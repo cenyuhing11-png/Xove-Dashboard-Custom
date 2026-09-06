@@ -3,6 +3,9 @@ import { KNOWLEDGE_AREAS } from './config';
 import { renderLifeCompass } from './LifeCompass';
 import { renderPlanningCard } from './PlanningCard';
 import type { PlanPeriod, PlanState } from '../../data/planning';
+import { renderLearningCard } from './LearningCard';
+import type { LearningActions } from './LearningCard';
+import type { CurrentLearning } from '../../data/learning';
 import { addEmpty, addEntry, createGroup, createSection } from './shared';
 
 export interface WorkbenchHomeData {
@@ -11,6 +14,8 @@ export interface WorkbenchHomeData {
 	projects: ProjectInfo[];
 	existingPaths: Set<string>;
 	plans: PlanState[];
+	learning: CurrentLearning[];
+	learningActions: LearningActions;
 	onOpenPlan(period: PlanPeriod): void;
 	onOpenTask(task: TaskItem): void;
 	onOpenProjects(): void;
@@ -31,16 +36,6 @@ function renderToday(parent: HTMLElement, data: WorkbenchHomeData): void {
 	addEmpty(createGroup(body, '今日最重要的 3 件事'), '尚未建立独立的重点事项模型');
 	renderTaskEntries(createGroup(body, '今日任务'), data.todayTasks, '今日暂无任务', data);
 	renderTaskEntries(createGroup(body, '即将截止'), data.upcomingTasks, '近期暂无截止任务', data);
-}
-
-function renderLearning(parent: HTMLElement): void {
-	const body = createSection(parent, '📚 当前学习');
-	addEmpty(createGroup(body, '当前主题'), '暂无当前学习主题');
-	addEmpty(createGroup(body, '当前资源'), '暂无当前学习资源');
-	addEmpty(createGroup(body, '下一步'), '尚未设置学习下一步');
-	const links = body.createDiv({ cls: 'wb-inline-links' });
-	addEntry(links, '学习队列', '后续接入');
-	addEntry(links, '能力地图', '后续接入');
 }
 
 function renderProjects(parent: HTMLElement, data: WorkbenchHomeData): void {
@@ -93,7 +88,7 @@ export function renderWorkbenchHome(parent: HTMLElement, data: WorkbenchHomeData
 	renderToday(execution, data);
 	renderPlanningCard(execution, data.plans, data.onOpenPlan);
 	const growth = parent.createDiv({ cls: 'wb-grid' });
-	renderLearning(growth);
+	renderLearningCard(growth, data.learning, data.learningActions);
 	renderProjects(growth, data);
 	const knowledge = parent.createDiv({ cls: 'wb-grid' });
 	renderKnowledge(knowledge, data);

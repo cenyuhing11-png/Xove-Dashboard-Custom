@@ -18,6 +18,9 @@ import { renderWorkbenchHome } from '../components/workbench/WorkbenchHome';
 import { naturalTimeSummary } from '../utils/timeProgress';
 import { PLAN_PERIODS, PLAN_ROOT, ensurePlan, readPlan } from '../data/planning';
 import type { PlanFiles, PlanPeriod } from '../data/planning';
+import { currentLearning } from '../data/learning';
+import { learningFiles, openLearningFile, scanLearning } from '../data/learningVault';
+import { LearningListModal, NewLearningModal } from './LearningModals';
 
 import type Dashboard from '../main';
 import {
@@ -385,6 +388,8 @@ export class DashboardView extends ItemView {
 			void this.refreshHomeCards();
 		});
 		let planDay = todayStr();
+		this.registerEvent(this.app.metadataCache.on('changed', () => { void this.renderWorkbenchDashboard(); }));
+		this.registerEvent(this.app.metadataCache.on('resolved', () => { void this.renderWorkbenchDashboard(); }));
 		this.registerInterval(window.setInterval(() => {
 			if (planDay === todayStr()) return;
 			planDay = todayStr();
@@ -1290,10 +1295,11 @@ export class DashboardView extends ItemView {
 		if (!board || this.currentPage !== 'home' || this.homeMode !== 'workbench') return;
 		const version = ++this.workbenchRenderVersion;
 		const date = new Date();
-		const [allTasks, projects, plans] = await Promise.all([
+		const [allTasks, projects, plans, learning] = await Promise.all([
 			this.taskStore.scanAllTasks(),
 			this.taskStore.scanAllProjects(),
 			Promise.all(PLAN_PERIODS.map((period) => readPlan(this.planFiles(), period, date))),
+			currentLearning(scanLearning(this.app), (path) => learningFiles(this.app).read(path)),
 		]);
 		if (version !== this.workbenchRenderVersion || !this.boardEl || this.boardEl !== board || this.currentPage !== 'home' || this.homeMode !== 'workbench') return;
 
@@ -1315,6 +1321,12 @@ export class DashboardView extends ItemView {
 			projects,
 			existingPaths,
 			plans,
+			learning,
+			learningActions: {
+				create: () => new NewLearningModal(this.app, '学习主题').open(),
+				open: (path) => { void openLearningFile(this.app, path).catch(() => this.showToast('笔记不存在或已移动')); },
+				list: (mode) => new LearningListModal(this.app, mode).open(),
+			},
 			onOpenPlan: (period) => void this.openPlan(period),
 			onOpenTask: (task) => this.openTaskEditModal(task),
 			onOpenProjects: () => void this.projectBoard.show(),
