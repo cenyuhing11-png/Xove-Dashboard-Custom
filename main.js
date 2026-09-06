@@ -1002,7 +1002,7 @@ class DashboardSettingTab extends obsidian.PluginSettingTab {
             : t;
         // Refresh every open dashboard view (not just the foreground one), so a
         // theme switch in Settings applies immediately to all of them.
-        this.app.workspace.getLeavesOfType('dashboard-view').forEach((leaf) => {
+        this.app.workspace.getLeavesOfType('xove-dashboard-custom-view').forEach((leaf) => {
             leaf.view?.containerEl?.querySelector('.dashboard-plugin')?.setAttribute('data-theme', effective);
         });
         // Fallback for any stray element still in the DOM.
@@ -6049,7 +6049,7 @@ class ProjectBoard {
     }
 }
 
-const VIEW_TYPE = 'dashboard-view';
+const VIEW_TYPE = 'xove-dashboard-custom-view';
 /** 卡片比例的最大格数（宽/高均为 1..4，4 = 页面最宽） */
 const MAX_SPAN = 4;
 /** 部分卡片的最低宽度（单位=格），限制缩放/比例菜单，避免关键卡片被压得过窄 */
