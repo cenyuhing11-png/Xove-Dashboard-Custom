@@ -270,7 +270,7 @@ export class DashboardSettingTab extends PluginSettingTab {
 			.setName(t('settings.pluginTitle'))
 			.setDesc(t('settings.pluginTitleDesc'))
 			.addText((tc) => tc
-				.setPlaceholder('我的工作台')
+				.setPlaceholder('夏知之 · 梦序')
 				.setValue(this.plugin.settings.dashboardTitle)
 				.onChange(async (v) => { this.plugin.settings.dashboardTitle = v; await this.plugin.saveSettings(); this.plugin.refreshDashboardTitle(); }),
 			);

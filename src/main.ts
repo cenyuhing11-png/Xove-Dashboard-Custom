@@ -41,13 +41,13 @@ export default class Dashboard extends Plugin {
 
 		this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
 
-		this.addRibbonIcon('layout-dashboard', '我的工作台', () => {
+		this.addRibbonIcon('layout-dashboard', '打开梦序', () => {
 			void this.activateView();
 		});
 
 		this.addCommand({
 			id: 'open-dashboard',
-			name: '打开我的工作台',
+			name: '打开梦序',
 			callback: () => {
 				void this.activateView();
 			},

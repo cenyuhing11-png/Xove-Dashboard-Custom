@@ -10,11 +10,11 @@ export const zh: Dict = {
 	},
 	// 更新日志弹窗
 	update: {
-		title: '✨ 我的工作台已更新到 v{v}',
+		title: '✨ 夏知之 · 梦序已更新到 v{v}',
 	},
 	// 新用户欢迎弹窗
 	welcome: {
-		title: '👋 欢迎使用我的工作台',
+		title: '👋 欢迎使用夏知之 · 梦序',
 		intro: '把 Obsidian 首页变成你的个人工作控制台：任务、项目、灵感与统计，一屏尽收。',
 		featuresTitle: '核心功能',
 		features: [
@@ -74,7 +74,7 @@ export const zh: Dict = {
 		},
 		bannerPlaceholder: '点击右上角按钮添加封面',
 		changeImage: '更换图片',
-		renderError: 'Dashboard 渲染出错',
+		renderError: '梦序渲染出错',
 		settingsBtn: '设置',
 		quickCapturePlaceholder: '记录一闪而过的想法…',
 		editTask: '编辑任务', postponeDay: '延后一天', deleteTask: '删除任务',
@@ -137,7 +137,7 @@ export const zh: Dict = {
 		fileNotFound: '文件不存在：',
 		parseIssues: '{n} 个文件解析异常（数据可能不完整），点击查看',
 		parseOpen: '在 Obsidian 打开',
-		guideTitle: '欢迎使用 Dashboard',
+		guideTitle: '欢迎使用夏知之 · 梦序',
 		guideBody: '检测到你的知识库还没有任何项目或任务。从下面任意一个开始，几秒即可上手：',
 		guideNewProject: '＋ 新建项目', guideNewTask: '＋ 新建任务', guideNewDiary: '＋ 新建日记',
 		captureFailed: '⚠️ 捕捉失败，请检查「存储路径」设置',
@@ -271,7 +271,7 @@ export const zh: Dict = {
 		diaryNaming: '日记命名规则',
 		theme: '主题', themeDesc: '跟随 Obsidian 外观，或手动指定深色/浅色。手动选择会同时切换 Obsidian 整体外观，仪表盘自动跟随',
 		themeAuto: '跟随 Obsidian', themeDark: '深色', themeLight: '浅色',
-		pluginTitle: '工作台标题', pluginTitleDesc: '自定义首页主标题。留空则使用默认标题“我的工作台”，修改后立即生效，无需重载',
+		pluginTitle: '首页标题', pluginTitleDesc: '自定义首页主标题。留空则使用默认标题“夏知之 · 梦序”，修改后立即生效，无需重载',
 		pipelineCount: '阶段数量', pipelineCountDesc: '设置项目阶段的数量（4-6个）',
 		pipelineShowAll: '显示全部',
 		progressFilter: '项目进度卡片筛选', progressFilterDesc: '主页"项目进度"卡片显示不超过所选阶段的项目',

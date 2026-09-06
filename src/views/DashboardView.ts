@@ -317,7 +317,7 @@ export class DashboardView extends ItemView {
 	}
 
 	getViewType(): string { return VIEW_TYPE; }
-	getDisplayText(): string { return '我的工作台'; }
+	getDisplayText(): string { return '夏知之 · 梦序'; }
 	getIcon(): string { return 'layout-dashboard'; }
 
 	async onOpen(): Promise<void> {
@@ -652,7 +652,7 @@ export class DashboardView extends ItemView {
 
 	private resolvedDashboardTitle(): string {
 		const custom = this.plugin.settings.dashboardTitle.trim();
-		return !custom || /xove\s*dashboard/i.test(custom) ? '我的工作台' : custom;
+		return !custom || custom === '我的工作台' || /xove\s*dashboard/i.test(custom) ? '夏知之 · 梦序' : custom;
 	}
 
 	/* ============================================================
@@ -662,7 +662,7 @@ export class DashboardView extends ItemView {
 		const h = root.createEl('header', { cls: 'ad-header' });
 		const left = h.createDiv({ cls: 'ad-header__left' });
 		this.adTitleEl = left.createEl('h1', { cls: 'ad-title', text: this.resolvedDashboardTitle() });
-		left.createEl('p', { cls: 'ad-subtitle', text: 'Obsidian · 我的工作台 · v' + (this.plugin.manifest?.version ?? d.header.subtitle.replace(/^.*v/, 'v')) });
+		left.createEl('p', { cls: 'ad-subtitle', text: 'Obsidian · 个人系统 · v' + (this.plugin.manifest?.version ?? d.header.subtitle.replace(/^.*v/, 'v')) });
 
 		const right = h.createDiv({ cls: 'ad-header__right' });
 

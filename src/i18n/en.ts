@@ -10,11 +10,11 @@ export const en: Dict = {
 	},
 	// What's new modal
 	update: {
-		title: '✨ 我的工作台 updated to v{v}',
+		title: '✨ 夏知之 · 梦序 updated to v{v}',
 	},
 	// First-run welcome modal
 	welcome: {
-		title: '👋 Welcome to 我的工作台',
+		title: '👋 Welcome to 夏知之 · 梦序',
 		intro: 'Turn your Obsidian home tab into a personal command center: tasks, projects, ideas and stats in one place.',
 		featuresTitle: 'Highlights',
 		features: [
@@ -73,7 +73,7 @@ export const en: Dict = {
 		},
 		bannerPlaceholder: 'Click the top-right button to add a cover image',
 		changeImage: 'Change image',
-		renderError: 'Dashboard render error',
+		renderError: '梦序 render error',
 		settingsBtn: 'Settings',
 		quickCapturePlaceholder: 'Jot down a fleeting thought…',
 		editTask: 'Edit task', postponeDay: 'Postpone one day', deleteTask: 'Delete task',
@@ -136,7 +136,7 @@ export const en: Dict = {
 		fileNotFound: 'File not found: ',
 		parseIssues: '{n} files failed to parse (data may be incomplete). Click to view',
 		parseOpen: 'Open in Obsidian',
-		guideTitle: 'Welcome to Dashboard',
+		guideTitle: 'Welcome to 夏知之 · 梦序',
 		guideBody: "Your vault doesn't have any projects or tasks yet. Start with any of these — ready in seconds:",
 		guideNewProject: '＋ New project', guideNewTask: '＋ New task', guideNewDiary: '＋ New note',
 		captureFailed: '⚠️ Capture failed. Check the "Storage path" setting',
@@ -270,7 +270,7 @@ export const en: Dict = {
 		diaryNaming: 'Diary naming rule',
 		theme: 'Theme', themeDesc: 'Follow Obsidian appearance, or set dark/light manually. Manual choice also switches Obsidian\'s overall appearance; the dashboard follows automatically',
 		themeAuto: 'Follow Obsidian', themeDark: 'Dark', themeLight: 'Light',
-		pluginTitle: 'Workbench title', pluginTitleDesc: 'Customize the home title. Leave empty to use “我的工作台”; applies immediately without reloading',
+		pluginTitle: 'Home title', pluginTitleDesc: 'Customize the home title. Leave empty to use “夏知之 · 梦序”; applies immediately without reloading',
 		pipelineCount: 'Stage count', pipelineCountDesc: 'Set the number of project stages (4-6)',
 		pipelineShowAll: 'Show all',
 		progressFilter: 'Progress card filter', progressFilterDesc: 'The home "Progress" card shows projects up to the selected stage',
