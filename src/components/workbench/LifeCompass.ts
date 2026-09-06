@@ -2,7 +2,9 @@ import { LIFE_COMPASS } from './config';
 
 export function renderLifeCompass(parent: HTMLElement): void {
 	const compass = parent.createEl('section', { cls: 'wb-compass' });
-	compass.createEl('h2', { cls: 'wb-compass__title', text: '🧭 人生罗盘' });
+	const title = compass.createEl('h2', { cls: 'wb-compass__title' });
+	title.createSpan({ cls: 'wb-compass__icon', text: '🧭', attr: { 'aria-hidden': 'true' } });
+	title.createSpan({ text: '人生罗盘' });
 	const lanes = compass.createDiv({ cls: 'wb-compass__lanes' });
 	for (const lane of LIFE_COMPASS) {
 		const row = lanes.createDiv({ cls: `wb-compass__lane wb-compass__lane--${lane.id}` });

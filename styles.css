@@ -629,6 +629,8 @@ body.theme-dark .dashboard-plugin:not([data-theme="light"]) { --ad-icon-accent: 
 .ad-toolbar__hint { margin-left: auto; align-self: center; font-family: var(--ad-font); font-size: 11px; color: var(--ad-text-dim); padding-right: 6px; }
 /* 工具栏分区：导航组 / 竖线分隔 / 动作组（右对齐 + 强调） */
 .ad-toolbar__group { display: inline-flex; align-items: center; gap: 8px; }
+.ad-toolbar__group { flex-wrap: wrap; min-width: 0; }
+.ad-toolbar__btn--more { margin-left: auto; }
 .ad-toolbar__sep { width: 1px; align-self: stretch; flex: 0 0 auto; background: var(--ad-line); margin: 2px 2px; }
 .ad-toolbar__btn--action { color: var(--ad-accent); }
 .ad-toolbar__btn--action .ad-glyph { color: var(--ad-accent); }
@@ -2395,24 +2397,28 @@ body.theme-dark .ad-popover.ad-addmenu-backdrop[data-theme="light"] {
   box-shadow: 0 1px 0 rgba(0,0,0,0.18);
 }
 .wb-compass {
-  display: flex; align-items: flex-start; gap: 18px; padding: 12px 14px;
+  --wb-compass-line-height: 20px;
+  display: flex; align-items: center; gap: 18px; padding: 12px 14px;
 }
 .wb-compass__title,
 .wb-section__title {
   color: var(--ad-text); font-size: 14px; font-weight: 650; line-height: 1.35;
 }
-.wb-compass__title { flex: 0 0 auto; padding-top: 4px; }
-.wb-compass__lanes { display: flex; align-items: flex-start; gap: 14px; flex: 1; min-width: 0; }
+.wb-compass__title { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; line-height: var(--wb-compass-line-height); }
+.wb-compass__icon { display: inline-flex; align-items: center; justify-content: center; height: var(--wb-compass-line-height); line-height: 1; }
+.wb-compass__lanes { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; flex: 1; min-width: 0; }
 .wb-compass__lane { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .wb-compass__lane--maintain { flex: 1; }
 .wb-compass__label {
-  flex: 0 0 auto; padding: 2px 6px; border-radius: 999px;
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  height: var(--wb-compass-line-height); line-height: var(--wb-compass-line-height);
+  padding: 0 6px; border-radius: 999px; white-space: nowrap;
   color: var(--ad-text-mute); background: var(--ad-s2); font-size: 10px;
 }
 .wb-compass__lane--focus .wb-compass__label { color: var(--ad-accent); background: var(--ad-accent-dim); }
 .wb-compass__lane--support .wb-compass__label { color: var(--ad-accent-2); }
-.wb-compass__items { display: flex; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
-.wb-compass__item { color: var(--ad-text); font-size: 12px; white-space: nowrap; }
+.wb-compass__items { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+.wb-compass__item { color: var(--ad-text); font-size: 12px; line-height: var(--wb-compass-line-height); white-space: nowrap; }
 .wb-compass__item:not(:last-child)::after { content: '·'; margin-left: 8px; color: var(--ad-text-dim); }
 
 .wb-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
@@ -2454,7 +2460,7 @@ body.theme-dark .ad-popover.ad-addmenu-backdrop[data-theme="light"] {
   .ad-header { align-items: flex-start; flex-direction: column; }
   .ad-header__right { width: 100%; align-items: flex-start; }
   .wb-time-progress { justify-content: flex-start; }
-  .wb-compass__lane { flex-basis: 100%; align-items: flex-start; }
+  .wb-compass__lane { flex-basis: 100%; }
   .wb-grid--short .wb-group { grid-template-columns: 1fr; gap: 2px; }
   .wb-inline-links { grid-template-columns: 1fr; }
 }

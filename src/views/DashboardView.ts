@@ -643,7 +643,6 @@ export class DashboardView extends ItemView {
 	private renderHeader(root: HTMLElement, d: DashboardData): void {
 		const h = root.createEl('header', { cls: 'ad-header' });
 		const left = h.createDiv({ cls: 'ad-header__left' });
-		left.createEl('p', { cls: 'ad-eyebrow', text: '个人工作台' });
 		this.adTitleEl = left.createEl('h1', { cls: 'ad-title', text: this.resolvedDashboardTitle() });
 		left.createEl('p', { cls: 'ad-subtitle', text: 'Obsidian · 我的工作台 · v' + (this.plugin.manifest?.version ?? d.header.subtitle.replace(/^.*v/, 'v')) });
 
@@ -711,14 +710,13 @@ export class DashboardView extends ItemView {
 	private renderActions(root: HTMLElement): void {
 		const nav = root.createEl('nav', { cls: 'ad-toolbar' });
 
-		// 导航组：去哪看（主页 / 全部项目 / 机会点）
+		// 仅调整工作台导航标签，保留原有页面与数据行为。
 		const navItems: Array<{ glyph: string; label: string; action: string; svg?: string }> = [
-			{ glyph: '\u2302', label: t('home.nav.home'), action: 'home', svg: ICON_home },
-			{ glyph: '\u203A', label: t('home.nav.allProjects'), action: 'all', svg: ICON_allProjects },
-			{ glyph: '\u25A6', label: '原有工具', action: 'classic' },
+			{ glyph: '\u2302', label: '首页', action: 'home', svg: ICON_home },
+			{ glyph: '\u203A', label: '项目', action: 'all', svg: ICON_allProjects },
 		];
 		if (this.plugin.settings.boardEnabled) {
-			navItems.push({ glyph: '\u25C8', label: this.plugin.settings.boardTitle || t('home.nav.board'), action: 'opportunity', svg: ICON_opportunity });
+			navItems.push({ glyph: '\u25C8', label: '收件箱', action: 'opportunity', svg: ICON_opportunity });
 		}
 		// 动作组：建什么（新建日记 / 新建任务 / 新建项目）
 		const actionItems: Array<{ glyph: string; label: string; action: string; svg?: string }> = [
@@ -758,6 +756,7 @@ export class DashboardView extends ItemView {
 		nav.createDiv({ cls: 'ad-toolbar__sep' });
 		const actGroup = nav.createDiv({ cls: 'ad-toolbar__group ad-toolbar__group--action' });
 		actionItems.forEach((it) => actGroup.appendChild(makeBtn(it, 'ad-toolbar__btn--action')));
+		makeBtn({ glyph: '\u25A6', label: '更多工具', action: 'classic' }, 'ad-toolbar__btn--more');
 	}
 
 	/* ============================================================
