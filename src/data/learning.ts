@@ -75,7 +75,7 @@ export function learningTemplate(kind: LearningKind, name: string, resourceType 
 	const bodies: Record<LearningKind, string> = {
 		能力: '## 能力目标\n\n## 当前阶段\n\n## 能力标准\n\n- [ ]\n\n## 当前学习主题\n\n## 实践与作品\n\n## 备注\n',
 		学习主题: '## 学习目标\n\n## 当前资源\n\n-\n\n## 下一步\n\n-\n\n## 实践\n\n-\n\n## 学习记录\n',
-		学习资源: '## 为什么要学\n\n## 学习记录\n\n## 备注\n',
+		学习资源: '## 为什么要学\n\n## 学习任务\n\n## 学习记录\n\n## 备注\n',
 	};
 	return `---\n类型: ${kind}\n${headers[kind]}\n---\n\n# ${title}\n\n${bodies[kind]}`;
 }

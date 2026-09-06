@@ -1,4 +1,7 @@
 import { Menu, TFile, TFolder } from 'obsidian';
+import type { EmbeddedTaskStore } from '../data/embeddedTaskVault';
+import { embeddedSource } from '../data/embeddedTasks';
+import { NewEmbeddedTaskModal, renderEmbeddedRows } from './EmbeddedTaskModal';
 import type { App } from 'obsidian';
 import {
 	TaskItem, ProjectInfo, TaskStatus, NodeState, priorityWeight,
@@ -15,6 +18,7 @@ import { ICON_gantt, ICON_list, ICON_calendar, ICON_kanban, injectSvg } from '..
 export interface ProjectHost {
 	app: App;
 	plugin: {
+		embeddedTasks: EmbeddedTaskStore;
 		settings: {
 			projectsFolder: string;
 			currentPoView: string;
@@ -155,12 +159,26 @@ export class ProjectBoard {
 	private renderPanels(): void {
 		if (!this.poMainEl) return;
 		this.poMainEl.empty();
+		const project = this.currentProjects.find(p => p.name === this.selectedProject);
+		if (project) {
+			const folderName = project.path.split('/').pop();
+			const source = `${project.path}/project-${folderName}.md`;
+			if (embeddedSource(source) === 'project') {
+				const tasks = this.plugin.embeddedTasks.bySource(source);
+				const section = this.poMainEl.createDiv({ cls: 'mx-project-tasks' });
+				section.createEl('h3', { text: '项目任务' });
+				section.createEl('p', { text: `总数 ${tasks.length} · 已完成 ${tasks.filter(t => t.completed).length} · 未完成 ${tasks.filter(t => !t.completed).length}` });
+				section.createEl('button', { text: '添加项目任务' }).onclick = () => new NewEmbeddedTaskModal(this.app, this.plugin.embeddedTasks, source).open();
+				renderEmbeddedRows(section, tasks, this.app, this.plugin.embeddedTasks);
+			}
+		}
 
 		const filteredTasks = this.selectedProject
 			? this.currentTasks.filter((t) => t.projectId === this.selectedProject)
 			: this.currentTasks;
 
 		// Tabs
+		this.poMainEl.createEl('p', { text: '以下为旧任务视图，暂不包含页面内任务。', cls: 'mx-task-meta' });
 		const tabs = this.poMainEl.createDiv({ cls: 'po-tabs' });
 		const tabDefs = [
 			{ key: 'gantt', label: UI_TEXT.poGantt, icon: ICON_gantt },

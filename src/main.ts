@@ -8,6 +8,7 @@ import { CHANGELOG, CHANGELOG_ORDER } from './changelog';
 import { UpdateLogModal } from './views/UpdateLogModal';
 import { WelcomeModal } from './views/WelcomeModal';
 import { DirectionView, DIRECTION_VIEW } from './views/DirectionView';
+import { EmbeddedTaskStore } from './data/embeddedTaskVault';
 
 /** 番茄钟运行时状态（与主页卡片共享，状态栏实时显示） */
 export interface PomoState {
@@ -23,6 +24,7 @@ export interface PomoState {
 
 export default class Dashboard extends Plugin {
 	settings!: DashboardSettings;
+	embeddedTasks!: EmbeddedTaskStore;
 
 	/** 番茄钟运行时状态（主页卡片与状态栏共用同一数据源） */
 	pomoState: PomoState = {
@@ -39,6 +41,7 @@ export default class Dashboard extends Plugin {
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
+		this.embeddedTasks = new EmbeddedTaskStore(this.app, this);
 
 		this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
 		this.registerView(DIRECTION_VIEW, (leaf) => new DirectionView(leaf));

@@ -2472,3 +2472,11 @@ body.theme-dark .ad-popover.ad-addmenu-backdrop[data-theme="light"] {
   .wb-grid--short .wb-group { grid-template-columns: 1fr; gap: 2px; }
   .wb-inline-links { grid-template-columns: 1fr; }
 }
+/* Embedded tasks: shared by workbench and lightweight task dialogs. */
+.mx-task-row { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; min-width: 0; }
+.mx-task-row > input { flex: 0 0 auto; margin-top: 4px; }
+.mx-task-body { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mx-task-link { padding: 0 !important; height: auto !important; background: none !important; box-shadow: none !important; border: 0 !important; text-align: left; white-space: normal; overflow-wrap: anywhere; color: var(--text-normal); }
+.mx-task-link.is-complete { text-decoration: line-through; color: var(--text-muted); }
+.mx-task-meta, .mx-task-meta .mx-task-link { font-size: var(--font-smallest); color: var(--text-muted); }
+.mx-project-tasks { padding: 12px; border-bottom: 1px solid var(--background-modifier-border); max-height: 35vh; overflow-y: auto; }

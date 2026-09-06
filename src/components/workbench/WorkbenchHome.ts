@@ -12,6 +12,8 @@ import type { JournalState } from '../../data/journal';
 import { addEmpty, addEntry, createGroup, createSection } from './shared';
 
 export interface WorkbenchHomeData {
+	renderEmbeddedToday(parent: HTMLElement): void;
+	onAllEmbeddedTasks(): void;
 	onOpenDirection(name: string): void;
 	todayTasks: TaskItem[];
 	upcomingTasks: TaskItem[];
@@ -40,7 +42,8 @@ function renderTaskEntries(parent: HTMLElement, tasks: TaskItem[], emptyText: st
 function renderToday(parent: HTMLElement, data: WorkbenchHomeData): void {
 	const body = createSection(parent, '🎯 今日执行');
 	addEmpty(createGroup(body, '今日最重要的 3 件事'), '尚未建立独立的重点事项模型');
-	renderTaskEntries(createGroup(body, '今日任务'), data.todayTasks, '今日暂无任务', data);
+	data.renderEmbeddedToday(createGroup(body, '今日任务'));
+	addEntry(body, '查看全部任务', '', data.onAllEmbeddedTasks);
 	renderTaskEntries(createGroup(body, '即将截止'), data.upcomingTasks, '近期暂无截止任务', data);
 }
 

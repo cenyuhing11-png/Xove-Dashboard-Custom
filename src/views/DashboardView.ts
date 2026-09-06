@@ -4,6 +4,7 @@ import { BannerSettings, DEFAULT_SETTINGS, CountdownSettings } from '../settings
 import { BannerModal } from './BannerModal';
 import { CountdownModal, defaultEventName } from './CountdownModal';
 import { TaskEditModal } from './TaskEditModal';
+import { NewEmbeddedTaskModal, EmbeddedTaskListModal, renderEmbeddedRows } from './EmbeddedTaskModal';
 import { TaskItem, ProjectInfo, TaskStatus, ProjectType, priorityWeight, NodeState, RepeatRule, serializeDailyNodesBlock, parseDailyNodesFromBody } from '../data/taskParser';
 import { TaskStore } from '../data/taskStore';
 import { writeFrontmatter as fmWriteFrontmatter, yamlScalar } from '../data/frontmatterWriter';
@@ -326,6 +327,10 @@ export class DashboardView extends ItemView {
 	getIcon(): string { return 'layout-dashboard'; }
 
 	async onOpen(): Promise<void> {
+		this.register(this.plugin.embeddedTasks.subscribe(() => {
+			if (this.currentPage === 'project') void this.projectBoard.refresh();
+			else void this.renderWorkbenchDashboard();
+		}));
 		// NOTE: earlier builds emptied this.containerEl then added .dashboard-plugin
 		// directly; that was fine (the "setText on null" bug was the titleEl field
 		// collision, NOT the empty()). Now we clear the container's leftovers
@@ -760,7 +765,7 @@ export class DashboardView extends ItemView {
 					if (it.action === 'home') void this.showDashboard();
 					if (it.action === 'classic') void this.showClassicDashboard();
 					if (it.action === 'diary') void this.createDiary();
-					if (it.action === 'task') void this.openTaskModal(this.selectedProject ?? undefined);
+					if (it.action === 'task') new NewEmbeddedTaskModal(this.app, this.plugin.embeddedTasks).open();
 					if (it.action === 'project') void this.createProjectFile();
 					if (it.action === 'all') void this.projectBoard.show();
 					if (it.action === 'opportunity') void this.oppBoard.show();
@@ -1294,6 +1299,7 @@ export class DashboardView extends ItemView {
 		this.currentPage = 'home';
 		this.homeMode = 'classic';
 		await this.renderEnabledModules(this.boardEl);
+		this.boardEl.createEl('button', { text: '旧任务工具 / 高级任务工具' }).onclick = () => { void this.openTaskModal(this.selectedProject ?? undefined); };
 		this.attachBoardInteractions();
 		await this.renderFirstRunIfEmpty(this.boardEl);
 	}
@@ -1303,6 +1309,7 @@ export class DashboardView extends ItemView {
 		const board = this.boardEl;
 		if (!board || this.currentPage !== 'home' || this.homeMode !== 'workbench') return;
 		const version = ++this.workbenchRenderVersion;
+		await this.plugin.embeddedTasks.ready;
 		const date = new Date();
 		const [allTasks, projects, plans, learning] = await Promise.all([
 			this.taskStore.scanAllTasks(),
@@ -1325,6 +1332,17 @@ export class DashboardView extends ItemView {
 		);
 
 		renderWorkbenchHome(board, {
+			renderEmbeddedToday: (parent) => {
+				const tasks = this.plugin.embeddedTasks.today(today);
+				if (!tasks.length) parent.createEl('p', { text: '今日暂无任务', cls: 'wb-empty' });
+				for (const [type, label] of [['learning', '学习'], ['project', '项目'], ['daily', '日常']] as const) {
+					const group = tasks.filter(task => task.sourceType === type);
+					if (!group.length) continue;
+					parent.createEl('h4', { text: label });
+					renderEmbeddedRows(parent, group, this.app, this.plugin.embeddedTasks);
+				}
+			},
+			onAllEmbeddedTasks: () => new EmbeddedTaskListModal(this.app, this.plugin.embeddedTasks).open(),
 			todayTasks: getTodayTasks(allTasks, today, this.plugin.settings.todoShowCompleted),
 			upcomingTasks,
 			projects,
@@ -1595,7 +1613,9 @@ export class DashboardView extends ItemView {
 	}
 
 	private async createProjectFolder(name: string, color: string, startDate: string, endDate: string, description: string, type: ProjectType = 'stage'): Promise<void> {
-		const rootPath = this.plugin.settings.projectsFolder;
+		// Preserve existing configured project roots; a missing legacy default uses the formal root.
+		const configuredRoot = this.plugin.settings.projectsFolder;
+		const rootPath = this.app.vault.getAbstractFileByPath(configuredRoot) instanceof TFolder ? configuredRoot : '03-项目与作品';
 
 		// Ensure root folder exists
 		await this.ensureFolder(rootPath);
@@ -1622,6 +1642,8 @@ export class DashboardView extends ItemView {
 		'---',
 		'',
 		`# ${name}`,
+		'',
+		'## 项目任务',
 		'',
 	];
 
