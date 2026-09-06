@@ -27,3 +27,16 @@
 - Obsidian 使用两条设计方向进程和一条英语方向进程验证；设计显示“学1 · 项1”，任务分别为“1 / 3”“2 / 4”。英语临时进程含 30 条任务，用于滚动验证。
 - 1320px 与 760px 窗口、浅色与深色检查通过；页面无新增横向溢出，窄表格保留原局部滚动方式。
 - 测试内容验证后移出 Vault；原笔记、目录和 data.json 使用 SHA-256 / 目录清单核验。
+
+## 快速预览 UI 收口
+
+`30cfc9b` 首次引入 `ProcessTasksModal` 时，沿用了默认 Modal 宽度与 80vh 内容上限，并把更新日志的 `ad-update-block` 用作任务分组。标题、两行说明、卡片 padding 和 footer margin 叠加，导致短列表也像详情页。
+
+对比 upstream 的 ConfirmModal、TaskModal、`.ad-propmenu` 和 `.po-check` 后，保留 Obsidian Modal 的焦点、Esc、外部关闭机制，采用 compact modal；不抽取绑定在 Dashboard 编辑菜单上的定位/关闭逻辑，避免扩大本轮纯视觉范围。
+
+- 外壳复用 `.ad-propmenu` 的边框、圆角和背景，宽 400px，最大高 480px；小窗口分别限制为视口宽减 24px、高减 32px。
+- 标题与一行“类型 · 任务进度”替代松散的三行信息；分组改为 section/details 和细分隔线，不再使用更新日志卡片。
+- 保持 `renderEmbeddedRows` 和所有任务读写回调不变，仅在快速框内部为原生 checkbox 应用 ProjectBoard 的 `.po-check` 圆形视觉。浅色中性黑，深色使用原蓝色 accent，不依赖 Obsidian 默认紫色。
+- footer 复用 `.po-back-btn`，作为透明背景的小型文字操作；关闭按钮沿用原生控件并缩紧尺寸。
+- 原 428 项测试继续通过，新增 6 项纯视觉结构回归，总计 434 项；没有修改进程详情、Store、任务格式、模型或设置。
+- 实机：1 条待完成为 400×215px；10 条待完成为 400×480px 并内部滚动。380px 窗口自动缩至 356px 宽。明暗主题、折叠、勾选写回/计数刷新、来源/详情跳转、外部点击与 Esc 均验证通过。

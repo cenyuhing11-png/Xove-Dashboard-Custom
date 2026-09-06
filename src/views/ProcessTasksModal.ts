@@ -19,10 +19,11 @@ export class ProcessTasksModal extends Modal {
 		this.completedOpen = false;
 		const el = beginListModal(this, this.source.name);
 		el.addClass('mx-quick-tasks');
-		el.createEl('p', { cls: 'ad-modal-hint', text: processTypeLabel(this.source.processType) });
+		// Keep Obsidian's focus/Esc/outside-click lifecycle, with the author's compact menu shell.
+		for (const cls of ['ad-modal', 'ad-propmenu', 'mx-quick-tasks-modal']) this.modalEl.addClass(cls);
 		this.summary = el.createEl('p', { cls: 'ad-modal-hint' });
 		this.body = el.createDiv({ cls: 'mx-quick-tasks__body' });
-		el.createDiv({ cls: 'ad-modal-btns' }).createEl('button', { cls: 'ad-modal-btn', text: '打开完整详情 →' }).onclick = () => { this.close(); this.openDetail(); };
+		el.createDiv({ cls: 'ad-modal-btns' }).createEl('button', { cls: 'po-back-btn', text: '打开完整详情 →' }).onclick = () => { this.close(); this.openDetail(); };
 		this.unsubscribe = this.store.subscribe(() => this.render());
 		this.render();
 		void this.store.refresh().catch(error => { if (this.live) new Notice(`任务读取失败：${String(error)}`); });
@@ -30,23 +31,26 @@ export class ProcessTasksModal extends Modal {
 	private render(): void {
 		if (!this.live) return;
 		const groups = processPreviewTasks(this.store.bySource(this.source.sourceFile), this.source);
-		this.summary.setText(`任务进度：${taskProgressLabel(groups.total, groups.completed.length)}`);
+		this.summary.setText(`${processTypeLabel(this.source.processType)} · 任务进度：${taskProgressLabel(groups.total, groups.completed.length)}`);
 		const scroll = this.body.scrollTop;
 		this.body.empty();
-		const pending = this.body.createDiv({ cls: 'ad-update-block' });
-		pending.createEl('h4', { cls: 'ad-modal-title', text: `待完成 ${groups.pending.length}` });
+		const pending = this.body.createEl('section');
+		pending.createEl('h4', { cls: 'ad-modal-label', text: `待完成 ${groups.pending.length}` });
 		renderEmbeddedRows(pending, groups.pending, this.app, this.store, () => this.close());
-		const completed = this.body.createEl('details', { cls: 'ad-update-block' });
+		const completed = this.body.createEl('details');
 		completed.open = this.completedOpen;
 		completed.createEl('summary', { cls: 'ad-modal-label', text: `已完成 ${groups.completed.length}` });
 		completed.ontoggle = () => { if (this.live && completed.parentElement === this.body) this.completedOpen = completed.open; };
 		renderEmbeddedRows(completed, groups.completed, this.app, this.store, () => this.close());
+		// Style the existing native checkboxes; their handlers and Embedded Task writes stay untouched.
+		this.body.querySelectorAll('input').forEach(check => check.addClass('po-check'));
 		this.body.scrollTop = scroll;
 	}
 	onClose(): void {
 		this.live = false;
 		this.unsubscribe?.(); this.unsubscribe = undefined;
 		this.contentEl.removeClass('mx-quick-tasks');
+		for (const cls of ['ad-modal', 'ad-propmenu', 'mx-quick-tasks-modal']) this.modalEl.removeClass(cls);
 		closeListModal(this);
 	}
 }
