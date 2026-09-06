@@ -1,4 +1,6 @@
-import type { ProjectInfo, TaskItem } from '../../data/taskParser';
+import type { TaskItem } from '../../data/taskParser';
+import type { MengxuProject } from '../../data/projects';
+import { currentProjects } from '../../data/projects';
 import { KNOWLEDGE_AREAS } from './config';
 import { renderLifeCompass } from './LifeCompass';
 import { renderPlanningCard } from './PlanningCard';
@@ -17,7 +19,7 @@ export interface WorkbenchHomeData {
 	onOpenDirection(name: string): void;
 	todayTasks: TaskItem[];
 	upcomingTasks: TaskItem[];
-	projects: ProjectInfo[];
+	projects: MengxuProject[];
 	existingPaths: Set<string>;
 	plans: PlanState[];
 	learning: CurrentLearning[];
@@ -27,7 +29,7 @@ export interface WorkbenchHomeData {
 	onOpenPlan(period: PlanPeriod): void;
 	onOpenTask(task: TaskItem): void;
 	onOpenProjects(): void;
-	onOpenProject(project: ProjectInfo): void;
+	onOpenProject(project: MengxuProject): void;
 	onOpenProjectView(view: 'calendar' | 'gantt'): void;
 	onOpenPath(path: string): void;
 }
@@ -49,10 +51,11 @@ function renderToday(parent: HTMLElement, data: WorkbenchHomeData): void {
 
 function renderProjects(parent: HTMLElement, data: WorkbenchHomeData): void {
 	const body = createSection(parent, '📅 项目与日程');
-	if (data.projects.length) addEntry(body, '当前项目', `${data.projects.length} 个`, data.onOpenProjects);
-	else addEmpty(body, '暂无当前项目');
-	addEntry(body, '月历', '查看现有项目月历', () => data.onOpenProjectView('calendar'));
-	addEntry(body, '甘特图', '查看现有项目甘特图', () => data.onOpenProjectView('gantt'));
+	const projects = currentProjects(data.projects);
+	if (!projects.length) addEmpty(body, '暂无当前项目');
+	for (const p of projects) addEntry(body, p.name, `${p.status}${p.dueDate ? ` · 截止 ${p.dueDate}` : ''}`, () => data.onOpenProject(p));
+	addEntry(body, '月历', '旧任务月历，暂不含新项目', () => data.onOpenProjectView('calendar'));
+	addEntry(body, '甘特图', '旧任务甘特图，暂不含新项目', () => data.onOpenProjectView('gantt'));
 	if (data.upcomingTasks.length) addEntry(body, '即将截止', `${data.upcomingTasks.length} 项`, data.onOpenProjects);
 	else addEmpty(body, '近期暂无截止任务');
 }
@@ -71,7 +74,7 @@ function renderContent(parent: HTMLElement, data: WorkbenchHomeData): void {
 	const projects = createGroup(body, '最近项目');
 	if (!data.projects.length) addEmpty(projects, '暂无项目数据');
 	for (const project of data.projects.slice(0, 3)) {
-		addEntry(projects, project.name, project.description || `${project.activeCount} 项进行中`, () => data.onOpenProject(project));
+		addEntry(projects, project.name, `${project.status}${project.dueDate ? ` · 截止 ${project.dueDate}` : ''}`, () => data.onOpenProject(project));
 	}
 	addEmpty(createGroup(body, '最近作品'), '暂无作品数据');
 	addEmpty(createGroup(body, '自媒体待发布'), '暂无待发布内容');

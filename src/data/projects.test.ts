@@ -1,0 +1,63 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createMengxuProject, currentProjects, directionProjects, filterProjects, PROJECT_ROOT, PROJECT_STATUSES, projectDirections, projectNote, projectPath, projectSummary, projectTemplate } from './projects.ts';
+import type { MengxuProject, NewProject } from './projects.ts';
+import { isLegacyTaskProperties } from './legacyTaskIdentity.ts';
+import { parseEmbeddedTasks, appendEmbeddedTask, setEmbeddedCompletion } from './embeddedTasks.ts';
+import { scanProjects } from './projectVault.ts';
+import type { App } from 'obsidian';
+const ID = '98d8124a-7bc2-4198-861c-efb50f19c5db';
+const input: NewProject = { name: '吹风机电商视觉', status: '进行中', direction: '设计', startDate: '2026-09-06', dueDate: '2026-10-06' };
+const path = projectPath(input.name).path;
+const fm = { 类型: '项目', 项目ID: ID, 状态: '进行中', 方向: '设计', 开始日期: '2026-09-06', 截止日期: '2026-10-06', 创建日期: '2026-09-06' };
+function project(extra: Partial<MengxuProject> = {}): MengxuProject { return { ...projectNote(path, fm)!, ...extra }; }
+function memory() {
+	const dirs = new Set<string>(); const files = new Map<string,string>();
+	const api = { kind: (p: string) => files.has(p) ? 'file' as const : dirs.has(p) ? 'folder' as const : undefined,
+		read: async (p: string) => files.get(p)!, createFolder: async (p: string) => { if(dirs.has(p)||files.has(p))throw Error('exists');dirs.add(p); },
+		create: async (p: string, s: string) => { if(files.has(p)||dirs.has(p))throw Error('exists');files.set(p,s); } };
+	return { dirs, files, api };
+}
+test('project uses formal root/name/name.md, never legacy prefix', () => { assert.deepEqual(projectPath(input.name), { name: input.name, folder: `${PROJECT_ROOT}/${input.name}`, path: `${PROJECT_ROOT}/${input.name}/${input.name}.md` }); });
+test('Chinese project names retained', () => { assert.equal(projectPath('  中文项目  ').name, '中文项目'); });
+test('invalid/path-traversal names rejected before writing', () => { for (const name of ['', '../a', 'a/b', 'a\\b', 'a\n标题', '#项目', 'a?', '.hidden']) assert.throws(()=>projectPath(name)); });
+test('existing extension normalized', () => { assert.ok(projectPath('项目.md').path.endsWith('/项目/项目.md')); });
+test('new project gets one UUID with required properties', () => { const raw = projectTemplate(input, ID, '2026-09-06'); for(const text of ['类型: 项目', `项目ID: ${ID}`, '状态: 进行中', '方向: "设计"', '创建日期: 2026-09-06'])assert.ok(raw.includes(text));assert.equal((raw.match(/项目ID:/g)||[]).length,1); });
+test('project ID must be UUID', () => { assert.throws(()=>projectTemplate(input,'file-name','2026-09-06')); });
+for(const status of PROJECT_STATUSES) test(`status Properties read: ${status}`,()=>assert.equal(projectNote(path,{...fm,状态:status})!.status,status));
+test('project direction optional and correctly read',()=>{ assert.equal(projectNote(path,fm)!.direction,'设计');assert.equal(projectNote(path,{类型:'项目'})!.direction,''); });
+test('project date Properties read',()=>{const p=projectNote(path,fm)!;assert.equal(p.startDate,'2026-09-06');assert.equal(p.dueDate,'2026-10-06');assert.equal(p.createdDate,'2026-09-06');});
+test('Date objects and invalid dates handled safely',()=>{assert.equal(projectNote(path,{...fm,开始日期:new Date('2026-09-06')})!.startDate,'2026-09-06');assert.equal(projectNote(path,{...fm,截止日期:'2026-02-30'})!.dueDate,'');});
+test('missing/new optional properties compatible',()=>{const p=projectNote(path,{类型:'项目'})!;assert.equal(p.status,'计划中');assert.equal(p.id,'');assert.equal(p.goal,'');});
+test('template has all empty sections and no invented goal',()=>{const raw=projectTemplate(input,ID,'2026-09-06');for(const h of ['项目目标','项目任务','项目资料','过程记录','最终成果','项目复盘'])assert.ok(raw.includes(`## ${h}`));assert.equal(parseEmbeddedTasks(path,raw).length,0);assert.ok(raw.includes('项目目标: \n'));});
+test('goal safely serialized and body remains primary summary',()=>{const raw=projectTemplate({...input,goal:'需要明确结果："示例"'},ID,'2026-09-06');assert.ok(raw.includes('项目目标: "需要明确结果：\\"示例\\""'));assert.equal(projectSummary(project({goal:'属性目标'}),raw).goal,'需要明确结果："示例"');});
+test('project goal property fallback',()=>assert.equal(projectSummary(project({goal:'属性目标'}),'## 项目目标\n\n').goal,'属性目标'));
+test('date range validation before create',()=>{assert.throws(()=>projectTemplate({...input,startDate:'2026-10-07'},ID,'2026-09-06'));assert.throws(()=>projectTemplate({...input,dueDate:'2026-02-30'},ID,'2026-09-06'));});
+test('directions come from the compass',()=>assert.deepEqual(projectDirections(),['设计','AI','3D','英语','自媒体','阅读','绘画','摄影','理财','生活']));
+test('creation rejects unknown direction',()=>assert.throws(()=>projectTemplate({...input,direction:'不存在'},ID,'2026-09-06')));
+test('same-name directory never overwritten',async()=>{const m=memory();m.dirs.add(projectPath(input.name).folder);await assert.rejects(createMengxuProject(m.api,input,ID,'2026-09-06'),/已存在/);assert.equal(m.files.size,0);});
+test('same-name project content untouched',async()=>{const m=memory();m.dirs.add(projectPath(input.name).folder);m.files.set(path,'真实笔记');await assert.rejects(createMengxuProject(m.api,input,ID,'2026-09-06'));assert.equal(m.files.get(path),'真实笔记');});
+test('creates exactly one project note, no task file',async()=>{const m=memory();assert.equal(await createMengxuProject(m.api,input,ID,'2026-09-06'),path);assert.equal(m.files.size,1);assert.ok(m.files.get(path)!.includes(`项目ID: ${ID}`));});
+test('concurrent same-name creation produces one note only',async()=>{const m=memory();const results=await Promise.allSettled([createMengxuProject(m.api,input,ID,'2026-09-06'),createMengxuProject(m.api,input,ID,'2026-09-06')]);assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(m.files.size,1);});
+test('invalid create leaves no folders',async()=>{const m=memory();await assert.rejects(createMengxuProject(m.api,{...input,name:'../bad'},ID,'2026-09-06'));assert.equal(m.dirs.size,0);});
+test('root occupied by a file blocks creation',async()=>{const m=memory();m.files.set(PROJECT_ROOT,'keep');await assert.rejects(createMengxuProject(m.api,input,ID,'2026-09-06'));assert.equal(m.files.get(PROJECT_ROOT),'keep');});
+test('embedded task completion totals read from project section only',()=>{const raw='## 项目任务\n- [ ] A\n- [x] B\n## 项目资料\n- [ ] 不计入';const s=projectSummary(project(),raw);assert.equal(s.total,2);assert.equal(s.done,1);});
+test('project detail summaries are bounded not full editors',()=>{const raw='## 项目资料\n'+['one','two','three','four'].join('\n')+'\n## 过程记录\nprogress\n## 最终成果\nresult';const s=projectSummary(project(),raw);assert.equal(s.materials,'one\ntwo\nthree');assert.equal(s.progress,'progress');assert.equal(s.outcome,'result');});
+test('direction filters exclude empty and unrelated projects',()=>{const a=project(),b=project({direction:'英语'}),c=project({direction:''});assert.deepEqual(directionProjects([a,b,c],'设计'),[a]);assert.deepEqual(directionProjects([a,b,c],''),[]);});
+test('home prioritizes active then planned, at most three',()=>{const ps=[project({name:'later',status:'计划中'}),project({name:'first'}),project({name:'second'}),project({name:'third'}),project({status:'已完成'})];assert.deepEqual(currentProjects(ps).map(p=>p.name),['first','second','third']);});
+test('paused completed and archived projects excluded from home',()=>assert.equal(currentProjects(['暂停','已完成','归档'].map(status=>project({status:status as MengxuProject['status']}))).length,0));
+test('project list filters all five states and all',()=>{const ps=PROJECT_STATUSES.map(status=>project({status}));assert.equal(filterProjects(ps,'全部').length,5);for(const s of PROJECT_STATUSES)assert.equal(filterProjects(ps,s).length,1);});
+test('reference markdown does not become project just from its path',()=>{assert.equal(projectNote(`${PROJECT_ROOT}/项目/notes.md`,{}),null);assert.equal(projectNote(path,{类型:'学习资源',状态:'进行中'}),null);});
+test('legacy project and outside root excluded from formal projects',()=>{assert.equal(projectNote(`${PROJECT_ROOT}/旧项目/project-旧项目.md`,{项目名称:'旧项目'}),null);assert.equal(projectNote('Projects/a/a.md',fm),null);});
+test('renamed file and folder retain ID and current path',()=>{const renamed=projectNote(`${PROJECT_ROOT}/新目录/新名字.md`,fm)!;assert.equal(renamed.id,ID);assert.equal(renamed.name,'新名字');assert.equal(renamed.path,`${PROJECT_ROOT}/新目录/新名字.md`);});
+test('bad metadata does not crash parsing',()=>{for(const value of [null,undefined,[],42,'broken'])assert.equal(projectNote(path,value),null);assert.equal(projectNote(path,{类型:'项目',状态:[],方向:{},开始日期:{}})!.direction,'');});
+test('empty root returns no project and scanner ignores broken metadata',()=>{const app={vault:{getMarkdownFiles:()=>[{path}, {path:`${PROJECT_ROOT}/broken.md`}]},metadataCache:{getFileCache:()=>{throw Error('bad metadata');}}} as unknown as App;assert.deepEqual(scanProjects(app),[]);});
+test('scanner rescans renames and deletes without modifying files',()=>{let files=[{path}];const app={vault:{getMarkdownFiles:()=>files},metadataCache:{getFileCache:()=>({frontmatter:fm})}} as unknown as App;assert.equal(scanProjects(app)[0]!.id,ID);files=[{path:`${PROJECT_ROOT}/新名字/新名字.md`}];assert.equal(scanProjects(app)[0]!.name,'新名字');files=[];assert.deepEqual(scanProjects(app),[]);});
+test('Embedded project task append/toggle preserves project UUID',()=>{const raw=appendEmbeddedTask(projectTemplate(input,ID,'2026-09-06'),path,'A','2026-09-06','task-a');const task=parseEmbeddedTasks(path,raw)[0]!;const changed=setEmbeddedCompletion(raw,task,true,()=> 'unused');assert.ok(changed.includes(`项目ID: ${ID}`));assert.equal(projectSummary(project(),changed).done,1);});
+test('legacy classifier ignores references and formal notes',()=>{for(const fm of [{},{类型:'项目',状态:'进行中'},{类型:'学习主题',状态:'进行中'},{类型:'计划',状态:'进行中'}])assert.equal(isLegacyTaskProperties(fm),false);});
+test('legacy normal/repeating task Properties remain recognized',()=>{assert.equal(isLegacyTaskProperties({类型:'普通',状态:'待办'}),true);assert.equal(isLegacyTaskProperties({类型:'重复'}),true);assert.equal(isLegacyTaskProperties({状态:'已完成'}),true);});
+test('new project view has no destructive UI or rename operation',()=>{const source=readFileSync(new URL('../views/ProjectView.ts',import.meta.url),'utf8');assert.equal(source.includes('trashFile'),false);assert.equal(source.includes('renameFile'),false);assert.ok(source.includes('编辑项目笔记'));});
+test('legacy deletion explicitly confirms folder and contents to trash',()=>{const zh=readFileSync(new URL('../i18n/zh.ts',import.meta.url),'utf8');assert.ok(zh.includes('将把该项目文件夹及其内容移入回收站'));const view=readFileSync(new URL('../views/ProjectBoard.ts',import.meta.url),'utf8');assert.ok(view.includes('ConfirmModal'));assert.ok(view.includes('trashFile(folder)'));});
+test('formal projectsFolder default and task picker wired correctly',()=>{const settings=readFileSync(new URL('../settings.ts',import.meta.url),'utf8');assert.ok(settings.includes('projectsFolder: PROJECT_ROOT'));const picker=readFileSync(new URL('../views/EmbeddedTaskModal.ts',import.meta.url),'utf8');assert.ok(picker.includes('projectPaths.has(f.path)'));});
+test('default project toolbar and homepage use formal scanner/view',()=>{const view=readFileSync(new URL('../views/DashboardView.ts',import.meta.url),'utf8');assert.ok(view.includes("if (it.action === 'project') new NewProjectModal"));assert.ok(view.includes("if (it.action === 'all') void openProjects"));assert.ok(view.includes('scanProjects(this.app)'));});

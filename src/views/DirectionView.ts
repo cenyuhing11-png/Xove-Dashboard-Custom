@@ -2,6 +2,9 @@ import { App, ItemView, Notice, WorkspaceLeaf } from 'obsidian';
 import type { ViewStateResult } from 'obsidian';
 import { directionAbilities, directionInfo, directionResources, directionTopics, ensureDirection } from '../data/compass';
 import { learningFiles, openLearningFile, scanLearning } from '../data/learningVault';
+import { scanProjects } from '../data/projectVault';
+import { directionProjects } from '../data/projects';
+import { openProjects } from './ProjectView';
 
 export const DIRECTION_VIEW = 'xove-dashboard-custom-direction';
 export async function openDirection(app: App, name: string): Promise<void> {
@@ -61,8 +64,13 @@ export class DirectionView extends ItemView {
 					el.createEl('p', { text: `状态：${note.status || '未填写'} · 能力：${note.abilities.join('、') || '未填写'}` });
 				}
 			}
-			el.createEl('h2', { text: '项目与作品' });
-			el.createEl('p', { text: '项目方向关联后续接入' });
+			el.createEl('h2', { text: '相关项目' });
+			const projects = directionProjects(scanProjects(this.app), info.name);
+			if (!projects.length) el.createEl('p', { text: '暂无关联项目' });
+			for (const p of projects) {
+				el.createEl('button', { text: p.name }).onclick = () => { void openProjects(this.app, p); };
+				el.createEl('p', { text: `${p.status}${p.dueDate ? ` · 截止 ${p.dueDate}` : ''}` });
+			}
 			el.createEl('button', { text: '编辑方向笔记 →' }).onclick = () => { void openLearningFile(this.app, info.path).catch(() => new Notice('方向笔记不存在或已移动')); };
 		} catch { if (token === this.generation) { this.contentEl.empty(); this.contentEl.createEl('p', { text: '方向笔记无法读取，请检查是否已移动或删除。' }); } }
 	}

@@ -5,6 +5,8 @@ import { BannerModal } from './BannerModal';
 import { CountdownModal, defaultEventName } from './CountdownModal';
 import { TaskEditModal } from './TaskEditModal';
 import { NewEmbeddedTaskModal, EmbeddedTaskListModal, renderEmbeddedRows } from './EmbeddedTaskModal';
+import { NewProjectModal, openProjects } from './ProjectView';
+import { scanProjects } from '../data/projectVault';
 import { TaskItem, ProjectInfo, TaskStatus, ProjectType, priorityWeight, NodeState, RepeatRule, serializeDailyNodesBlock, parseDailyNodesFromBody } from '../data/taskParser';
 import { TaskStore } from '../data/taskStore';
 import { writeFrontmatter as fmWriteFrontmatter, yamlScalar } from '../data/frontmatterWriter';
@@ -766,8 +768,8 @@ export class DashboardView extends ItemView {
 					if (it.action === 'classic') void this.showClassicDashboard();
 					if (it.action === 'diary') void this.createDiary();
 					if (it.action === 'task') new NewEmbeddedTaskModal(this.app, this.plugin.embeddedTasks).open();
-					if (it.action === 'project') void this.createProjectFile();
-					if (it.action === 'all') void this.projectBoard.show();
+					if (it.action === 'project') new NewProjectModal(this.app).open();
+					if (it.action === 'all') void openProjects(this.app);
 					if (it.action === 'opportunity') void this.oppBoard.show();
 				} catch (e) {
 					const msg = e instanceof Error ? e.message : String(e);
@@ -1300,6 +1302,7 @@ export class DashboardView extends ItemView {
 		this.homeMode = 'classic';
 		await this.renderEnabledModules(this.boardEl);
 		this.boardEl.createEl('button', { text: '旧任务工具 / 高级任务工具' }).onclick = () => { void this.openTaskModal(this.selectedProject ?? undefined); };
+		this.boardEl.createEl('button', { text: '旧项目 / 月历 / 甘特图' }).onclick = () => { void this.projectBoard.show(); };
 		this.attachBoardInteractions();
 		await this.renderFirstRunIfEmpty(this.boardEl);
 	}
@@ -1313,7 +1316,7 @@ export class DashboardView extends ItemView {
 		const date = new Date();
 		const [allTasks, projects, plans, learning] = await Promise.all([
 			this.taskStore.scanAllTasks(),
-			this.taskStore.scanAllProjects(),
+			scanProjects(this.app),
 			Promise.all(PLAN_PERIODS.map((period) => readPlan(this.planFiles(), period, date))),
 			currentLearning(scanLearning(this.app), (path) => learningFiles(this.app).read(path)),
 		]);
@@ -1362,8 +1365,8 @@ export class DashboardView extends ItemView {
 			},
 			onOpenPlan: (period) => void this.openPlan(period),
 			onOpenTask: (task) => this.openTaskEditModal(task),
-			onOpenProjects: () => void this.projectBoard.show(),
-			onOpenProject: (project) => void this.projectBoard.openProjectGantt(project),
+			onOpenProjects: () => void openProjects(this.app),
+			onOpenProject: (project) => void openProjects(this.app, project),
 			onOpenProjectView: (view) => void this.projectBoard.openView(view),
 			onOpenPath: (path) => void this.revealFolder(path),
 		});

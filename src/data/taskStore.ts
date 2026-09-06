@@ -1,6 +1,7 @@
 import { TFile, TFolder } from 'obsidian';
 import type { App } from 'obsidian';
-import { parseTaskFile, parseProjectMeta } from './taskParser';
+import { parseTaskFile, parseProjectMeta, parseFrontmatter } from './taskParser';
+import { isLegacyTaskProperties } from './legacyTaskIdentity';
 import type { ProjectInfo, TaskItem } from './taskParser';
 import { reportParseIssue, clearParseIssues, getParseIssues } from './parserDiagnostics';
 import type { ParseIssue } from './parserDiagnostics';
@@ -157,6 +158,7 @@ export class TaskStore {
 		const results = await Promise.all(files.map(async (file) => {
 			try {
 				const content = await this.app.vault.cachedRead(file);
+				if (!isLegacyTaskProperties(parseFrontmatter(content))) return null;
 				return parseTaskFile(file.path, content, projectId || folder.name, projectColor);
 			} catch (e) {
 				reportParseIssue({ path: file.path, kind: 'read', message: e instanceof Error ? e.message : String(e) });

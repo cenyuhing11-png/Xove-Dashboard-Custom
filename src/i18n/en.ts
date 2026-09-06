@@ -220,7 +220,7 @@ export const en: Dict = {
 		poAlreadyInProject: 'Task already in this project', poDeleteTask: 'Delete task',
 		poAlreadySubtask: 'Already a subtask of this task', poParentCycle: '❌ Cannot make it the parent of its own descendant (would create a cycle)',
 		poStageUpdated: '✨ {name} stage updated to "{stage}"', poNameExists: '❌ "{name}" already exists in the target project, not moved',
-		poMoved: 'Moved to "{project}"', poProjectDeleted: '❌ Project deleted: {name}', poDeleteProjectConfirm: 'Delete project "{name}" and all its task files? This cannot be undone.',
+		poMoved: 'Moved to "{project}"', poProjectDeleted: '❌ Project deleted: {name}', poDeleteProjectConfirm: 'Move project "{name}" and its entire folder contents to the trash?',
 		poDateUpdated: '✨ Task date updated', poStatusUpdated: '✨ Task status updated: {status}',
 		poPriorityUpdated: '✨ Priority updated: {priority}',
 	},

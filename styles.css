@@ -2480,3 +2480,7 @@ body.theme-dark .ad-popover.ad-addmenu-backdrop[data-theme="light"] {
 .mx-task-link.is-complete { text-decoration: line-through; color: var(--text-muted); }
 .mx-task-meta, .mx-task-meta .mx-task-link { font-size: var(--font-smallest); color: var(--text-muted); }
 .mx-project-tasks { padding: 12px; border-bottom: 1px solid var(--background-modifier-border); max-height: 35vh; overflow-y: auto; }
+.mx-project-view { padding: 24px; overflow-y: auto; overflow-wrap: anywhere; }
+.mx-project-view p { white-space: pre-wrap; }
+.mx-project-card { padding: 12px 0; border-bottom: 1px solid var(--background-modifier-border); }
+.mx-project-view button { max-width: 100%; white-space: normal; height: auto; }

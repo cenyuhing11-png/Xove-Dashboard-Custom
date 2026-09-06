@@ -2,6 +2,7 @@ import { App, Modal, Notice, Setting, TFile } from 'obsidian';
 import { DAILY_TASK_FILE, embeddedSource, groupEmbedded } from '../data/embeddedTasks';
 import type { EmbeddedTask, EmbeddedSourceType } from '../data/embeddedTasks';
 import type { EmbeddedTaskStore } from '../data/embeddedTaskVault';
+import { scanProjects } from '../data/projectVault';
 
 const LABELS = { project: '项目', learning: '学习', daily: '日常' };
 export function openEmbeddedSource(app: App, task: EmbeddedTask): void {
@@ -40,7 +41,8 @@ export class NewEmbeddedTaskModal extends Modal {
 		const renderPicker = () => {
 			picker.empty();
 			if (type === 'daily') { path = DAILY_TASK_FILE; picker.createEl('p', { text: '保存到：日常任务 → 日常待办' }); return; }
-			const files = this.app.vault.getMarkdownFiles().filter(f => embeddedSource(f.path) === type).sort((a, b) => a.path.localeCompare(b.path, 'zh-CN'));
+			const projectPaths = new Set(scanProjects(this.app).map(p => p.path));
+			const files = this.app.vault.getMarkdownFiles().filter(f => embeddedSource(f.path) === type && (type !== 'project' || projectPaths.has(f.path))).sort((a, b) => a.path.localeCompare(b.path, 'zh-CN'));
 			// Scope + explicit selection determines project source; never scan unrelated folders.
 			if (!files.some(f => f.path === path)) path = files[0]?.path ?? '';
 			new Setting(picker).setName(type === 'project' ? '项目笔记' : '学习笔记 / 学习资源').addDropdown(select => {

@@ -221,7 +221,7 @@ export const zh: Dict = {
 		poAlreadyInProject: '任务已在该项目', poDeleteTask: '删除任务',
 		poAlreadySubtask: '已经是该任务的子任务', poParentCycle: '❌ 不能设为自身子任务的父任务（会形成循环）',
 		poStageUpdated: '✨ {name} 阶段已更新为 "{stage}"', poNameExists: '❌ 目标项目已存在同名任务「{name}」，未移动',
-		poMoved: '已移动到「{project}」', poProjectDeleted: '❌ 项目已删除: {name}', poDeleteProjectConfirm: '确定删除项目「{name}」及其所有任务文件？此操作不可撤销。',
+		poMoved: '已移动到「{project}」', poProjectDeleted: '❌ 项目已删除: {name}', poDeleteProjectConfirm: '删除项目「{name}」将把该项目文件夹及其内容移入回收站。是否继续？',
 		poDateUpdated: '✨ 任务日期已更新', poStatusUpdated: '✨ 任务状态已更新: {status}',
 		poPriorityUpdated: '✨ 优先级已更新: {priority}',
 	},

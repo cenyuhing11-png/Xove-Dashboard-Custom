@@ -1,6 +1,7 @@
 import { App, PluginSettingTab, Setting, TFile, TFolder } from 'obsidian';
 import Dashboard from './main';
 import { DIARY_FOLDER } from './data/vaultPaths';
+import { PROJECT_ROOT } from './data/projects';
 import type { BoardStage } from './data/opportunityParser';
 import { t, setLang, getLang } from './i18n';
 
@@ -118,7 +119,7 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
 	todoSourceFolder: '',
 	todoShowCompleted: false,
 	taskDetailMode: 'detail',
-	projectsFolder: 'Projects',
+	projectsFolder: PROJECT_ROOT,
 	currentPoView: 'gantt',
 	poProjectOrder: [],
 	poTaskOrder: [],

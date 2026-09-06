@@ -9,6 +9,7 @@ import { UpdateLogModal } from './views/UpdateLogModal';
 import { WelcomeModal } from './views/WelcomeModal';
 import { DirectionView, DIRECTION_VIEW } from './views/DirectionView';
 import { EmbeddedTaskStore } from './data/embeddedTaskVault';
+import { ProjectView, PROJECT_VIEW } from './views/ProjectView';
 
 /** 番茄钟运行时状态（与主页卡片共享，状态栏实时显示） */
 export interface PomoState {
@@ -45,6 +46,7 @@ export default class Dashboard extends Plugin {
 
 		this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
 		this.registerView(DIRECTION_VIEW, (leaf) => new DirectionView(leaf));
+		this.registerView(PROJECT_VIEW, (leaf) => new ProjectView(leaf, this.embeddedTasks));
 
 		this.addRibbonIcon('layout-dashboard', '打开梦序', () => {
 			void this.activateView();
