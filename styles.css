@@ -235,8 +235,8 @@
 /* Pulse ticker: secondary surface */
 :is(body.theme-light .dashboard-plugin:not([data-theme="dark"]),
     body.theme-dark .dashboard-plugin[data-theme="light"]) .ad-pulse {
-  background: var(--ad-s2);
-  border-color: var(--ad-line);
+  background: transparent;
+  border-color: transparent;
 }
 
 /* Cards: white, hairline border, soft shadow */
@@ -492,6 +492,9 @@
     radial-gradient(100% 90% at 100% 100%, rgba(123,167,255,0.08), transparent 60%),
     linear-gradient(120deg, #161A24 0%, #1B2030 50%, #191D28 100%);
 }
+.ad-banner--empty { aspect-ratio: auto; height: clamp(72px, 9cqi, 120px); }
+.ad-banner--empty .ad-banner__ph { padding: 28px 12px 6px; text-align: center; }
+.ad-banner--empty .ad-banner__bar { top: 6px; right: 8px; opacity: 1; transform: none; }
 .ad-banner::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.018) 0 1px, transparent 1px 12px);
@@ -536,14 +539,14 @@
 
 /* ============================================================ pulse */
 .ad-pulse {
-  margin-top: 10px; padding: 8px 12px;
-  border: 1px solid var(--ad-line); border-radius: var(--ad-r2);
-  background: linear-gradient(180deg, var(--ad-s1), #14161C);
-  font-family: var(--ad-font-mono); font-size: 12px; color: var(--ad-text-mute);
-  display: flex; align-items: center; gap: 14px;
-  overflow: hidden; white-space: nowrap;
+  margin-top: 6px; padding: 4px 8px;
+  border: 0; border-radius: var(--ad-r2);
+  background: transparent;
+  font-family: var(--ad-font-mono); font-size: 11px; color: var(--ad-text-mute);
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px;
+  white-space: normal;
 }
-.ad-pulse__tag { color: var(--ad-accent); letter-spacing: 0.18em; text-transform: uppercase; }
+.ad-pulse__tag { color: var(--ad-text-mute); letter-spacing: 0.06em; }
 .ad-pulse__sep { color: var(--ad-text-dim); }
 
 /* ============================================================ header */

@@ -48,7 +48,7 @@ function renderLearning(parent: HTMLElement): void {
 }
 
 function renderProjects(parent: HTMLElement, data: WorkbenchHomeData): void {
-	const body = createSection(parent, '📅 项目 / 日历');
+	const body = createSection(parent, '📅 项目与日程');
 	if (data.projects.length) addEntry(body, '当前项目', `${data.projects.length} 个`, data.onOpenProjects);
 	else addEmpty(body, '暂无当前项目');
 	addEntry(body, '月历', '查看现有项目月历', () => data.onOpenProjectView('calendar'));
@@ -58,7 +58,7 @@ function renderProjects(parent: HTMLElement, data: WorkbenchHomeData): void {
 }
 
 function renderKnowledge(parent: HTMLElement, data: WorkbenchHomeData): void {
-	const body = createSection(parent, '📥 知识');
+	const body = createSection(parent, '📥 知识库');
 	for (const area of KNOWLEDGE_AREAS) {
 		const exists = data.existingPaths.has(area.path);
 		addEntry(body, area.label, exists ? area.path : '目录尚未建立', exists ? () => data.onOpenPath(area.path) : undefined);
@@ -67,7 +67,7 @@ function renderKnowledge(parent: HTMLElement, data: WorkbenchHomeData): void {
 }
 
 function renderContent(parent: HTMLElement, data: WorkbenchHomeData): void {
-	const body = createSection(parent, '✨ 项目 / 作品 / 内容');
+	const body = createSection(parent, '✨ 作品与内容');
 	const projects = createGroup(body, '最近项目');
 	if (!data.projects.length) addEmpty(projects, '暂无项目数据');
 	for (const project of data.projects.slice(0, 3)) {

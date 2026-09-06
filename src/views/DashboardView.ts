@@ -409,7 +409,7 @@ export class DashboardView extends ItemView {
 	   ============================================================ */
 	private renderBanner(root: HTMLElement): void {
 		if (!this.plugin.settings.banner.enabled) return;
-		const banner = root.createDiv({ cls: 'ad-banner' });
+		const banner = root.createDiv({ cls: 'ad-banner ad-banner--empty' });
 		const ph = banner.createDiv({ cls: 'ad-banner__ph', text: t('home.bannerPlaceholder') });
 		this.bannerPh = ph;
 
@@ -475,6 +475,7 @@ export class DashboardView extends ItemView {
 		const img = this.bannerImg;
 		const ph = this.bannerPh;
 		if (!img || !ph) return;
+		img.parentElement?.removeClass('ad-banner--empty');
 		img.onload = () => {
 			img.style.transform = `translateY(${offsetY}px)`;
 		};
