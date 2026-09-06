@@ -10,11 +10,11 @@ export const en: Dict = {
 	},
 	// What's new modal
 	update: {
-		title: '✨ Xove Dashboard updated to v{v}',
+		title: '✨ 我的工作台 updated to v{v}',
 	},
 	// First-run welcome modal
 	welcome: {
-		title: '👋 Welcome to Xove Dashboard',
+		title: '👋 Welcome to 我的工作台',
 		intro: 'Turn your Obsidian home tab into a personal command center: tasks, projects, ideas and stats in one place.',
 		featuresTitle: 'Highlights',
 		features: [
@@ -270,7 +270,7 @@ export const en: Dict = {
 		diaryNaming: 'Diary naming rule',
 		theme: 'Theme', themeDesc: 'Follow Obsidian appearance, or set dark/light manually. Manual choice also switches Obsidian\'s overall appearance; the dashboard follows automatically',
 		themeAuto: 'Follow Obsidian', themeDark: 'Dark', themeLight: 'Light',
-		pluginTitle: 'Plugin title', pluginTitleDesc: 'Custom dashboard title (the "XOVE DASHBOARD" line). Leave empty to use the default "XOVE DASHBOARD"; applies immediately, no reload needed',
+		pluginTitle: 'Workbench title', pluginTitleDesc: 'Customize the home title. Leave empty to use “我的工作台”; applies immediately without reloading',
 		pipelineCount: 'Stage count', pipelineCountDesc: 'Set the number of project stages (4-6)',
 		pipelineShowAll: 'Show all',
 		progressFilter: 'Progress card filter', progressFilterDesc: 'The home "Progress" card shows projects up to the selected stage',

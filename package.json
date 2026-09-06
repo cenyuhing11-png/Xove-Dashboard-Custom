@@ -1,7 +1,7 @@
 {
 	"name": "xove-dashboard-custom",
-	"version": "0.3.1-custom.1",
-	"description": "A private, maintainable Obsidian workbench based on Xove Dashboard.",
+	"version": "0.4.0-dev.1",
+	"description": "A private, maintainable Obsidian workbench.",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {

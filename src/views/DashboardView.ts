@@ -14,6 +14,8 @@ import { ProjectBoard } from './ProjectBoard';
 import { fmtDate, todayStr, nowFmt, calcNextRemindDate, getTodayUniverse, getTodayTasks, isDoneToday, isSkipToday, overdueDays } from '../data/taskLogic';
 import { t, tArr, isEnglish } from '../i18n';
 import { UI_TEXT } from '../constants';
+import { renderWorkbenchHome } from '../components/workbench/WorkbenchHome';
+import { naturalTimeSummary } from '../utils/timeProgress';
 
 import type Dashboard from '../main';
 import {
@@ -205,6 +207,9 @@ export class DashboardView extends ItemView {
 	private weekdayEl: HTMLElement | null = null;
 	private parseIssuesEl: HTMLElement | null = null;
 	private lunarEl: HTMLElement | null = null;
+	private isoWeekEl: HTMLElement | null = null;
+	private monthProgressEl: HTMLElement | null = null;
+	private yearProgressEl: HTMLElement | null = null;
 	private dashboardEl: HTMLElement | null = null;
 	/** Header theme-toggle button. Prefixed to avoid clashing with ItemView fields. */
 	private adThemeBtn: HTMLElement | null = null;
@@ -265,6 +270,8 @@ export class DashboardView extends ItemView {
 	private storeUnsub: (() => void) | null = null;
 	private oppBoard: OpportunityBoard;
 	private projectBoard: ProjectBoard;
+	/** 新首页为默认视图；classic 保留作者原有全部首页卡片能力。 */
+	private homeMode: 'workbench' | 'classic' = 'workbench';
 
 	/* ---- 番茄钟（状态提升到 plugin.pomoState，主页卡片与状态栏共用） ---- */
 	private adPomoTimer: number | null = null;
@@ -305,7 +312,7 @@ export class DashboardView extends ItemView {
 	}
 
 	getViewType(): string { return VIEW_TYPE; }
-	getDisplayText(): string { return 'Xove Dashboard'; }
+	getDisplayText(): string { return '我的工作台'; }
 	getIcon(): string { return 'layout-dashboard'; }
 
 	async onOpen(): Promise<void> {
@@ -338,7 +345,7 @@ export class DashboardView extends ItemView {
 			} else if (this.currentPage === 'opportunity') {
 				this.oppBoard.scheduleRefresh();
 			} else {
-				this.scheduleHeatmapRefresh();
+				if (this.homeMode === 'classic') this.scheduleHeatmapRefresh();
 				this.dashboardStore.requestRefresh();
 			}
 		};
@@ -630,7 +637,12 @@ export class DashboardView extends ItemView {
 	/** Live-update only the dashboard title text (cheap; no full re-render). */
 	refreshTitle(): void {
 		if (!this.adTitleEl) return;
-		this.adTitleEl.textContent = this.plugin.settings.dashboardTitle || MOCK_DATA.header.title;
+		this.adTitleEl.textContent = this.resolvedDashboardTitle();
+	}
+
+	private resolvedDashboardTitle(): string {
+		const custom = this.plugin.settings.dashboardTitle.trim();
+		return !custom || /xove\s*dashboard/i.test(custom) ? '我的工作台' : custom;
 	}
 
 	/* ============================================================
@@ -639,30 +651,27 @@ export class DashboardView extends ItemView {
 	private renderHeader(root: HTMLElement, d: DashboardData): void {
 		const h = root.createEl('header', { cls: 'ad-header' });
 		const left = h.createDiv({ cls: 'ad-header__left' });
-		left.createEl('p', { cls: 'ad-eyebrow', text: d.header.eyebrow });
-		this.adTitleEl = left.createEl('h1', { cls: 'ad-title', text: this.plugin.settings.dashboardTitle || d.header.title });
-		left.createEl('p', { cls: 'ad-subtitle', text: 'Obsidian · Xove Dashboard · v' + (this.plugin.manifest?.version ?? d.header.subtitle.replace(/^.*v/, 'v')) });
+		left.createEl('p', { cls: 'ad-eyebrow', text: 'PERSONAL WORKBENCH' });
+		this.adTitleEl = left.createEl('h1', { cls: 'ad-title', text: this.resolvedDashboardTitle() });
+		left.createEl('p', { cls: 'ad-subtitle', text: 'Obsidian · 我的工作台 · v' + (this.plugin.manifest?.version ?? d.header.subtitle.replace(/^.*v/, 'v')) });
 
 		const right = h.createDiv({ cls: 'ad-header__right' });
 
 		const now = new Date();
-		const loc = isEnglish() ? 'en-US' : 'zh-CN';
-		const dateStr = now.toLocaleDateString(loc, { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' });
-		const timeStr = now.toLocaleTimeString(loc, { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' });
-		this.dateEl = right.createDiv({ cls: 'ad-header__date', text: `${dateStr} ${timeStr}` });
+		const summary = naturalTimeSummary(now);
+		this.dateEl = right.createDiv({ cls: 'ad-header__date', text: summary.date });
 
 		const meta = right.createDiv({ cls: 'ad-header__meta' });
-		this.weekdayEl = meta.createSpan({ text: new Date().toLocaleDateString(loc, { timeZone: 'Asia/Shanghai', weekday: 'long' }) });
+		this.weekdayEl = meta.createSpan({ text: summary.weekday });
 		meta.createSpan({ cls: 'ad-dot' });
-		// Compute the real lunar date up front (mock data has a stale literal);
-		// the 30s interval below keeps it fresh across day boundaries.
-		// 决策2：英文模式下自动隐藏农历。
-		const initialLunar = getLunarDate(new Date());
-		if (initialLunar && !isEnglish()) {
-			this.lunarEl = meta.createSpan({ text: t('home.lunarPrefix') + initialLunar });
-		} else if (!isEnglish()) {
-			this.lunarEl = meta.createSpan({ text: d.lunar });
+		this.isoWeekEl = meta.createSpan({ text: `W${summary.isoWeek}` });
+		if (!isEnglish()) {
+			meta.createSpan({ cls: 'ad-dot' });
+			this.lunarEl = meta.createSpan({ text: t('home.lunarPrefix') + getLunarDate(now) });
 		}
+		const progress = right.createDiv({ cls: 'wb-time-progress' });
+		this.monthProgressEl = progress.createSpan({ text: `${summary.monthLabel} · ${summary.monthProgress}%` });
+		this.yearProgressEl = progress.createSpan({ text: `${summary.yearLabel} · ${summary.yearProgress}%` });
 
 		// Buttons row: theme toggle (left) + settings (right), same line
 		const btns = right.createDiv({ cls: 'ad-header__btns' });
@@ -692,20 +701,15 @@ export class DashboardView extends ItemView {
 		// Update time every 30 seconds
 		this.registerInterval(window.setInterval(() => {
 			const n = new Date();
-			const l = isEnglish() ? 'en-US' : 'zh-CN';
+			const current = naturalTimeSummary(n);
 			if (this.dateEl) {
-				const ds = n.toLocaleDateString(l, { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' });
-				const ts = n.toLocaleTimeString(l, { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit' });
-				this.dateEl.textContent = `${ds} ${ts}`;
+				this.dateEl.textContent = current.date;
 			}
-			if (this.weekdayEl) {
-				this.weekdayEl.textContent = n.toLocaleDateString(l, { timeZone: 'Asia/Shanghai', weekday: 'long' });
-			}
-			// 英文模式下 lunarEl 不存在（决策2：隐藏农历），自然跳过
-			if (this.lunarEl) {
-				const lunar = getLunarDate(n);
-				if (lunar) this.lunarEl.textContent = t('home.lunarPrefix') + lunar;
-			}
+			if (this.weekdayEl) this.weekdayEl.textContent = current.weekday;
+			if (this.isoWeekEl) this.isoWeekEl.textContent = `W${current.isoWeek}`;
+			if (this.lunarEl) this.lunarEl.textContent = t('home.lunarPrefix') + getLunarDate(n);
+			if (this.monthProgressEl) this.monthProgressEl.textContent = `${current.monthLabel} · ${current.monthProgress}%`;
+			if (this.yearProgressEl) this.yearProgressEl.textContent = `${current.yearLabel} · ${current.yearProgress}%`;
 		}, 30000));
 	}
 
@@ -719,6 +723,7 @@ export class DashboardView extends ItemView {
 		const navItems: Array<{ glyph: string; label: string; action: string; svg?: string }> = [
 			{ glyph: '\u2302', label: t('home.nav.home'), action: 'home', svg: ICON_home },
 			{ glyph: '\u203A', label: t('home.nav.allProjects'), action: 'all', svg: ICON_allProjects },
+			{ glyph: '\u25A6', label: '原有工具', action: 'classic' },
 		];
 		if (this.plugin.settings.boardEnabled) {
 			navItems.push({ glyph: '\u25C8', label: this.plugin.settings.boardTitle || t('home.nav.board'), action: 'opportunity', svg: ICON_opportunity });
@@ -740,6 +745,7 @@ export class DashboardView extends ItemView {
 				btn.addClass('is-active');
 				try {
 					if (it.action === 'home') void this.showDashboard();
+					if (it.action === 'classic') void this.showClassicDashboard();
 					if (it.action === 'diary') void this.createDiary();
 					if (it.action === 'task') void this.openTaskModal(this.selectedProject ?? undefined);
 					if (it.action === 'project') void this.createProjectFile();
@@ -862,10 +868,7 @@ export class DashboardView extends ItemView {
 	private renderBoard(root: HTMLElement, d: DashboardData): void {
 		const board = root.createDiv({ cls: 'ad-board' });
 		this.boardEl = board;
-		// 按注册表渲染全部启用模块
-		void this.renderEnabledModules(board);
-		this.attachBoardInteractions();
-		void this.renderFirstRunIfEmpty(board);
+		void this.renderWorkbenchDashboard();
 	}
 
 	/* ---- Quick Capture ---- */
@@ -1250,15 +1253,76 @@ export class DashboardView extends ItemView {
 
 	private async showDashboard(): Promise<void> {
 		if (!this.boardEl) return;
-		// 进入首页前确保退出可能的编辑态（修复「切页未退出编辑态」残留）
 		this.exitEditMode();
 		this.boardEl.empty();
 		this.boardEl.removeClass('po-board');
 		this.boardEl.removeClass('op-board');
 		this.boardEl.addClass('ad-board');
+		this.boardEl.addClass('wb-home');
 		this.currentPage = 'home';
-		// 按注册表渲染全部启用模块（顺序/显隐由 settings.homeModules 决定）
+		this.homeMode = 'workbench';
+		await this.renderWorkbenchDashboard();
+	}
+
+	/** 作者原有的可编辑卡片首页保留为独立入口，避免新首页删除既有能力。 */
+	private async showClassicDashboard(): Promise<void> {
+		if (!this.boardEl) return;
+		this.exitEditMode();
+		this.boardEl.empty();
+		this.boardEl.removeClass('po-board');
+		this.boardEl.removeClass('op-board');
+		this.boardEl.removeClass('wb-home');
+		this.boardEl.addClass('ad-board');
+		this.currentPage = 'home';
+		this.homeMode = 'classic';
 		await this.renderEnabledModules(this.boardEl);
+		this.attachBoardInteractions();
+		await this.renderFirstRunIfEmpty(this.boardEl);
+	}
+
+	private async renderWorkbenchDashboard(): Promise<void> {
+		const board = this.boardEl;
+		if (!board || this.currentPage !== 'home' || this.homeMode !== 'workbench') return;
+		const [allTasks, projects] = await Promise.all([
+			this.taskStore.scanAllTasks(),
+			this.taskStore.scanAllProjects(),
+		]);
+		if (!this.boardEl || this.boardEl !== board || this.currentPage !== 'home' || this.homeMode !== 'workbench') return;
+
+		const today = todayStr();
+		const horizonDate = new Date();
+		horizonDate.setDate(horizonDate.getDate() + 14);
+		const horizon = fmtDate(horizonDate);
+		const upcomingTasks = allTasks
+			.filter((task) => task.status !== '已完成' && task.status !== '已取消' && !!task.dueDate && task.dueDate >= today && task.dueDate <= horizon)
+			.sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '') || priorityWeight(a.priority) - priorityWeight(b.priority));
+		const existingPaths = new Set(
+			['00-收件箱', '01-学习与资料', '02-知识与思考']
+				.filter((path) => this.app.vault.getAbstractFileByPath(path) instanceof TFolder),
+		);
+
+		renderWorkbenchHome(board, {
+			todayTasks: getTodayTasks(allTasks, today, this.plugin.settings.todoShowCompleted),
+			upcomingTasks,
+			projects,
+			existingPaths,
+			onOpenTask: (task) => this.openTaskEditModal(task),
+			onOpenProjects: () => void this.projectBoard.show(),
+			onOpenProject: (project) => void this.projectBoard.openProjectGantt(project),
+			onOpenProjectView: (view) => void this.projectBoard.openView(view),
+			onOpenPath: (path) => void this.revealFolder(path),
+		});
+	}
+
+	private async revealFolder(path: string): Promise<void> {
+		const folder = this.app.vault.getAbstractFileByPath(path);
+		if (!(folder instanceof TFolder)) return;
+		const leaf = this.app.workspace.getLeavesOfType('file-explorer')[0];
+		const explorer = leaf?.view as unknown as { revealInFolder?: (file: TFolder) => Promise<void> };
+		if (leaf && explorer.revealInFolder) {
+			await this.app.workspace.revealLeaf(leaf);
+			await explorer.revealInFolder(folder);
+		}
 	}
 
 	/** Delete task file from vault */
@@ -1578,6 +1642,7 @@ export class DashboardView extends ItemView {
 	/** Refresh the todo list card in-place */
 	private async refreshTodoList(): Promise<void> {
 		if (!this.boardEl) return;
+		if (this.homeMode === 'workbench') return this.renderWorkbenchDashboard();
 		const allTasks = await this.taskStore.scanAllTasks();
 		await this.renderTodo(this.boardEl, allTasks);
 	}
@@ -1590,6 +1655,7 @@ export class DashboardView extends ItemView {
 	/** Refresh the weekly & overdue list card in-place */
 	private async refreshWeeklyList(): Promise<void> {
 		if (!this.boardEl) return;
+		if (this.homeMode === 'workbench') return this.renderWorkbenchDashboard();
 		const allTasks = await this.taskStore.scanAllTasks();
 		await this.renderWeekly(this.boardEl, allTasks);
 	}
@@ -1772,7 +1838,8 @@ export class DashboardView extends ItemView {
 	rebuildHome(): void {
 		if (this.currentPage !== 'home' || !this.boardEl) return;
 		this.boardEl.empty();
-		void this.renderEnabledModules(this.boardEl);
+		if (this.homeMode === 'workbench') void this.renderWorkbenchDashboard();
+		else void this.renderEnabledModules(this.boardEl);
 	}
 
 	/** 设置页修改看板开关/名称/阶段配置后，立即刷新导航与看板页（无需重启） */
@@ -2248,6 +2315,7 @@ export class DashboardView extends ItemView {
 	private async showDashboardKeepEditMode(): Promise<void> {
 		if (!this.boardEl) return;
 		this.currentPage = 'home';
+		this.homeMode = 'classic';
 		await this.renderEnabledModules(this.boardEl);
 		if (this.adEditMode) this.injectCardResizeButtons();
 	}
@@ -2595,6 +2663,11 @@ export class DashboardView extends ItemView {
 	 *  (no remove/re-create), so the layout never flashes. */
 	private async refreshHomeCards(): Promise<void> {
 		if (this.currentPage !== 'home' || !this.boardEl) return;
+		if (this.homeMode === 'workbench') {
+			await this.renderWorkbenchDashboard();
+			this.refreshParseIssues();
+			return;
+		}
 		// A first-run guide (if shown at load) should yield as soon as the user
 		// starts populating the vault, so drop any stale guide on refresh.
 		this.boardEl.querySelector('.ad-card--guide')?.remove();

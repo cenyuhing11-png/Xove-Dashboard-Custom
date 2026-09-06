@@ -94,6 +94,13 @@ export class ProjectBoard {
 		await this.show(true);
 	}
 
+	/** 首页入口复用现有项目总览的指定视图，不另建日历或甘特图实现。 */
+	async openView(view: 'calendar' | 'gantt'): Promise<void> {
+		this.host.selectedProject = null;
+		this.currentView = view;
+		await this.show(true);
+	}
+
 
 	/**
 	 * 渲染项目总览。
@@ -116,6 +123,7 @@ export class ProjectBoard {
 		this.boardEl.addClass('po-board');
 		this.boardEl.removeClass('ad-board');
 		this.boardEl.removeClass('op-board');
+		this.boardEl.removeClass('wb-home');
 		this.currentPage = 'project';
 
 		this.currentProjects = projects;

@@ -106,6 +106,7 @@ export class OpportunityBoard {
 		this.host.boardEl.empty();
 		this.host.boardEl.removeClass('ad-board');
 		this.host.boardEl.removeClass('po-board');
+		this.host.boardEl.removeClass('wb-home');
 		this.host.boardEl.addClass('op-board');
 		this.host.currentPage = 'opportunity';
 

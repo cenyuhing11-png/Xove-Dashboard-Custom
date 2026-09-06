@@ -270,7 +270,7 @@ export class DashboardSettingTab extends PluginSettingTab {
 			.setName(t('settings.pluginTitle'))
 			.setDesc(t('settings.pluginTitleDesc'))
 			.addText((tc) => tc
-				.setPlaceholder('XOVE DASHBOARD')
+				.setPlaceholder('我的工作台')
 				.setValue(this.plugin.settings.dashboardTitle)
 				.onChange(async (v) => { this.plugin.settings.dashboardTitle = v; await this.plugin.saveSettings(); this.plugin.refreshDashboardTitle(); }),
 			);

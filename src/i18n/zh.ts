@@ -10,11 +10,11 @@ export const zh: Dict = {
 	},
 	// 更新日志弹窗
 	update: {
-		title: '✨ Xove Dashboard 已更新到 v{v}',
+		title: '✨ 我的工作台已更新到 v{v}',
 	},
 	// 新用户欢迎弹窗
 	welcome: {
-		title: '👋 欢迎使用 Xove Dashboard',
+		title: '👋 欢迎使用我的工作台',
 		intro: '把 Obsidian 首页变成你的个人工作控制台：任务、项目、灵感与统计，一屏尽收。',
 		featuresTitle: '核心功能',
 		features: [
@@ -271,7 +271,7 @@ export const zh: Dict = {
 		diaryNaming: '日记命名规则',
 		theme: '主题', themeDesc: '跟随 Obsidian 外观，或手动指定深色/浅色。手动选择会同时切换 Obsidian 整体外观，仪表盘自动跟随',
 		themeAuto: '跟随 Obsidian', themeDark: '深色', themeLight: '浅色',
-		pluginTitle: '插件标题', pluginTitleDesc: '自定义仪表盘主标题（即"XOVE DASHBOARD"那一行）。留空则使用默认标题 "XOVE DASHBOARD"，修改后立即生效，无需重载',
+		pluginTitle: '工作台标题', pluginTitleDesc: '自定义首页主标题。留空则使用默认标题“我的工作台”，修改后立即生效，无需重载',
 		pipelineCount: '阶段数量', pipelineCountDesc: '设置项目阶段的数量（4-6个）',
 		pipelineShowAll: '显示全部',
 		progressFilter: '项目进度卡片筛选', progressFilterDesc: '主页"项目进度"卡片显示不超过所选阶段的项目',
