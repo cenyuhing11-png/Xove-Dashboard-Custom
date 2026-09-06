@@ -6,7 +6,7 @@ export type LearningKind = '能力' | '学习主题' | '学习资源';
 const folders: Record<LearningKind, string> = { 能力: '能力', 学习主题: '学习主题', 学习资源: '学习资源' };
 export interface LearningNote {
 	path: string; name: string; kind: LearningKind; status: string;
-	priority: string; abilities: string[]; topics: string[];
+	priority: string; abilities: string[]; topics: string[]; direction: string;
 	domain: string; stage: string; resourceType: string;
 }
 export interface CurrentLearning extends LearningNote { next: string }
@@ -27,7 +27,7 @@ export function learningNote(path: string, name: string, properties: unknown): L
 	const kind = text(fm['类型']);
 	if (kind !== '能力' && kind !== '学习主题' && kind !== '学习资源') return null;
 	return { path, name, kind, status: text(fm['状态']), priority: text(fm['优先级']),
-		abilities: relationNames(fm['所属能力']), topics: relationNames(fm['关联主题']),
+		abilities: relationNames(fm['所属能力']), topics: relationNames(fm['关联主题']), direction: text(fm['方向']),
 		domain: text(fm['领域']), stage: text(fm['阶段']), resourceType: text(fm['资源类型']) };
 }
 export function currentTopics(notes: LearningNote[]): LearningNote[] {
@@ -62,8 +62,8 @@ export function learningTemplate(kind: LearningKind, name: string): string {
 	const title = learningName(name);
 	const headers: Record<LearningKind, string> = {
 		能力: '状态: 培养中\n领域: ""\n阶段: ""',
-		学习主题: '状态: 学习中\n所属能力: []\n优先级: 主攻',
-		学习资源: '资源类型: 其他资料\n状态: 待学习\n关联主题: []\n来源: ""\n链接: ""',
+		学习主题: '状态: 学习中\n方向: ""\n所属能力: []\n优先级: 主攻',
+		学习资源: '资源类型: 其他资料\n状态: 待学习\n方向: ""\n关联主题: []\n来源: ""\n链接: ""',
 	};
 	const bodies: Record<LearningKind, string> = {
 		能力: '## 能力目标\n\n## 当前阶段\n\n## 能力标准\n\n- [ ]\n\n## 当前学习主题\n\n## 实践与作品\n\n## 备注\n',

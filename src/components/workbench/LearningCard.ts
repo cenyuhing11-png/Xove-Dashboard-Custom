@@ -4,7 +4,7 @@ import { addEmpty, addEntry, createSection } from './shared';
 export interface LearningActions {
 	create(): void;
 	open(path: string): void;
-	list(mode: 'queue' | 'abilities'): void;
+	list(mode: 'queue' | 'topics'): void;
 }
 export function renderLearningCard(parent: HTMLElement, notes: CurrentLearning[], actions: LearningActions): void {
 	const body = createSection(parent, '📚 当前学习');
@@ -20,5 +20,5 @@ export function renderLearningCard(parent: HTMLElement, notes: CurrentLearning[]
 	}
 	const links = body.createDiv({ cls: 'wb-inline-links' });
 	addEntry(links, '学习队列', undefined, () => actions.list('queue'));
-	addEntry(links, '能力地图', undefined, () => actions.list('abilities'));
+	addEntry(links, '查看学习主题', undefined, () => actions.list('topics'));
 }

@@ -1,6 +1,6 @@
-import { LIFE_COMPASS } from './config';
+import { LIFE_COMPASS } from './config.ts';
 
-export function renderLifeCompass(parent: HTMLElement): void {
+export function renderLifeCompass(parent: HTMLElement, open: (name: string) => void): void {
 	const compass = parent.createEl('section', { cls: 'wb-compass' });
 	const title = compass.createEl('h2', { cls: 'wb-compass__title' });
 	title.createSpan({ cls: 'wb-compass__icon', text: '🧭', attr: { 'aria-hidden': 'true' } });
@@ -10,6 +10,9 @@ export function renderLifeCompass(parent: HTMLElement): void {
 		const row = lanes.createDiv({ cls: `wb-compass__lane wb-compass__lane--${lane.id}` });
 		row.createSpan({ cls: 'wb-compass__label', text: lane.label });
 		const items = row.createDiv({ cls: 'wb-compass__items' });
-		for (const item of lane.items) items.createSpan({ cls: 'wb-compass__item', text: item });
+		for (const item of lane.items) {
+			const wrapper = items.createSpan({ cls: 'wb-compass__item' });
+			wrapper.createEl('button', { cls: 'wb-compass__link', text: item, attr: { 'aria-label': `打开${item}方向` } }).onclick = () => open(item);
+		}
 	}
 }

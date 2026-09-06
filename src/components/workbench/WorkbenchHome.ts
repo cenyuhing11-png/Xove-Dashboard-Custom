@@ -12,6 +12,7 @@ import type { JournalState } from '../../data/journal';
 import { addEmpty, addEntry, createGroup, createSection } from './shared';
 
 export interface WorkbenchHomeData {
+	onOpenDirection(name: string): void;
 	todayTasks: TaskItem[];
 	upcomingTasks: TaskItem[];
 	projects: ProjectInfo[];
@@ -76,7 +77,7 @@ function renderContent(parent: HTMLElement, data: WorkbenchHomeData): void {
 export function renderWorkbenchHome(parent: HTMLElement, data: WorkbenchHomeData): void {
 	parent.empty();
 	parent.addClass('wb-home');
-	renderLifeCompass(parent);
+	renderLifeCompass(parent, data.onOpenDirection);
 	const execution = parent.createDiv({ cls: 'wb-grid' });
 	renderToday(execution, data);
 	renderPlanningCard(execution, data.plans, data.onOpenPlan);

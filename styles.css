@@ -2423,6 +2423,11 @@ body.theme-dark .ad-popover.ad-addmenu-backdrop[data-theme="light"] {
 .wb-compass__items { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
 .wb-compass__item { color: var(--ad-text); font-size: 12px; line-height: var(--wb-compass-line-height); white-space: nowrap; }
 .wb-compass__item:not(:last-child)::after { content: '·'; margin-left: 8px; color: var(--ad-text-dim); }
+.wb-compass button.wb-compass__link { all: unset; font: inherit; color: inherit; cursor: pointer; background: transparent; box-shadow: none; border: 0; padding: 0; }
+.wb-compass__link:hover { text-decoration: underline; color: var(--text-accent); }
+.wb-compass__link:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+.mx-direction { padding: 24px; overflow-y: auto; overflow-wrap: anywhere; }
+.mx-direction button { max-width: 100%; white-space: normal; height: auto; }
 
 .wb-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
 .wb-section { padding: 13px 14px; }

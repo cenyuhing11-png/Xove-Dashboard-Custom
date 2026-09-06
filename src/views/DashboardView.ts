@@ -24,6 +24,7 @@ import { LearningListModal, NewLearningModal } from './LearningModals';
 import { ensureJournal, journalStates } from '../data/journal';
 import type { JournalKind } from '../data/journal';
 import { JournalHistoryModal } from './JournalHistoryModal';
+import { openDirection } from './DirectionView';
 
 import type Dashboard from '../main';
 import {
@@ -1326,6 +1327,7 @@ export class DashboardView extends ItemView {
 			plans,
 			learning,
 			journals: journalStates(this.planFiles(), date),
+			onOpenDirection: (name) => { void openDirection(this.app, name); },
 			journalActions: {
 				open: (kind) => { void this.openJournal(kind); },
 				history: (mode) => new JournalHistoryModal(this.app, mode, (path) => this.openJournalPath(path), (kind) => this.openJournal(kind)).open(),
