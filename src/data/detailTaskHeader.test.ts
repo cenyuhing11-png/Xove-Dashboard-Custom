@@ -8,14 +8,16 @@ import { EmbeddedTaskIndex } from './embeddedTasks.ts';
 
 class Element {
 	children: Element[] = []; classes = new Set<string>(); attrs: Record<string, string> = {}; text = ''; value = ''; checked = false; disabled = false;
+	parent?: Element;
 	onclick: () => void | Promise<void> = () => {}; onchange: () => void = () => {};
 	tag: string;
 	constructor(tag = 'div') { this.tag = tag; }
 	get textContent(): string { return this.text + this.children.map(e => e.textContent).join(''); }
-	createEl(tag: string, options: any = {}) { const e = new Element(tag); e.text = options.text ?? ''; e.value = options.value ?? ''; e.attrs = options.attr ?? {}; (options.cls ?? '').split(' ').filter(Boolean).forEach((c: string) => e.classes.add(c)); this.children.push(e); return e; }
+	createEl(tag: string, options: any = {}) { const e = new Element(tag); e.text = options.text ?? ''; e.value = options.value ?? ''; e.attrs = options.attr ?? {}; (options.cls ?? '').split(' ').filter(Boolean).forEach((c: string) => e.classes.add(c)); e.parent = this; this.children.push(e); return e; }
 	createDiv(o: any = {}) { return this.createEl('div', o); } createSpan(o: any = {}) { return this.createEl('span', o); }
 	addClass(c: string) { this.classes.add(c); } removeClass(c: string) { this.classes.delete(c); } closest() { return this; } focus() {}
 	empty() { this.children = []; } all(): Element[] { return [this, ...this.children.flatMap(e => e.all())]; }
+	remove() { if (this.parent) this.parent.children = this.parent.children.filter(e => e !== this); }
 	querySelectorAll(s: string) { return this.all().filter(e => s.startsWith('.') ? e.classes.has(s.slice(1)) : e.tag === s); }
 	querySelector(s: string) { return this.querySelectorAll(s)[0]; }
 }
@@ -58,7 +60,8 @@ for (const type of ['learning', 'project'] as const) test(`${type} inline add op
 	assert.equal(f.modals.length, 1); const modal = f.modals[0];
 	assert.equal(modal.presetPath, f.path); assert.equal(f.content(), f.before);
 	const form = modal.contentEl as Element;
-	assert.equal(form.querySelectorAll('select').find(e => e.attrs['aria-label'] === '归属')!.value, type);
+	assert.equal(form.querySelectorAll('select').find(e => e.attrs['aria-label'] === '归属')!.value, 'process');
+	assert.equal(form.querySelectorAll('select').find(e => e.attrs['aria-label'] === '所属进程')!.value, f.path);
 	form.querySelectorAll('input').find(e => e.attrs['aria-label'] === '任务内容')!.value = '新增验证任务';
 	await form.querySelectorAll('button').find(e => e.text === '创建任务')!.onclick();
 	assert.match(f.content(), /- \[ \] 新增验证任务 <!-- mx-task:detail-test -->/);

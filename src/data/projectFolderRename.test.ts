@@ -60,7 +60,8 @@ test('Default setting, legacy fallback and task picker all reuse PROJECT_ROOT', 
 	const read = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8');
 	assert.ok(read('../settings.ts').includes('projectsFolder: PROJECT_ROOT'));
 	assert.ok(read('../views/DashboardView.ts').includes('configuredRoot : PROJECT_ROOT'));
-	assert.ok(read('../views/EmbeddedTaskModal.ts').includes("type === 'project' ? PROJECT_ROOT"));
+	assert.ok(read('../views/EmbeddedTaskModal.ts').includes('processes(scanLearning(this.app), scanProjects(this.app), [])'));
+	assert.ok(read('./processes.ts').includes('projects.filter(p => inRoot(p.path, PROJECT_ROOT))'));
 	assert.ok(read('./embeddedTasks.ts').includes('path.startsWith(`${PROJECT_ROOT}/`)'));
 });
 test('Only project category captions change; works/content and final outcome retain their meaning', () => {

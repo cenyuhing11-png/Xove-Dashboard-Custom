@@ -1,9 +1,10 @@
 import { App, Modal, Notice, TFile } from 'obsidian';
-import { DAILY_TASK_FILE, embeddedSource, groupEmbedded } from '../data/embeddedTasks';
-import type { EmbeddedTask, EmbeddedSourceType } from '../data/embeddedTasks';
+import { DAILY_TASK_FILE, groupEmbedded } from '../data/embeddedTasks';
+import type { EmbeddedTask } from '../data/embeddedTasks';
 import type { EmbeddedTaskStore } from '../data/embeddedTaskVault';
 import { scanProjects } from '../data/projectVault';
-import { PROJECT_ROOT } from '../data/vaultPaths';
+import { scanLearning } from '../data/learningVault';
+import { processes, processTypeLabel } from '../data/processes';
 import { beginListModal, closeListModal } from './viewPrimitives';
 
 const LABELS = { project: '项目', learning: '学习', daily: '日常' };
@@ -40,7 +41,12 @@ export class NewEmbeddedTaskModal extends Modal {
 		contentEl.addClass('ad-task-modal');
 		this.containerEl.closest('.modal-container')?.addClass('dashboard-modal');
 		contentEl.createEl('h3', { cls: 'ad-modal-title', text: '新建任务' });
-		let type: EmbeddedSourceType = (this.presetPath && embeddedSource(this.presetPath)) || 'daily'; let path = this.presetPath ?? DAILY_TASK_FILE;
+		// The same read-only Process Adapter as the overview excludes ordinary learning resources.
+		const candidates = () => processes(scanLearning(this.app), scanProjects(this.app), [])
+			.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN') || a.processType.localeCompare(b.processType) || a.sourceFile.localeCompare(b.sourceFile, 'zh-CN'));
+		let assignment: 'daily' | 'process' = this.presetPath && this.presetPath !== DAILY_TASK_FILE ? 'process' : 'daily';
+		let path = candidates().find(p => p.sourceFile === this.presetPath)?.sourceFile ?? '';
+		let saving = false;
 		const titleField = contentEl.createDiv({ cls: 'ad-modal-field' });
 		titleField.createEl('label', { cls: 'ad-modal-label', text: '任务内容' });
 		const textInput = titleField.createEl('input', { cls: 'ad-modal-input ad-input-title', attr: { type: 'text', placeholder: '一次可以完成的具体行动', 'aria-label': '任务内容' } });
@@ -48,38 +54,45 @@ export class NewEmbeddedTaskModal extends Modal {
 		const sources = row.createDiv({ cls: 'ad-modal-col' });
 		sources.createEl('label', { cls: 'ad-modal-label', text: '归属' });
 		const sourceSelect = sources.createEl('select', { cls: 'ad-modal-input', attr: { 'aria-label': '归属' } });
-		for (const value of ['daily', 'project', 'learning'] as const) sourceSelect.createEl('option', { value, text: LABELS[value] });
-		sourceSelect.value = type;
-		const dateCol = row.createDiv({ cls: 'ad-modal-col' });
-		dateCol.createEl('label', { cls: 'ad-modal-label', text: '日期（可选）' });
-		const dateInput = dateCol.createEl('input', { cls: 'ad-modal-input', attr: { type: 'date', 'aria-label': '日期（可选）' } });
-		const picker = contentEl.createDiv({ cls: 'ad-modal-field' });
+		for (const [value, text] of [['daily', '日常'], ['process', '进程']] as const) sourceSelect.createEl('option', { value, text });
+		sourceSelect.value = assignment;
+		let picker: HTMLElement | undefined;
+		const updateCreate = () => { create.disabled = saving || (assignment === 'process' && !path); };
 		const renderPicker = () => {
-			picker.empty();
-			if (type === 'daily') { path = DAILY_TASK_FILE; picker.createEl('div', { cls: 'ad-modal-hint', text: '保存到：日常任务 → 日常待办' }); return; }
-			const projectPaths = new Set(scanProjects(this.app).map(p => p.path));
-			const files = this.app.vault.getMarkdownFiles().filter(f => embeddedSource(f.path) === type && (type !== 'project' || projectPaths.has(f.path))).sort((a, b) => a.path.localeCompare(b.path, 'zh-CN'));
-			// Scope + explicit selection determines project source; never scan unrelated folders.
-			if (!files.some(f => f.path === path)) path = files[0]?.path ?? '';
-			const label = type === 'project' ? '项目笔记' : '学习笔记 / 学习资源';
-			picker.createEl('label', { cls: 'ad-modal-label', text: label });
-			const select = picker.createEl('select', { cls: 'ad-modal-input', attr: { 'aria-label': label } });
-			for (const file of files) select.createEl('option', { value: file.path, text: file.path });
+			picker?.remove(); picker = undefined;
+			if (assignment === 'daily') { path = ''; updateCreate(); return; }
+			const items = candidates();
+			if (!items.some(p => p.sourceFile === path)) path = '';
+			picker = sources.createDiv({ cls: 'ad-modal-field' });
+			picker.createEl('label', { cls: 'ad-modal-label', text: '所属进程' });
+			const select = picker.createEl('select', { cls: 'ad-modal-input', attr: { 'aria-label': '所属进程' } });
+			select.createEl('option', { value: '', text: '选择进程…' });
+			for (const process of items) select.createEl('option', { value: process.sourceFile, text: `[${processTypeLabel(process.processType)}] ${process.name}${process.direction ? ` · ${process.direction}` : ''}`, attr: { title: process.sourceFile } });
 			select.value = path;
-			select.onchange = () => { path = select.value; };
-			if (!files.length) picker.createEl('div', { cls: 'ad-modal-hint', text: `暂无${LABELS[type]}笔记，请先在${type === 'project' ? PROJECT_ROOT : '01-学习与资料'}中新建笔记。` });
+			select.onchange = () => { path = select.value; updateCreate(); };
+			if (!items.length) picker.createEl('div', { cls: 'ad-modal-hint', text: '暂无可选进程，请先通过顶部“新建进程”创建学习或项目。' });
+			updateCreate();
 		};
-		sourceSelect.onchange = () => { type = sourceSelect.value as EmbeddedSourceType; renderPicker(); };
-		renderPicker();
+		sourceSelect.onchange = () => { assignment = sourceSelect.value === 'process' ? 'process' : 'daily'; renderPicker(); };
+		const dateField = contentEl.createDiv({ cls: 'ad-modal-field' });
+		dateField.createEl('label', { cls: 'ad-modal-label', text: '日期（可选）' });
+		const dateInput = dateField.createEl('input', { cls: 'ad-modal-input', attr: { type: 'date', 'aria-label': '日期（可选）' } });
 		contentEl.createEl('div', { cls: 'ad-modal-hint', text: 'v1：计划执行 / 截止日期；不填则不进入今日执行' });
 		const btns = contentEl.createDiv({ cls: 'ad-modal-btns' });
 		btns.createEl('button', { cls: 'ad-modal-btn', text: '取消' }).onclick = () => this.close();
 		const create = btns.createEl('button', { cls: 'ad-modal-btn ad-modal-btn--primary', text: '创建任务' });
 		create.onclick = async () => {
-			create.disabled = true;
-			try { if (!path) throw new Error('请先选择来源笔记'); await this.store.add(path, textInput.value, dateInput.value || undefined); this.close(); new Notice('任务已写入来源笔记'); }
-			catch (e) { new Notice(String(e)); create.disabled = false; }
+			if (saving) return;
+			saving = true; updateCreate();
+			try {
+				const target = assignment === 'daily' ? DAILY_TASK_FILE : candidates().find(p => p.sourceFile === path)?.sourceFile;
+				if (!target) { renderPicker(); throw new Error('请先选择有效的所属进程'); }
+				await this.store.add(target, textInput.value, dateInput.value || undefined);
+				this.close(); new Notice('任务已写入来源笔记');
+			} catch (e) { new Notice(String(e)); }
+			finally { saving = false; updateCreate(); }
 		};
+		renderPicker();
 		textInput.focus();
 	}
 	onClose(): void { this.containerEl.closest('.modal-container')?.removeClass('dashboard-modal'); this.contentEl.empty(); }
