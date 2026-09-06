@@ -13,6 +13,18 @@ import { computeWindow, filterWithOrig } from '../data/virtualList';
 import { UI_TEXT, MODAL_TEXT } from '../constants';
 import { t, tArr } from '../i18n';
 import { ICON_gantt, ICON_list, ICON_calendar, ICON_kanban, injectSvg } from '../icons';
+import { filterBoardItems, projectTimelineItems } from '../data/projectBoardAdapter';
+import type { ProjectBoardItem } from '../data/projectBoardAdapter';
+import { PROJECT_STATUSES } from '../data/projects';
+import type { ProjectStatus } from '../data/projects';
+
+/** Explicit read-only project source; no legacy task/file mutation capabilities. */
+export interface ProjectBoardSource {
+	kind: 'mengxu'; app: App; boardEl: HTMLElement; tasks: EmbeddedTaskStore;
+	items(): ProjectBoardItem[];
+	open(item: ProjectBoardItem): void;
+	create(): void;
+}
 
 /** 宿主接口：ProjectBoard 渲染器所需的宿主依赖。 */
 export interface ProjectHost {
@@ -48,7 +60,18 @@ export interface ProjectHost {
 
 /** 项目总览（第二页）渲染器 — 从 DashboardView 抽出。 */
 export class ProjectBoard {
-	private host: ProjectHost;
+	private legacyHost?: ProjectHost;
+	private source?: ProjectBoardSource;
+	private items: ProjectBoardItem[] = [];
+	private projectFilter: ProjectStatus | '全部' = '全部';
+	private projectSelection: string | null = null;
+	private calendarObserver?: ResizeObserver;
+	// New overview UI preferences are session-local, not changes to data.json.
+	private projectSettings: ProjectHost['plugin']['settings'] = { projectsFolder: '', currentPoView: 'gantt', poProjectOrder: [], poTaskOrder: [], npdpStages: [] };
+	private get host(): ProjectHost {
+		if (!this.legacyHost) throw new Error('Legacy project mutation is unavailable in the Mengxu overview');
+		return this.legacyHost;
+	}
 
 	// Project overview state
 	private currentProjects: ProjectInfo[] = [];
@@ -69,27 +92,153 @@ export class ProjectBoard {
 	private ganttStatusFilter: TaskStatus[] = [];
 
 	// ---- host 依赖别名（保持搬移方法体原样） ----
-	private get app() { return this.host.app; }
-	private get plugin() { return this.host.plugin; }
-	private get boardEl() { return this.host.boardEl; }
-	private get currentPage() { return this.host.currentPage; }
+	private get app() { return this.source?.app ?? this.host.app; }
+	private get plugin() { return this.source ? { settings: this.projectSettings, embeddedTasks: this.source.tasks, saveSettings: async () => {} } : this.host.plugin; }
+	private get boardEl() { return this.source?.boardEl ?? this.host.boardEl; }
+	private get currentPage() { return this.source ? 'project' : this.host.currentPage; }
 	private set currentPage(v: 'home' | 'project' | 'opportunity') { this.host.currentPage = v; }
-	private get selectedProject() { return this.host.selectedProject; }
+	private get selectedProject() { return this.source ? this.projectSelection : this.host.selectedProject; }
 	private set selectedProject(v: string | null) { this.host.selectedProject = v; }
 	private get showToast() { return this.host.showToast.bind(this.host); }
 	private get taskStore() { return this.host.taskStore; }
-	private get openTaskEditModal() { return this.host.openTaskEditModal.bind(this.host); }
+	private get openTaskEditModal() {
+		if (this.source) return (task: TaskItem) => { const item = this.items.find(p => p.key === task.id); if (item) this.source!.open(item); };
+		return this.host.openTaskEditModal.bind(this.host);
+	}
 	private get writeFrontmatter() { return this.host.writeFrontmatter.bind(this.host); }
 	private get deleteTask() { return this.host.deleteTask.bind(this.host); }
 	private get editProject() { return this.host.editProject.bind(this.host); }
 	private get createProjectFile() { return this.host.createProjectFile.bind(this.host); }
-	private get openTaskModalWithParent() { return this.host.openTaskModalWithParent.bind(this.host); }
+	private get openTaskModalWithParent() {
+		if (this.source) return async (_parent: string, _project: string) => { this.source!.create(); };
+		return this.host.openTaskModalWithParent.bind(this.host);
+	}
 	private get toggleTask() { return this.host.toggleTask.bind(this.host); }
 	private get setDailyNode() { return this.host.setDailyNode.bind(this.host); }
 
-	constructor(host: ProjectHost) {
-		this.host = host;
+	constructor(host: ProjectHost | ProjectBoardSource) {
+		if ('kind' in host) this.source = host;
+		else this.legacyHost = host;
 	}
+
+	private showMengxu(): void {
+		const source = this.source!;
+		this.items = source.items();
+		if (!filterBoardItems(this.items, this.projectFilter).some(p => p.key === this.projectSelection)) this.projectSelection = null;
+		source.boardEl.empty(); source.boardEl.addClass('po-board');
+		const container = source.boardEl.createDiv({ cls: 'po-container' });
+		const sidebar = container.createDiv({ cls: 'po-sidebar' });
+		this.renderMengxuSidebar(sidebar);
+		this.poMainEl = container.createDiv({ cls: 'po-main' });
+		this.renderMengxuPanels();
+	}
+
+	private renderMengxuSidebar(sidebar: HTMLElement): void {
+		sidebar.empty();
+		const list = sidebar.createDiv({ cls: 'po-sidebar__list' });
+		const visible = filterBoardItems(this.items, this.projectFilter);
+		const addItem = (item?: ProjectBoardItem) => {
+			const key = item?.key ?? null;
+			const el = list.createDiv({ cls: 'po-sidebar__item' + (key === this.projectSelection ? ' is-active' : ''), attr: { role: 'button', tabindex: '0' } });
+			el.createSpan({ cls: 'po-dot', attr: { style: 'background:#7BA7FF;color:#7BA7FF' } });
+			el.createSpan({ text: item?.name ?? '全部项目' });
+			const group = item ? [item] : visible;
+			el.createSpan({ cls: 'po-count', text: `${group.reduce((n, p) => n + (p.doneCount ?? 0), 0)}/${group.reduce((n, p) => n + p.taskCount, 0)}` });
+			el.title = item ? [item.name, item.status, item.direction].filter(Boolean).join(' · ') : '全部项目';
+			const select = () => { this.projectSelection = key; this.renderMengxuSidebar(sidebar); this.renderMengxuPanels(); };
+			el.onclick = select;
+			el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); } };
+		};
+		addItem(); visible.forEach(addItem);
+		sidebar.createEl('button', { cls: 'po-add-btn', text: UI_TEXT.newProjectBtn }).onclick = () => this.source!.create();
+	}
+
+	private renderMengxuPanels(): void {
+		this.dispose();
+		const main = this.poMainEl!; main.empty();
+		const toolbar = main.createDiv({ cls: 'po-toolbar' });
+		toolbar.createSpan({ cls: 'po-toolbar__label', text: '项目状态' });
+		for (const status of ['全部', ...PROJECT_STATUSES] as const) {
+			const button = toolbar.createEl('button', { cls: 'po-chip' + (status === this.projectFilter ? ' is-active' : ''), text: status });
+			button.dataset.filter = status;
+			button.onclick = () => { this.projectFilter = status; this.showMengxu(); };
+		}
+		const items = filterBoardItems(this.items, this.projectFilter, this.projectSelection);
+		const tabs = main.createDiv({ cls: 'po-tabs' });
+		const content = main.createDiv({ cls: 'po-content' });
+		const panel = content.createDiv({ cls: 'po-panel is-active', attr: { 'data-view': this.currentView } });
+		for (const [key, label, icon] of [['gantt', UI_TEXT.poGantt, ICON_gantt], ['list', UI_TEXT.poList, ICON_list], ['calendar', UI_TEXT.poCalendar, ICON_calendar], ['kanban', UI_TEXT.poKanban, ICON_kanban]]) {
+			const button = tabs.createEl('button', { cls: 'po-tab' + (this.currentView === key ? ' is-active' : '') });
+			injectSvg(button.createSpan({ cls: 'ad-glyph' }), icon!); button.createSpan({ text: label }); button.dataset.view = key;
+			button.onclick = () => { this.currentView = key!; this.renderMengxuPanels(); };
+		}
+		// Same tab strip and lazy view switching, but no inferred NPDP phase control.
+		if (this.currentView === 'gantt' || this.currentView === 'calendar') {
+			panel.createDiv({ cls: 'po-toolbar' }).createSpan({ cls: 'po-toolbar__label', text: '显示项目开始／截止日期；页面内任务日期暂未接入。日期修改请编辑项目笔记。' });
+			const timelines = projectTimelineItems(items);
+			if (this.currentView === 'gantt') this.renderGanttPanel(panel, timelines, items);
+			else this.renderCalendarPanel(panel, timelines, items);
+		} else if (this.currentView === 'list') this.renderProjectTable(panel, items);
+		else this.renderProjectCards(panel, items);
+	}
+
+	private renderProjectCards(panel: HTMLElement, items: ProjectBoardItem[]): void {
+		if (!items.length) { panel.createDiv({ cls: 'po-empty', text: this.items.length ? '没有符合筛选条件的项目' : '暂无项目，点击左侧新建项目开始。' }); return; }
+		const board = panel.createDiv({ cls: 'po-kanban' });
+		for (const status of PROJECT_STATUSES) {
+			if (this.projectFilter !== '全部' && this.projectFilter !== status) continue;
+			const col = board.createDiv({ cls: 'po-kanban__col', attr: { 'data-status': status } });
+			const heading = col.createDiv({ cls: 'po-kanban__hd' }); heading.createSpan({ text: status });
+			const group = items.filter(p => p.status === status);
+			heading.createSpan({ cls: 'po-kanban__count', text: String(group.length) });
+			for (const item of group) {
+				const card = col.createDiv({ cls: 'po-kanban__card', attr: { 'data-project-path': item.key, role: 'button', tabindex: '0' } });
+				card.createDiv({ text: item.name });
+				card.createDiv({ cls: 'po-kanban__meta', text: [item.status, item.direction].filter(Boolean).join(' · ') });
+				if (item.startDate || item.endDate) card.createDiv({ cls: 'po-kanban__meta', text: `${item.startDate || '未设置开始'} → ${item.endDate || '未设置截止'}` });
+				card.createDiv({ cls: 'po-kanban__meta', text: `任务 ${item.doneCount} / ${item.taskCount}` });
+				card.onclick = () => this.source!.open(item);
+				card.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.source!.open(item); } };
+			}
+		}
+	}
+
+	private renderProjectTable(panel: HTMLElement, items: ProjectBoardItem[]): { tbody: HTMLElement; rows: HTMLElement[] } {
+		const section = panel.createDiv({ cls: 'po-tasklist' });
+		const wrap = section.createDiv({ cls: 'po-table-wrap' });
+		const table = wrap.createEl('table', { cls: 'po-table' });
+		const head = table.createEl('thead').createEl('tr');
+		const cols = [['name', '项目名称'], ['status', '状态'], ['direction', '方向'], ['startDate', '开始日期'], ['endDate', '截止日期'], ['', '任务完成']] as const;
+		for (const [key, text] of cols) {
+			const th = head.createEl('th', { text });
+			if (!key) continue;
+			th.addClass('po-th--sortable'); th.dataset.sortKey = key;
+			th.createSpan({ cls: 'po-sort-arrow', text: this.sortCol === key ? (this.sortDir === 'asc' ? '↑' : '↓') : '' });
+			th.onclick = () => { this.sortDir = this.sortCol === key && this.sortDir === 'asc' ? 'desc' : 'asc'; this.sortCol = key; this.renderMengxuPanels(); };
+		}
+		const tbody = table.createEl('tbody');
+		const sorted = [...items];
+		const key = cols.find(([key]) => key && key === this.sortCol)?.[0];
+		if (key) sorted.sort((a, b) => String(a[key] ?? '').localeCompare(String(b[key] ?? ''), 'zh-CN') * (this.sortDir === 'asc' ? 1 : -1));
+		const statusClasses = { '计划中': 'po-todo', '进行中': 'po-progress', '暂停': 'po-blocked', '已完成': 'po-done', '归档': 'po-cancelled' };
+		const rows = sorted.map(item => {
+			const row = tbody.createEl('tr', { cls: 'po-data-row' }); row.dataset.projectPath = item.key;
+			const name = row.createEl('td', { cls: 'po-name-cell po-clickable', text: item.name, attr: { role: 'button', tabindex: '0' } }); name.onclick = () => this.source!.open(item);
+			name.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.source!.open(item); } };
+			row.createEl('td').createSpan({ cls: 'po-status ' + statusClasses[item.status], text: item.status });
+			for (const text of [item.direction || '未关联', item.startDate || '—', item.endDate || '—', `${item.doneCount} / ${item.taskCount}`]) row.createEl('td', { text });
+			return row;
+		});
+		if (!items.length) section.createDiv({ cls: 'po-empty', text: '暂无符合条件的项目' });
+		return { tbody, rows };
+	}
+
+	private scheduleStatus(task: TaskItem): string {
+		return this.source ? this.items.find(p => p.key === task.id)?.status ?? '' : UI_TEXT.statusLabel(task.status);
+	}
+
+	/** Release geometry observers when the overview/tab is detached. */
+	dispose(): void { this.calendarObserver?.disconnect(); this.calendarObserver = undefined; }
 
 	/** 从首页卡片进入：定位到某项目并切换到甘特视图。 */
 	async openProjectGantt(proj: ProjectInfo): Promise<void> {
@@ -113,6 +262,7 @@ export class ProjectBoard {
 	 *        「全部项目」）重置为显示所有项目并恢复上次记忆的视图标签。
 	 */
 	async show(preserveSelection = false): Promise<void> {
+		if (this.source) { this.showMengxu(); return; }
 		if (!this.boardEl) return;
 		// 离开首页时自动退出编辑态（修复「切到项目总览后编辑态残留」）
 		this.host.exitEditMode();
@@ -158,6 +308,7 @@ export class ProjectBoard {
 	/** Re-render only the main content panels (tabs + panels) */
 	private renderPanels(): void {
 		if (!this.poMainEl) return;
+		if (this.source) { this.renderMengxuPanels(); return; }
 		this.poMainEl.empty();
 		const project = this.currentProjects.find(p => p.name === this.selectedProject);
 		if (project) {
@@ -457,6 +608,7 @@ export class ProjectBoard {
 
 	/** Refresh project overview data and re-render */
 	async refresh(): Promise<void> {
+		if (this.source) { this.showMengxu(); return; }
 		// Only meaningful while the project overview is the active board.
 		if (this.currentPage !== 'project') return;
 		const projects = await this.taskStore.scanAllProjects();
@@ -676,6 +828,8 @@ export class ProjectBoard {
 			});
 		});
 
+		// Project mode uses the real project-status filter above, never task statuses.
+		if (!this.source) {
 		// Status filter (multi-select) — modeled on reference obsidian-pm FilterDropdown
 		zoomBar.createSpan({ cls: 'po-gantt__sep' });
 		const filterBtn = zoomBar.createEl('button', { cls: 'po-gantt__zoom-btn' + (this.ganttStatusFilter.length ? ' is-active' : '') });
@@ -712,10 +866,11 @@ export class ProjectBoard {
 			}
 		menu.showAtMouseEvent(e);
 	});
+		}
 
 	// 筛选结果为空时，筛选栏（缩放 + 状态筛选）仍必须渲染，不能整块消失
 	if (tasks.length === 0) {
-		panel.createDiv({ cls: 'po-empty', text: UI_TEXT.noTasks });
+		panel.createDiv({ cls: 'po-empty', text: this.source ? '暂无符合条件的项目，点击左侧新建项目开始。' : UI_TEXT.noTasks });
 		return;
 	}
 
@@ -726,7 +881,7 @@ export class ProjectBoard {
 		const left = wrapper.createDiv({ cls: 'po-gantt__left' });
 		const leftHeader = left.createDiv({ cls: 'po-gantt__left-hd' });
 		leftHeader.style.height = HEADER_HEIGHT + 'px';
-		leftHeader.createSpan({ text: UI_TEXT.poTaskName, cls: 'po-gantt__left-hd-label' });
+		leftHeader.createSpan({ text: this.source ? '项目名称' : UI_TEXT.poTaskName, cls: 'po-gantt__left-hd-label' });
 		const leftBody = left.createDiv({ cls: 'po-gantt__left-body' });
 		// 拖动指示线（插入位置）+ 清理函数（拖动结束/放下时复位所有拖动 UI）
 		const dropLine = leftBody.createDiv({ cls: 'po-gantt__drop-line' });
@@ -907,15 +1062,18 @@ export class ProjectBoard {
 				});
 			}
 			lr.createSpan({ cls: 'po-gantt__label-title', text: t.content });
+			if (!this.source) {
 			const addBtn = lr.createSpan({ cls: 'po-gantt__label-add', text: '+' });
 			addBtn.addEventListener('click', (e) => {
 				e.stopPropagation();
 				void this.openTaskModalWithParent(t.content, t.projectId);
 			});
+			}
 			lr.addEventListener('click', () => this.openTaskEditModal(t));
 			// Right-click context menu: edit / delete
 			lr.addEventListener('contextmenu', (e) => {
 				e.preventDefault();
+				if (this.source) return;
 				const menu = new Menu();
 				menu.addItem((item) => {
 					item.setTitle(UI_TEXT.taskDetail).setIcon('pencil').onClick(() => this.openTaskEditModal(t));
@@ -928,14 +1086,16 @@ export class ProjectBoard {
 
 			// Drag: hover row middle = drop as subtask (row highlights); hover near row top/bottom edge
 			// = insert (a drop-line shows the exact insert position). Alt/Shift forces subtask mode.
-			lr.draggable = true;
+			lr.draggable = !this.source;
 			lr.addEventListener('dragstart', (e) => {
+				if (this.source) { e.preventDefault(); return; }
 				e.dataTransfer?.setData('text/task-id', t.id);
 				lr.addClass('po-row--dragging');
 				clearDropUI();
 			});
 			lr.addEventListener('dragend', () => { lr.removeClass('po-row--dragging'); clearDropUI(); });
 			lr.addEventListener('dragover', (e) => {
+				if (this.source) return;
 				e.preventDefault();
 				const rect = lr.getBoundingClientRect();
 				const bodyRect = leftBody.getBoundingClientRect();
@@ -967,6 +1127,7 @@ export class ProjectBoard {
 			});
 			lr.addEventListener('drop', async (e) => {
 				e.preventDefault();
+				if (this.source) return;
 				const draggedId = e.dataTransfer?.getData('text/task-id');
 				const zone = lr.dataset.dropZone || 'top';
 				clearDropUI();
@@ -1032,7 +1193,7 @@ export class ProjectBoard {
 		bar.setAttribute('fill', color);
 		bar.dataset.taskId = t.id;
 		(bar as SVGElement & { _dragged?: boolean })._dragged = false;
-		if (t.startDate && t.dueDate) bar.classList.add('po-gantt__bar--movable');
+		if (!this.source && t.startDate && t.dueDate) bar.classList.add('po-gantt__bar--movable');
 		bars.push(bar);
 
 		// Group wraps bar + edge handles so the hover hint reveals them together
@@ -1047,6 +1208,7 @@ export class ProjectBoard {
 		// Bar + both edge handles are repositioned together during drag so the
 		// transparent handles always track the block (no snapping on release).
 		const beginDrag = (b: SVGRectElement, side: 'left' | 'right' | 'move', e: MouseEvent): void => {
+			if (this.source) return;
 			e.preventDefault();
 			if (side !== 'move') e.stopPropagation();
 			const startX = e.clientX;
@@ -1094,7 +1256,7 @@ export class ProjectBoard {
 		};
 
 		// Edge resize handles (hover hint + drag). Only rendered when wide enough to avoid overlap.
-		if (width > HANDLE_W * 2) {
+		if (!this.source && width > HANDLE_W * 2) {
 			for (const side of ['left', 'right'] as const) {
 				const hx = side === 'left' ? x : x + width - HANDLE_W;
 				const handle = svgEl('rect', {
@@ -1114,7 +1276,7 @@ export class ProjectBoard {
 			tooltip.createEl('br');
 			tooltip.appendText((t.startDate || '?') + ' → ' + (t.dueDate || '?'));
 			tooltip.createEl('br');
-			tooltip.appendText(prioLabel + ' · ' + t.status);
+			tooltip.appendText(this.source ? this.scheduleStatus(t) : prioLabel + ' · ' + t.status);
 			tooltip.addClass('is-visible');
 			this.positionTooltip(tooltip, e);
 		});
@@ -1129,10 +1291,11 @@ export class ProjectBoard {
 			}
 			this.openTaskEditModal(t);
 			this.clearHighlights(bars, tableResult.rows);
-			if (tableResult.rows[idx]) {
-				tableResult.rows[idx].addClass('po-row--highlight');
-				tableResult.rows[idx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-				this.highlightedRow = tableResult.rows[idx];
+			const linkedRow = this.source ? tableResult.rows.find(row => row?.dataset.projectPath === t.id) : tableResult.rows[idx];
+			if (linkedRow) {
+				linkedRow.addClass('po-row--highlight');
+				linkedRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+				this.highlightedRow = linkedRow;
 			}
 			bar.classList.add('po-bar--highlight');
 			this.highlightedBar = bar;
@@ -1248,6 +1411,7 @@ export class ProjectBoard {
 		task.startDate = newStart;
 		task.dueDate = newEnd;
 	}	private renderTaskTable(panel: HTMLElement, tbodyId: string, tasks: TaskItem[], projects: ProjectInfo[]): { tbody: HTMLElement; rows: (HTMLElement | null)[] } {
+		if (this.source) return this.renderProjectTable(panel, tasks.map(t => this.items.find(p => p.key === t.id)).filter((p): p is ProjectBoardItem => !!p));
 		const section = panel.createDiv({ cls: 'po-tasklist' });
 		const toolbar = section.createDiv({ cls: 'po-toolbar' });
 		toolbar.createSpan({ cls: 'po-toolbar__label', text: UI_TEXT.filter });
@@ -1536,6 +1700,7 @@ export class ProjectBoard {
 		const rangeLabel = (task: TaskItem): string => dayFmt(task.startDate!) + ' → ' + dayFmt(task.dueDate!);
 		/** 单日 hover 状态文案（横条按日分段 title 用）：8月17日 · 已完成 · 备注 */
 		const dayStateLabel = (task: TaskItem, ds: string): string => {
+			if (this.source) return dayFmt(ds) + ' · ' + this.scheduleStatus(task);
 			const node = task.dailyNodes && task.dailyNodes[ds];
 			const st = node && node.s === 'done' ? t('home.calNodeDone') : node && node.s === 'skip' ? t('home.calNodeSkip') : t('home.calNodeTodo');
 			const note = node && node.n ? node.n : '';
@@ -1548,7 +1713,7 @@ export class ProjectBoard {
 			return Math.round((b.getTime() - a.getTime()) / 86400000);
 		};
 		const isOverdue = (task: TaskItem): boolean =>
-			task.status !== '已完成' && task.status !== '已取消' && !!task.dueDate && new Date(task.dueDate) < today;
+			(!this.source || !['已完成', '归档'].includes(this.scheduleStatus(task))) && task.status !== '已完成' && task.status !== '已取消' && !!task.dueDate && (this.source ? task.dueDate < todayStr : new Date(task.dueDate) < today);
 		const projColor = (task: TaskItem): string => colorMap[task.projectId] || '#3b82f6';
 		const addDays = (ds: string, n: number): string => {
 			const d = new Date(ds + 'T00:00:00');
@@ -1572,7 +1737,7 @@ export class ProjectBoard {
 		/** 渲染单条任务行（详情面板 / 议程共用）：项目色点 + 名称 + 状态 + 逾期标签；多日任务可展开每日记录 */
 		const renderTaskRow = (container: HTMLElement, task: TaskItem): void => {
 			const row = container.createDiv({ cls: 'po-cal__task' });
-			row.draggable = true;
+			row.draggable = !this.source;
 			row.dataset.taskId = task.id;
 			row.createSpan({ cls: 'po-mini-dot', attr: { style: 'background:' + projColor(task) } });
 			const nameSpan = row.createSpan({ cls: 'po-cal__task-name po-clickable', text: task.content });
@@ -1580,17 +1745,17 @@ export class ProjectBoard {
 				ev.stopPropagation();
 				this.openTaskEditModal(task);
 			});
-			row.createSpan({ cls: 'po-status ' + (task.status === '已完成' ? 'po-done' : 'po-todo'), text: UI_TEXT.statusLabel(task.status) });
+			row.createSpan({ cls: 'po-status ' + (task.status === '已完成' ? 'po-done' : 'po-todo'), text: this.scheduleStatus(task) });
 			if (isRangeTask(task)) {
 				row.createSpan({ cls: 'po-cal__range', text: rangeLabel(task) });
 			}
 			if (isOverdue(task)) {
 				const due = new Date(task.dueDate + 'T00:00:00');
-				const days = Math.max(1, Math.round((today.getTime() - due.getTime()) / 86400000));
+				const days = this.source ? dayIndexOf(task.dueDate!, todayStr) : Math.max(1, Math.round((today.getTime() - due.getTime()) / 86400000));
 				row.createSpan({ cls: 'po-cal__over', text: t('ui.calOverdueDays', { n: String(days) }) });
 			}
 			// 多日任务：点击展开每日执行记录（含总进度）
-			if (isRangeTask(task)) {
+			if (!this.source && isRangeTask(task)) {
 				const toggle = row.createSpan({ cls: 'po-cal__expand', text: '▸' });
 				toggle.addEventListener('click', (ev) => {
 					ev.stopPropagation();
@@ -1642,17 +1807,19 @@ export class ProjectBoard {
 			chip.addEventListener('contextmenu', (ev) => {
 				ev.preventDefault();
 				ev.stopPropagation();
+				if (this.source) return;
 				const menu = new Menu();
 				menu.addItem((item) => item.setTitle(t('ui.calCtxDelete')).setIcon('trash').onClick(() => void this.deleteTask(task)));
 				menu.addItem((item) => item.setTitle(t('ui.calCtxOpenSource')).setIcon('file-text').onClick(() => { if (task.sourceFile) void this.app.workspace.openLinkText(task.sourceFile, '', true); }));
 				menu.showAtMouseEvent(ev);
 			});
-			chip.draggable = true;
+			chip.draggable = !this.source;
 			chip.dataset.taskId = task.id;
 		};
 
 		/** 日期格拖放改期（月 / 周通用） */
 		const bindDrop = (el: HTMLElement): void => {
+			if (this.source) return;
 			el.addEventListener('dragover', (e) => {
 				if (el.dataset.date) { e.preventDefault(); el.addClass('po-cal__day--drag-over'); }
 			});
@@ -1963,6 +2130,7 @@ export class ProjectBoard {
 						piece.addEventListener('contextmenu', (ev) => {
 							ev.preventDefault();
 							ev.stopPropagation();
+							if (this.source) return;
 							const menu = new Menu();
 							menu.addItem((item) => item.setTitle(t('ui.calCtxDelete')).setIcon('trash').onClick(() => void this.deleteTask(seg.task)));
 							menu.addItem((item) => item.setTitle(t('ui.calCtxOpenSource')).setIcon('file-text').onClick(() => { if (seg.task.sourceFile) void this.app.workspace.openLinkText(seg.task.sourceFile, '', true); }));
@@ -1994,6 +2162,7 @@ export class ProjectBoard {
 			requestAnimationFrame(() => repositionBars());
 			calResizeObserver = new ResizeObserver(() => repositionBars());
 			calResizeObserver.observe(days);
+			if (this.source) this.calendarObserver = calResizeObserver;
 		};
 
 		/** 周视图：7 列日柱，今日列高亮；跨天任务渲染为跨列横条 */
@@ -2052,6 +2221,7 @@ export class ProjectBoard {
 					piece.addEventListener('contextmenu', (ev) => {
 						ev.preventDefault();
 						ev.stopPropagation();
+						if (this.source) return;
 						const menu = new Menu();
 						menu.addItem((item) => item.setTitle(t('ui.calCtxDelete')).setIcon('trash').onClick(() => void this.deleteTask(task)));
 						menu.addItem((item) => item.setTitle(t('ui.calCtxOpenSource')).setIcon('file-text').onClick(() => { if (task.sourceFile) void this.app.workspace.openLinkText(task.sourceFile, '', true); }));
@@ -2098,10 +2268,10 @@ export class ProjectBoard {
 			const dObj = new Date(dt + 'T00:00:00');
 			const det = root.createDiv({ cls: 'po-cal__det' });
 			const hd = det.createDiv({ cls: 'po-cal__det-hd' });
-			hd.createSpan({ cls: 'po-cal__det-ttl', text: dayFmt(dt) + ' · ' + (dt === todayStr ? t('ui.calAgendaToday') : UI_TEXT.calWeekdays[(dObj.getDay() + 6) % 7]) + ' · ' + t('ui.calTaskCount', { n: String(dayTasks.length) }) });
-			if (!dayTasks.length) det.createSpan({ cls: 'po-cal__det-empty', text: t('ui.noTaskOnDay') });
+			hd.createSpan({ cls: 'po-cal__det-ttl', text: dayFmt(dt) + ' · ' + (dt === todayStr ? t('ui.calAgendaToday') : UI_TEXT.calWeekdays[(dObj.getDay() + 6) % 7]) + ' · ' + (this.source ? `${dayTasks.length} 个项目` : t('ui.calTaskCount', { n: String(dayTasks.length) })) });
+			if (!dayTasks.length) det.createSpan({ cls: 'po-cal__det-empty', text: this.source ? '当日暂无项目日程' : t('ui.noTaskOnDay') });
 			dayTasks.forEach((task) => renderTaskRow(det, task));
-			const newBtn = det.createDiv({ cls: 'po-cal__new', text: t('ui.calNewTask') });
+			const newBtn = det.createDiv({ cls: 'po-cal__new', text: this.source ? '＋ 新建项目' : t('ui.calNewTask') });
 			newBtn.addEventListener('click', () => { void this.openTaskModalWithParent('', this.selectedProject ?? ''); });
 		};
 

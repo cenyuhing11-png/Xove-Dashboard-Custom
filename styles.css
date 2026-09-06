@@ -2482,5 +2482,17 @@ body.theme-dark .ad-popover.ad-addmenu-backdrop[data-theme="light"] {
 .mx-project-tasks { padding: 12px; border-bottom: 1px solid var(--background-modifier-border); max-height: 35vh; overflow-y: auto; }
 .mx-project-view { padding: 24px; overflow-y: auto; overflow-wrap: anywhere; }
 .mx-project-view p { white-space: pre-wrap; }
-.mx-project-card { padding: 12px 0; border-bottom: 1px solid var(--background-modifier-border); }
 .mx-project-view button { max-width: 100%; white-space: normal; height: auto; }
+
+/* Original ProjectBoard in its own ItemView: viewport sizing only, no new skin. */
+.mx-project-overview { display: flex; flex-direction: column; min-width: 0; container-type: inline-size; }
+.mx-project-overview > .po-board { flex: 1; min-height: 0; }
+.mx-project-overview .po-container { height: auto; min-height: 0; margin-top: 0; }
+.mx-project-overview .po-toolbar, .mx-project-overview .po-tabs, .mx-project-overview .po-kanban__meta { flex-wrap: wrap; }
+.mx-project-overview .po-sidebar__item > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mx-project-overview .po-kanban__card { overflow-wrap: anywhere; }
+@container (max-width: 720px) {
+  .mx-project-overview .po-container { flex-direction: column; }
+  .mx-project-overview .po-sidebar { width: auto; max-height: 160px; }
+  .mx-project-overview .po-main { min-height: 360px; }
+}

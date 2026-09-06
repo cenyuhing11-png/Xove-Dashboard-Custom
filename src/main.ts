@@ -46,7 +46,7 @@ export default class Dashboard extends Plugin {
 
 		this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
 		this.registerView(DIRECTION_VIEW, (leaf) => new DirectionView(leaf));
-		this.registerView(PROJECT_VIEW, (leaf) => new ProjectView(leaf, this.embeddedTasks));
+		this.registerView(PROJECT_VIEW, (leaf) => new ProjectView(leaf, this.embeddedTasks, () => this.settings.theme));
 
 		this.addRibbonIcon('layout-dashboard', '打开梦序', () => {
 			void this.activateView();

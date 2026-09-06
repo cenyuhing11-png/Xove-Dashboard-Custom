@@ -1,6 +1,6 @@
-import { App, ItemView, Modal, Notice, Setting, WorkspaceLeaf } from 'obsidian';
+import { App, ItemView, Modal, Notice, WorkspaceLeaf } from 'obsidian';
 import type { ViewStateResult } from 'obsidian';
-import { createMengxuProject, filterProjects, PROJECT_STATUSES, projectDirections, projectSummary } from '../data/projects';
+import { createMengxuProject, PROJECT_STATUSES, projectDirections, projectSummary } from '../data/projects';
 import type { MengxuProject, NewProject, ProjectStatus } from '../data/projects';
 import { scanProjects } from '../data/projectVault';
 import { learningFiles, openLearningFile } from '../data/learningVault';
@@ -8,6 +8,8 @@ import { todayStr } from '../data/taskLogic';
 import type { EmbeddedTaskStore } from '../data/embeddedTaskVault';
 import { NewEmbeddedTaskModal, renderEmbeddedRows } from './EmbeddedTaskModal';
 import { parseEmbeddedTasks } from '../data/embeddedTasks';
+import { projectBoardItems } from '../data/projectBoardAdapter';
+import { ProjectBoard } from './ProjectBoard';
 
 export const PROJECT_VIEW = 'xove-dashboard-custom-projects';
 export async function openProjects(app: App, project?: Pick<MengxuProject, 'id' | 'path'>): Promise<void> {
@@ -71,9 +73,10 @@ export class NewProjectModal extends Modal {
 export class ProjectView extends ItemView {
 	private projectId = '';
 	private path = '';
-	private filter: ProjectStatus | '全部' = '全部';
+	private overview?: ProjectBoard;
+	private overviewEl?: HTMLElement;
 	private generation = 0;
-	constructor(leaf: WorkspaceLeaf, private tasks: EmbeddedTaskStore) { super(leaf); }
+	constructor(leaf: WorkspaceLeaf, private tasks: EmbeddedTaskStore, private theme: () => 'light' | 'dark' | 'auto' = () => 'auto') { super(leaf); }
 	getViewType(): string { return PROJECT_VIEW; }
 	getDisplayText(): string { return this.path ? this.path.split('/').pop()!.replace(/\.md$/, '') : '全部项目'; }
 	getIcon(): string { return 'folder-kanban'; }
@@ -84,8 +87,8 @@ export class ProjectView extends ItemView {
 		await this.render(); await super.setState(state, result);
 	}
 	async onOpen(): Promise<void> {
-		this.contentEl.addClass('mx-project-view');
 		const update = () => { void this.render(); };
+		this.registerEvent(this.app.workspace.on('css-change', update));
 		this.registerEvent(this.app.metadataCache.on('changed', update));
 		this.registerEvent(this.app.metadataCache.on('resolved', update));
 		this.registerEvent(this.app.vault.on('delete', update));
@@ -93,28 +96,31 @@ export class ProjectView extends ItemView {
 		this.register(this.tasks.subscribe(update));
 		await this.render();
 	}
-	async onClose(): Promise<void> { this.generation++; }
+	async onClose(): Promise<void> { this.generation++; this.overview?.dispose(); }
 	private async render(): Promise<void> {
 		const token = ++this.generation;
 		const projects = scanProjects(this.app);
 		const el = this.contentEl;
 		if (!this.projectId && !this.path) {
-			el.empty(); el.createEl('h1', { text: '全部项目' });
-			el.createEl('button', { text: '新建项目' }).onclick = () => new NewProjectModal(this.app).open();
-			new Setting(el).setName('状态筛选').addDropdown(d => {
-				d.addOption('全部', '全部'); for (const s of PROJECT_STATUSES) d.addOption(s, s);
-				d.setValue(this.filter).onChange(v => { this.filter = v as ProjectStatus | '全部'; void this.render(); });
-			});
-			const shown = filterProjects(projects, this.filter);
-			if (!shown.length) el.createEl('p', { text: '暂无项目' });
-			for (const p of shown) {
-				const card = el.createDiv({ cls: 'mx-project-card' });
-				card.createEl('button', { text: p.name }).onclick = () => { void openProjects(this.app, p); };
-				const tasks = this.tasks.bySource(p.path);
-				card.createEl('p', { text: `${p.status} · 方向：${p.direction || '未关联'} · 开始：${p.startDate || '未设置'} · 截止：${p.dueDate || '未设置'} · 任务 ${tasks.filter(t => t.completed).length} / ${tasks.length}` });
+			el.removeClass('mx-project-view');
+			if (!this.overview || !this.overviewEl) {
+				el.empty();
+				this.overviewEl = el.createDiv({ cls: 'dashboard-plugin mx-project-overview' });
+				const boardEl = this.overviewEl.createDiv({ cls: 'po-board' });
+				this.overview = new ProjectBoard({ kind: 'mengxu', app: this.app, boardEl, tasks: this.tasks,
+					items: () => projectBoardItems(scanProjects(this.app), this.tasks.all()),
+					open: item => { void openProjects(this.app, item.project); },
+					create: () => new NewProjectModal(this.app).open(),
+				});
 			}
+			if (this.overviewEl.parentElement !== el) { el.empty(); el.appendChild(this.overviewEl); }
+			const theme = this.theme();
+			this.overviewEl.setAttribute('data-theme', theme === 'auto' ? (document.body.classList.contains('theme-light') ? 'light' : 'dark') : theme);
+			await this.overview.show();
 			return;
 		}
+		this.overview?.dispose();
+		el.addClass('mx-project-view');
 		const matches = projects.filter(p => this.projectId ? p.id === this.projectId : p.path === this.path);
 		if (matches.length !== 1) {
 			el.empty(); el.createEl('p', { text: matches.length > 1 ? '项目 ID 重复，请在原笔记中修正后重试。' : '项目不存在、正在索引或 Properties 无效。' });
