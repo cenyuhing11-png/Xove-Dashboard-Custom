@@ -1,6 +1,8 @@
 import type { ProjectInfo, TaskItem } from '../../data/taskParser';
 import { KNOWLEDGE_AREAS } from './config';
 import { renderLifeCompass } from './LifeCompass';
+import { renderPlanningCard } from './PlanningCard';
+import type { PlanPeriod, PlanState } from '../../data/planning';
 import { addEmpty, addEntry, createGroup, createSection } from './shared';
 
 export interface WorkbenchHomeData {
@@ -8,6 +10,8 @@ export interface WorkbenchHomeData {
 	upcomingTasks: TaskItem[];
 	projects: ProjectInfo[];
 	existingPaths: Set<string>;
+	plans: PlanState[];
+	onOpenPlan(period: PlanPeriod): void;
 	onOpenTask(task: TaskItem): void;
 	onOpenProjects(): void;
 	onOpenProject(project: ProjectInfo): void;
@@ -27,14 +31,6 @@ function renderToday(parent: HTMLElement, data: WorkbenchHomeData): void {
 	addEmpty(createGroup(body, '今日最重要的 3 件事'), '尚未建立独立的重点事项模型');
 	renderTaskEntries(createGroup(body, '今日任务'), data.todayTasks, '今日暂无任务', data);
 	renderTaskEntries(createGroup(body, '即将截止'), data.upcomingTasks, '近期暂无截止任务', data);
-}
-
-function renderPlan(parent: HTMLElement): void {
-	const body = createSection(parent, '🗓 当前计划');
-	addEmpty(createGroup(body, '本周重点'), '尚未设置本周重点');
-	addEmpty(createGroup(body, '本月重点'), '尚未设置本月重点');
-	addEmpty(createGroup(body, '当前季度'), '尚未设置季度计划');
-	addEntry(body, '年度目标', '计划系统后续接入');
 }
 
 function renderLearning(parent: HTMLElement): void {
@@ -95,7 +91,7 @@ export function renderWorkbenchHome(parent: HTMLElement, data: WorkbenchHomeData
 	renderLifeCompass(parent);
 	const execution = parent.createDiv({ cls: 'wb-grid' });
 	renderToday(execution, data);
-	renderPlan(execution);
+	renderPlanningCard(execution, data.plans, data.onOpenPlan);
 	const growth = parent.createDiv({ cls: 'wb-grid' });
 	renderLearning(growth);
 	renderProjects(growth, data);

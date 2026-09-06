@@ -16,6 +16,8 @@ import { t, tArr, isEnglish } from '../i18n';
 import { UI_TEXT } from '../constants';
 import { renderWorkbenchHome } from '../components/workbench/WorkbenchHome';
 import { naturalTimeSummary } from '../utils/timeProgress';
+import { PLAN_PERIODS, PLAN_ROOT, ensurePlan, readPlan } from '../data/planning';
+import type { PlanFiles, PlanPeriod } from '../data/planning';
 
 import type Dashboard from '../main';
 import {
@@ -353,6 +355,10 @@ export class DashboardView extends ItemView {
 		this.registerEvent(this.app.vault.on('delete', refreshAll));
 		this.registerEvent(this.app.vault.on('rename', refreshAll));
 		this.registerEvent(this.app.vault.on('modify', (file) => {
+			if (file.path.startsWith(`${PLAN_ROOT}/`) && this.currentPage === 'home' && this.homeMode === 'workbench') {
+				void this.renderWorkbenchDashboard();
+				return;
+			}
 			this.taskStore.invalidate();
 			if (this.currentPage === 'project') {
 				// Project config files are re-rendered by setProjectStage / updateProjectFile themselves.
@@ -378,6 +384,12 @@ export class DashboardView extends ItemView {
 			if (this.currentPage !== 'home' || !this.boardEl) return;
 			void this.refreshHomeCards();
 		});
+		let planDay = todayStr();
+		this.registerInterval(window.setInterval(() => {
+			if (planDay === todayStr()) return;
+			planDay = todayStr();
+			void this.renderWorkbenchDashboard();
+		}, 60000));
 
 		// Initial scan populates parse diagnostics asynchronously; refresh the
 		// banner warning once the first scans have completed.
@@ -1272,14 +1284,18 @@ export class DashboardView extends ItemView {
 		await this.renderFirstRunIfEmpty(this.boardEl);
 	}
 
+	private workbenchRenderVersion = 0;
 	private async renderWorkbenchDashboard(): Promise<void> {
 		const board = this.boardEl;
 		if (!board || this.currentPage !== 'home' || this.homeMode !== 'workbench') return;
-		const [allTasks, projects] = await Promise.all([
+		const version = ++this.workbenchRenderVersion;
+		const date = new Date();
+		const [allTasks, projects, plans] = await Promise.all([
 			this.taskStore.scanAllTasks(),
 			this.taskStore.scanAllProjects(),
+			Promise.all(PLAN_PERIODS.map((period) => readPlan(this.planFiles(), period, date))),
 		]);
-		if (!this.boardEl || this.boardEl !== board || this.currentPage !== 'home' || this.homeMode !== 'workbench') return;
+		if (version !== this.workbenchRenderVersion || !this.boardEl || this.boardEl !== board || this.currentPage !== 'home' || this.homeMode !== 'workbench') return;
 
 		const today = todayStr();
 		const horizonDate = new Date();
@@ -1298,12 +1314,42 @@ export class DashboardView extends ItemView {
 			upcomingTasks,
 			projects,
 			existingPaths,
+			plans,
+			onOpenPlan: (period) => void this.openPlan(period),
 			onOpenTask: (task) => this.openTaskEditModal(task),
 			onOpenProjects: () => void this.projectBoard.show(),
 			onOpenProject: (project) => void this.projectBoard.openProjectGantt(project),
 			onOpenProjectView: (view) => void this.projectBoard.openView(view),
 			onOpenPath: (path) => void this.revealFolder(path),
 		});
+	}
+
+	private planFiles(): PlanFiles {
+		const vault = this.app.vault;
+		return {
+			kind: (path) => {
+				const entry = vault.getAbstractFileByPath(path);
+				return entry instanceof TFile ? 'file' : entry instanceof TFolder ? 'folder' : undefined;
+			},
+			read: async (path) => {
+				const file = vault.getAbstractFileByPath(path);
+				if (!(file instanceof TFile)) throw new Error('计划笔记不存在');
+				return vault.read(file);
+			},
+			createFolder: (path) => vault.createFolder(path),
+			create: (path, content) => vault.create(path, content),
+		};
+	}
+
+	private async openPlan(period: PlanPeriod): Promise<void> {
+		try {
+			const path = await ensurePlan(this.planFiles(), period);
+			const file = this.app.vault.getAbstractFileByPath(path);
+			if (!(file instanceof TFile)) throw new Error('计划笔记不可用');
+			await this.app.workspace.getLeaf('tab').openFile(file);
+		} catch (error) {
+			this.showToast(`无法打开计划：${error instanceof Error ? error.message : '请检查目录权限'}`);
+		}
 	}
 
 	private async revealFolder(path: string): Promise<void> {
