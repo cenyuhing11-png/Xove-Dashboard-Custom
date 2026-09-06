@@ -4,10 +4,10 @@ import type { LearningNote } from '../data/learning';
 import type { EmbeddedTaskStore } from '../data/embeddedTaskVault';
 import { parseEmbeddedTasks } from '../data/embeddedTasks';
 import { readSection } from '../data/planning';
-import { learningProcessResources, learningProcessStatus, taskProgressLabel } from '../data/processes';
+import { learningProcessResources, learningProcessStatus } from '../data/processes';
 import { openLearningFile } from '../data/learningVault';
 import { NewEmbeddedTaskModal, renderEmbeddedRows } from './EmbeddedTaskModal';
-import { listEntry } from './viewPrimitives';
+import { detailTaskHeader, listEntry } from './viewPrimitives';
 
 /** Secondary detail only; reads one Markdown snapshot and reuses task completion writes. */
 export function renderLearningProcessDetail(el: HTMLElement, app: App, store: EmbeddedTaskStore, note: LearningNote, notes: LearningNote[], content: string, overview: () => void): void {
@@ -28,9 +28,7 @@ export function renderLearningProcessDetail(el: HTMLElement, app: App, store: Em
 	section('学习目标');
 	const tasks = parseEmbeddedTasks(note.path, content);
 	const block = el.createDiv({ cls: 'ad-update-block' });
-	block.createEl('h2', { cls: 'ad-modal-title', text: '学习任务' });
-	block.createEl('p', { cls: 'ad-modal-hint', text: taskProgressLabel(tasks.length, tasks.filter(t => t.completed).length) });
-	block.createEl('button', { cls: 'ad-modal-btn', text: '添加学习任务' }).onclick = () => new NewEmbeddedTaskModal(app, store, note.path).open();
+	detailTaskHeader(block, '学习任务', tasks.filter(t => t.completed).length, tasks.length, () => new NewEmbeddedTaskModal(app, store, note.path).open());
 	renderEmbeddedRows(block, tasks, app, store);
 	const resources = section('当前资源');
 	for (const resource of learningProcessResources(note, notes)) listEntry(resources, resource.name, [resource.resourceType, resource.status].filter(Boolean).join(' · '), () => { void openLearningFile(app, resource.path).catch(e => new Notice(String(e))); });

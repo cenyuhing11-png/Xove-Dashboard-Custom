@@ -11,6 +11,7 @@ import { parseEmbeddedTasks } from '../data/embeddedTasks';
 import { processes, processBoardItems } from '../data/processes';
 import type { Process } from '../data/processes';
 import { renderLearningProcessDetail } from './LearningProcessDetail';
+import { detailTaskHeader } from './viewPrimitives';
 import { ProjectBoard } from './ProjectBoard';
 import { requestProcessStatusChange } from './ProcessStatusAction';
 import { WorkbenchShell } from '../components/workbench/WorkbenchShell';
@@ -125,9 +126,7 @@ export class ProjectView extends ItemView {
 			const goal = el.createDiv({ cls: 'ad-update-block' });
 			goal.createEl('h2', { cls: 'ad-modal-title', text: '项目目标' }); goal.createEl('p', { cls: 'ad-modal-desc', text: summary.goal || '尚未填写项目目标' });
 			const tasks = el.createDiv({ cls: 'ad-update-block' });
-			tasks.createEl('h2', { cls: 'ad-modal-title', text: '项目任务' });
-			tasks.createEl('p', { cls: 'ad-modal-hint', text: `总数 ${summary.total} · 已完成 ${summary.done} · 未完成 ${summary.total - summary.done}` });
-			tasks.createEl('button', { cls: 'ad-modal-btn', text: '添加项目任务' }).onclick = () => new NewEmbeddedTaskModal(this.app, this.tasks, project.path).open();
+			detailTaskHeader(tasks, '项目任务', summary.done, summary.total, () => new NewEmbeddedTaskModal(this.app, this.tasks, project.path).open());
 			// Keep counts and rows on the same Markdown snapshot during metadata/index refreshes.
 			renderEmbeddedRows(tasks, parseEmbeddedTasks(project.path, content), this.app, this.tasks);
 			for (const [heading, text] of [['项目资料', summary.materials], ['过程记录', summary.progress], ['最终成果', summary.outcome]]) {

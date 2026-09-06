@@ -2483,6 +2483,12 @@ body.theme-dark .ad-popover.ad-addmenu-backdrop[data-theme="light"] {
 .mx-project-view { padding: 24px; overflow-y: auto; overflow-wrap: anywhere; }
 .mx-project-view p { white-space: pre-wrap; }
 .mx-project-view button { max-width: 100%; white-space: normal; height: auto; }
+/* Detail task headings share the original card header and neutral calendar text action. */
+.mx-detail-task-head { flex-wrap: wrap; padding-bottom: 6px; margin-bottom: 8px; border-bottom: 1px solid var(--ad-line); }
+.mx-detail-task-head > .ad-modal-title { min-width: 0; margin: 0; }
+.mx-detail-task-head .ad-modal-hint { font-weight: 400; white-space: nowrap; }
+.mx-detail-task-head > .po-cal__seg-btn { flex: 0 0 auto; margin-left: auto; box-shadow: none; background: transparent; color: var(--ad-text-dim); }
+.mx-detail-task-head > .po-cal__seg-btn:hover { background: var(--ad-h1); color: var(--ad-text); }
 
 /* Original ProjectBoard in its own ItemView: viewport sizing only, no new skin. */
 .mx-project-overview { display: flex; flex-direction: column; min-width: 0; container-type: inline-size; }

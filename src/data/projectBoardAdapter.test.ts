@@ -219,13 +219,13 @@ function learningDetail(){
 	return{root,changes,modals,opened,back:()=>back};
 }
 test('Learning detail reuses author blocks and displays goal/tasks/resources/next/practice',()=>{
-	const f=learningDetail();for(const label of ['学习目标','学习任务','当前资源','下一步','实践'])assert.ok(f.root.querySelectorAll('.ad-modal-title').some(e=>e.text===label));assert.equal(f.root.querySelectorAll('.mx-task-row').length,3);assert.ok(f.root.all().some(e=>e.text==='1 / 3'));assert.equal(f.root.querySelector('.ad-header'),undefined);
+	const f=learningDetail();for(const label of ['学习目标','学习任务','当前资源','下一步','实践'])assert.ok(f.root.querySelectorAll('.ad-modal-title').some(e=>e.text===label));assert.equal(f.root.querySelectorAll('.mx-task-row').length,3);assert.ok(f.root.all().some(e=>e.text===' · 1 / 3'));assert.equal(f.root.querySelector('.ad-header'),undefined);
 });
 test('Learning detail completion writes the original Embedded Task source',async()=>{
 	const f=learningDetail();const input:any=f.root.querySelectorAll('input')[1]!;input.checked=true;input.onchange();await Promise.resolve();assert.deepEqual(f.changes,[[learning.path,true]]);
 });
 test('Learning detail add-task action keeps the theme preset, not a task file',()=>{
-	const f=learningDetail();f.root.querySelectorAll('button').find(e=>e.text==='添加学习任务')!.onclick();assert.equal(f.modals.length,1);assert.equal(f.modals[0].presetPath,learning.path);
+	const f=learningDetail();f.root.querySelector('.mx-detail-task-head')!.querySelector('button')!.onclick();assert.equal(f.modals.length,1);assert.equal(f.modals[0].presetPath,learning.path);
 });
 test('Learning detail source edit and overview remain available',async()=>{
 	const f=learningDetail();f.root.querySelectorAll('button').find(e=>e.text==='编辑学习笔记 →')!.onclick();await Promise.resolve();assert.deepEqual(f.opened,[learning.path]);f.root.querySelectorAll('button').find(e=>e.text==='全部进程 →')!.onclick();assert.equal(f.back(),1);
