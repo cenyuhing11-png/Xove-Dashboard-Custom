@@ -1,0 +1,25 @@
+{
+	"name": "xove-dashboard-custom",
+	"version": "0.3.1-custom.1",
+	"description": "A private, maintainable Obsidian workbench based on Xove Dashboard.",
+	"main": "main.js",
+	"type": "module",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "npm run typecheck && node esbuild.config.mjs production",
+		"typecheck": "tsc -noEmit -skipLibCheck",
+		"test": "node --test \"src/data/*.test.ts\"",
+		"check": "npm run build && npm run test"
+	},
+	"keywords": [],
+	"license": "0-BSD",
+	"devDependencies": {
+		"@types/node": "^22.15.17",
+		"esbuild": "0.25.5",
+		"obsidian": "latest",
+		"typescript": "^5.8.3"
+	},
+	"allowScripts": {
+		"esbuild@0.25.5": true
+	}
+}
