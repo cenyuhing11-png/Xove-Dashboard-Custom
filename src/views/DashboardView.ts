@@ -21,6 +21,9 @@ import type { PlanFiles, PlanPeriod } from '../data/planning';
 import { currentLearning } from '../data/learning';
 import { learningFiles, openLearningFile, scanLearning } from '../data/learningVault';
 import { LearningListModal, NewLearningModal } from './LearningModals';
+import { ensureJournal, journalStates } from '../data/journal';
+import type { JournalKind } from '../data/journal';
+import { JournalHistoryModal } from './JournalHistoryModal';
 
 import type Dashboard from '../main';
 import {
@@ -1322,6 +1325,11 @@ export class DashboardView extends ItemView {
 			existingPaths,
 			plans,
 			learning,
+			journals: journalStates(this.planFiles(), date),
+			journalActions: {
+				open: (kind) => { void this.openJournal(kind); },
+				history: (mode) => new JournalHistoryModal(this.app, mode, (path) => this.openJournalPath(path), (kind) => this.openJournal(kind)).open(),
+			},
 			learningActions: {
 				create: () => new NewLearningModal(this.app, '学习主题').open(),
 				open: (path) => { void openLearningFile(this.app, path).catch(() => this.showToast('笔记不存在或已移动')); },
@@ -1334,6 +1342,19 @@ export class DashboardView extends ItemView {
 			onOpenProjectView: (view) => void this.projectBoard.openView(view),
 			onOpenPath: (path) => void this.revealFolder(path),
 		});
+	}
+
+	private async openJournalPath(path: string): Promise<void> {
+		try {
+			const file = this.app.vault.getAbstractFileByPath(path);
+			if (!(file instanceof TFile)) throw new Error('笔记不存在或已移动');
+			await this.app.workspace.getLeaf('tab').openFile(file);
+		} catch (error) { this.showToast(`无法打开记录：${error instanceof Error ? error.message : '请检查权限'}`); }
+	}
+
+	private async openJournal(kind: JournalKind): Promise<void> {
+		try { await this.openJournalPath(await ensureJournal(this.planFiles(), kind)); }
+		catch (error) { this.showToast(`无法创建记录：${error instanceof Error ? error.message : '请检查权限'}`); }
 	}
 
 	private planFiles(): PlanFiles {

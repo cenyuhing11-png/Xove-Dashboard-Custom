@@ -1,3 +1,5 @@
+import { ensureSafeNote } from './safeNote.ts';
+
 export type PlanPeriod = 'year' | 'quarter' | 'month' | 'week';
 export const PLAN_PERIODS: PlanPeriod[] = ['week', 'month', 'quarter', 'year'];
 export const PLAN_ROOT = '05-计划';
@@ -104,17 +106,5 @@ export async function readPlan(files: PlanFiles, period: PlanPeriod, date = new 
 /** Never modify an existing file; a concurrent creator wins safely. */
 export async function ensurePlan(files: PlanFiles, period: PlanPeriod, date = new Date()): Promise<string> {
 	const info = planInfo(period, date);
-	if (files.kind(info.path) === 'file') return info.path;
-	if (files.kind(info.path)) throw new Error('计划路径被文件夹占用');
-	for (const folder of [PLAN_ROOT, info.folder]) {
-		if (files.kind(folder) === 'file') throw new Error('计划目录被文件占用');
-		if (!files.kind(folder)) {
-			try { await files.createFolder(folder); }
-			catch (error) { if (files.kind(folder) !== 'folder') throw error; }
-		}
-	}
-	if (files.kind(info.path) === 'file') return info.path;
-	try { await files.create(info.path, planTemplate(period, date)); }
-	catch (error) { if (files.kind(info.path) !== 'file') throw error; }
-	return info.path;
+	return ensureSafeNote(files, info.path, [PLAN_ROOT, info.folder], planTemplate(period, date));
 }

@@ -6,6 +6,9 @@ import type { PlanPeriod, PlanState } from '../../data/planning';
 import { renderLearningCard } from './LearningCard';
 import type { LearningActions } from './LearningCard';
 import type { CurrentLearning } from '../../data/learning';
+import { renderJournalCards } from './JournalCards';
+import type { JournalActions } from './JournalCards';
+import type { JournalState } from '../../data/journal';
 import { addEmpty, addEntry, createGroup, createSection } from './shared';
 
 export interface WorkbenchHomeData {
@@ -16,6 +19,8 @@ export interface WorkbenchHomeData {
 	plans: PlanState[];
 	learning: CurrentLearning[];
 	learningActions: LearningActions;
+	journals: JournalState[];
+	journalActions: JournalActions;
 	onOpenPlan(period: PlanPeriod): void;
 	onOpenTask(task: TaskItem): void;
 	onOpenProjects(): void;
@@ -68,18 +73,6 @@ function renderContent(parent: HTMLElement, data: WorkbenchHomeData): void {
 	addEmpty(createGroup(body, '自媒体待发布'), '暂无待发布内容');
 }
 
-function renderReviews(parent: HTMLElement): void {
-	const diary = createSection(parent, '📓 日记 / 周记', true);
-	addEmpty(createGroup(diary, '今日日记'), '尚未检测到今日日记');
-	addEmpty(createGroup(diary, '本周周记'), '尚未建立周记入口');
-	addEntry(diary, '最近记录', '后续接入');
-
-	const review = createSection(parent, '🔄 月度 / 年度复盘', true);
-	addEmpty(createGroup(review, '本月复盘'), '尚未建立本月复盘');
-	addEmpty(createGroup(review, '年度复盘'), '尚未建立年度复盘');
-	addEntry(review, '查看复盘', '后续接入');
-}
-
 export function renderWorkbenchHome(parent: HTMLElement, data: WorkbenchHomeData): void {
 	parent.empty();
 	parent.addClass('wb-home');
@@ -94,5 +87,5 @@ export function renderWorkbenchHome(parent: HTMLElement, data: WorkbenchHomeData
 	renderKnowledge(knowledge, data);
 	renderContent(knowledge, data);
 	const reviews = parent.createDiv({ cls: 'wb-grid wb-grid--short' });
-	renderReviews(reviews);
+	renderJournalCards(reviews, data.journals, data.journalActions);
 }
