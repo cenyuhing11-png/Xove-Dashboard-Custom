@@ -13,10 +13,13 @@ export interface ConfirmModalOptions {
 	confirmLabel: string;
 	cancelLabel: string;
 	onConfirm: () => void;
+	onCancel?: () => void;
+	confirmStyle?: 'primary' | 'danger';
 }
 
 export class ConfirmModal extends Modal {
 	private opts: ConfirmModalOptions;
+	private confirmed = false;
 
 	constructor(opts: ConfirmModalOptions) {
 		super(opts.app);
@@ -24,6 +27,7 @@ export class ConfirmModal extends Modal {
 	}
 
 	onOpen(): void {
+		this.confirmed = false;
 		const { contentEl } = this;
 		contentEl.addClass('ad-confirm-modal');
 		contentEl.createEl('h3', { cls: 'ad-modal-title', text: this.opts.title });
@@ -31,8 +35,9 @@ export class ConfirmModal extends Modal {
 		const btns = contentEl.createDiv({ cls: 'ad-modal-btns' });
 		btns.createEl('button', { cls: 'ad-modal-btn', text: this.opts.cancelLabel })
 			.addEventListener('click', () => this.close());
-		const ok = btns.createEl('button', { cls: 'ad-modal-btn ad-modal-btn--danger', text: this.opts.confirmLabel });
+		const ok = btns.createEl('button', { cls: `ad-modal-btn ad-modal-btn--${this.opts.confirmStyle ?? 'danger'}`, text: this.opts.confirmLabel });
 		ok.addEventListener('click', () => {
+			this.confirmed = true;
 			this.close();
 			this.opts.onConfirm();
 		});
@@ -40,6 +45,7 @@ export class ConfirmModal extends Modal {
 	}
 
 	onClose(): void {
+		if (!this.confirmed) this.opts.onCancel?.();
 		this.contentEl.empty();
 	}
 }

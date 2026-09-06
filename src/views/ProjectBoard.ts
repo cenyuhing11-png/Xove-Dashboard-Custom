@@ -1,4 +1,4 @@
-import { Menu, TFile, TFolder } from 'obsidian';
+import { Menu, Notice, TFile, TFolder } from 'obsidian';
 import type { EmbeddedTaskStore } from '../data/embeddedTaskVault';
 import { embeddedSource } from '../data/embeddedTasks';
 import { NewEmbeddedTaskModal, renderEmbeddedRows } from './EmbeddedTaskModal';
@@ -27,11 +27,12 @@ import { ProcessTasksModal } from './ProcessTasksModal';
 type BoardItem = ProjectBoardItem | ProcessBoardItem;
 function itemType(item: BoardItem): ProcessType { return 'process' in item ? item.process.processType : 'project'; }
 
-/** Explicit read-only project source; no legacy task/file mutation capabilities. */
+/** Explicit project source; only the optional status action may mutate a Property. No legacy writes. */
 export interface ProjectBoardSource {
 	kind: 'mengxu'; app: App; boardEl: HTMLElement; tasks: EmbeddedTaskStore;
 	items(): BoardItem[];
 	open(item: BoardItem): void;
+	changeStatus?(item: BoardItem, status: ProjectStatus): Promise<void>;
 }
 
 /** 宿主接口：ProjectBoard 渲染器所需的宿主依赖。 */
@@ -250,7 +251,17 @@ export class ProjectBoard {
 			name.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.source!.open(item); } };
 			row.createEl('td', { text: processTypeLabel(itemType(item)) });
 			row.createEl('td', { text: item.direction || '未关联' });
-			row.createEl('td').createSpan({ cls: 'po-status ' + statusClasses[item.status], text: item.status });
+			const status = row.createEl('td').createSpan({ cls: 'po-status po-clickable ' + statusClasses[item.status], text: item.status, attr: { role: 'button', tabindex: '0', 'aria-haspopup': 'menu', 'aria-label': `${item.name} 状态：${item.status}` } });
+			const chooseStatus = () => {
+				// Obsidian's themed menu stays beside the pill in both themes and zoom levels.
+				const menu = new Menu().setUseNativeMenu(false);
+				for (const next of PROJECT_STATUSES) menu.addItem(entry => entry.setTitle(next).setChecked(next === item.status).onClick(() => {
+					void this.source?.changeStatus?.(item, next).catch(error => new Notice(String(error)));
+				}));
+				const rect = status.getBoundingClientRect(); menu.showAtPosition({ x: rect.left, y: rect.bottom });
+			};
+			status.onclick = event => { event.stopPropagation(); chooseStatus(); };
+			status.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); chooseStatus(); } };
 			for (const date of [item.startDate, item.endDate]) row.createEl('td', { text: compactProcessDate(date), attr: { title: processDateTitle(date) } });
 			this.renderProcessProgress(row.createEl('td'), item);
 			return row;

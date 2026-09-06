@@ -12,6 +12,7 @@ import { processes, processBoardItems } from '../data/processes';
 import type { Process } from '../data/processes';
 import { renderLearningProcessDetail } from './LearningProcessDetail';
 import { ProjectBoard } from './ProjectBoard';
+import { requestProcessStatusChange } from './ProcessStatusAction';
 import { WorkbenchShell } from '../components/workbench/WorkbenchShell';
 import { renderLifeCompass } from '../components/workbench/LifeCompass';
 import { openDirection } from './DirectionView';
@@ -77,6 +78,7 @@ export class ProjectView extends ItemView {
 				this.overview = new ProjectBoard({ kind: 'mengxu', app: this.app, boardEl, tasks: this.tasks,
 					items: () => processBoardItems(processes(scanLearning(this.app), scanProjects(this.app), this.tasks.all())),
 					open: item => { if ('process' in item) void openProcess(this.app, item.process); else void openProjects(this.app, item.project); },
+					changeStatus: (item, status) => requestProcessStatusChange(this.app, { sourceFile: item.key, processType: 'process' in item ? item.process.processType : 'project', projectId: 'project' in item ? item.project.id : item.process.processType === 'project' && !item.process.id.startsWith('project:') ? item.process.id : undefined }, status),
 				});
 			}
 			if (this.overviewEl.parentElement !== el) { el.empty(); el.appendChild(this.overviewEl); }

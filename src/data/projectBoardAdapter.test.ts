@@ -78,7 +78,7 @@ test('Legacy missing optional fields still render safely through the formal opt-
 class Element {
 	tag: string; children: Element[] = []; parent?: Element; classes = new Set<string>(); text = ''; value = ''; title = ''; draggable = false;
 	dataset: Record<string,string> = {}; style: Record<string,string> = {}; attrs: Record<string,string> = {}; events: Record<string,((e:any)=>unknown)[]> = {};
-	onclick: () => unknown = () => {}; onkeydown: (e:any)=>unknown = () => {};
+	onclick: (e?:any) => unknown = () => {}; onkeydown: (e:any)=>unknown = () => {};
 	clientWidth=800; clientHeight=600; offsetHeight=600; offsetTop=0; scrollLeft=0; scrollTop=0;
 	constructor(tag='div') { this.tag=tag; }
 	get parentElement(){return this.parent;}
@@ -99,21 +99,45 @@ class Element {
 }
 const bundle=buildSync({entryPoints:[fileURLToPath(new URL('../views/ProjectBoard.ts',import.meta.url))],bundle:true,platform:'node',format:'cjs',write:false,external:['obsidian']}).outputFiles[0]!.text;
 function boardFixture(view='kanban', values=[project], processItems?: ProcessBoardItem[]) {
-	const module:{exports:any}={exports:{}};const opened:any[]=[];let created=0,learningCreated=0;const menuItems:any[]=[],previews:any[]=[];
-	class Menu { addItem(fn:(item:any)=>void){const item={title:'',click:()=>{},setTitle(title:string){this.title=title;return this;},onClick(click:()=>void){this.click=click;return this;}};fn(item);menuItems.push(item);} showAtMouseEvent(){} }
+	const module:{exports:any}={exports:{}};const opened:any[]=[];let created=0,learningCreated=0;const menuItems:any[]=[],previews:any[]=[],statusChanges:any[]=[];
+	class Menu { setUseNativeMenu(){return this;} addItem(fn:(item:any)=>void){const item={title:'',checked:false,click:()=>{},setTitle(title:string){this.title=title;return this;},setChecked(value:boolean){this.checked=value;return this;},onClick(click:()=>void){this.click=click;return this;}};fn(item);menuItems.push(item);} showAtMouseEvent(){} showAtPosition(){} }
 	runInNewContext(bundle,{module,exports:module.exports,require:(id:string)=>{assert.equal(id,'obsidian');return {Menu,Modal:class{open(){previews.push(this);}close(){}},ItemView:class{}};},
 		DOMParser:class{parseFromString(){return {documentElement:new Element('svg')};}},
 		document:{createElementNS:(_:string,t:string)=>new Element(t)},window:{requestAnimationFrame:()=>{}},
 		ResizeObserver:class{observe(){}disconnect(){}},requestAnimationFrame:()=>{},setTimeout:()=>{},
 	});
 	const root=new Element();const items=processItems ?? projectBoardItems(values,tasks);
-	const board=new module.exports.ProjectBoard({kind:'mengxu',app:{},boardEl:root,tasks:{},items:()=>items,open:(p:any)=>opened.push(p.process ?? p.project),create:()=>created++,...(processItems ? {createLearning:()=>learningCreated++} : {})});
+	const board=new module.exports.ProjectBoard({kind:'mengxu',app:{},boardEl:root,tasks:{},items:()=>items,open:(p:any)=>opened.push(p.process ?? p.project),changeStatus:async(item:any,status:string)=>{statusChanges.push({path:item.key,status});item.status=status;/* Simulate the existing metadata-event rescan, not a local optimistic pill. */await board.refresh();},create:()=>created++,...(processItems ? {createLearning:()=>learningCreated++} : {})});
 	board.currentView=view;
-	return {board,root,items,opened,created:()=>created,learningCreated:()=>learningCreated,menuItems,previews};
+	return {board,root,items,opened,created:()=>created,learningCreated:()=>learningCreated,menuItems,previews,statusChanges};
 }
 test('ProjectBoard uses original container/sidebar/tabs/card classes', async()=>{
 	const f=boardFixture();await f.board.show();for(const cls of ['po-board','po-container','po-sidebar','po-main','po-tabs','po-panel','po-kanban','po-kanban__card'])assert.ok(f.root.querySelector('.'+cls),cls);
 	assert.equal(f.root.querySelectorAll('.po-tab').length,4);assert.equal(f.root.querySelector('.mx-project-card'),undefined);
+});
+
+test('Process status pill reuses author classes and opens five checked menu options', async()=>{
+	const f=boardFixture('list');await f.board.show();const pill=f.root.querySelector('.po-status')!;
+	assert.ok(pill.classes.has('po-clickable'));assert.equal(pill.getAttribute('role'),'button');assert.equal(pill.getAttribute('aria-haspopup'),'menu');
+	pill.onclick({stopPropagation(){}});assert.deepEqual(f.menuItems.map(i=>i.title),['计划中','进行中','暂停','已完成','归档']);assert.equal(f.menuItems.filter(i=>i.checked).length,1);assert.equal(f.menuItems.find(i=>i.checked).title,project.status);
+	assert.equal(f.opened.length,0);assert.equal(f.previews.length,0);
+});
+test('Status menu changes the correct source and list refresh displays persisted status', async()=>{
+	const f=boardFixture('list');await f.board.show();f.root.querySelector('.po-status')!.onclick({stopPropagation(){}});
+	f.menuItems.find(i=>i.title==='暂停').click();await new Promise(r=>setImmediate(r));
+	assert.deepEqual(f.statusChanges,[{path,status:'暂停'}]);assert.equal(f.root.querySelector('.po-status')!.text,'暂停');assert.equal(f.opened.length,0);
+});
+test('Status change rescan immediately removes items excluded by active status filter', async()=>{
+	const f=boardFixture('list');await f.board.show();f.board.projectFilter=project.status;await f.board.refresh();f.root.querySelector('.po-status')!.onclick({stopPropagation(){}});
+	f.menuItems.find(i=>i.title==='归档').click();await new Promise(r=>setImmediate(r));assert.equal(f.root.querySelectorAll('.po-data-row').length,0);assert.equal(f.board.projectFilter,project.status);
+});
+test('Kanban metadata rescan moves the process into its new status column', async()=>{
+	const f=boardFixture('kanban');await f.board.show();f.items[0]!.status='暂停';await f.board.refresh();
+	const card=f.root.querySelector('.po-kanban__card')!;assert.equal(card.parent!.dataset.status,'暂停');assert.equal(f.root.querySelectorAll('.po-kanban__card').length,1);
+});
+test('Keyboard status action does not trigger name/detail or task-preview actions', async()=>{
+	const f=boardFixture('list');await f.board.show();let prevented=0;f.root.querySelector('.po-status')!.onkeydown({key:'Enter',preventDefault(){prevented++;},stopPropagation(){}});
+	assert.equal(prevented,1);assert.equal(f.menuItems.length,5);assert.equal(f.opened.length,0);assert.equal(f.previews.length,0);
 });
 
 const learningPath='01-学习与资料/产品建模.md';
