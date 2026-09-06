@@ -1,6 +1,6 @@
 import { App, Modal, Notice } from 'obsidian';
 import type { EventRef } from 'obsidian';
-import { abilityNotes, ensureLearningNote, queuedResources } from '../data/learning';
+import { abilityNotes, ensureLearningNote, queuedResources, RESOURCE_TYPES } from '../data/learning';
 import type { LearningKind } from '../data/learning';
 import { allLearningTopics } from '../data/compass';
 import { learningFiles, openLearningFile, scanLearning } from '../data/learningVault';
@@ -14,13 +14,21 @@ export class NewLearningModal extends Modal {
 		const label = form.createEl('label', { text: `${this.kind}名称` });
 		const input = label.createEl('input', { type: 'text', attr: { placeholder: `输入${this.kind}名称`, 'aria-label': `${this.kind}名称`, required: 'true' } });
 		const error = form.createDiv({ attr: { role: 'alert' } });
+		let resourceType = '其他资料';
+		if (this.kind === '学习资源') {
+			const field = form.createEl('label', { text: '资源类型' });
+			const select = field.createEl('select', { attr: { 'aria-label': '资源类型' } });
+			for (const value of RESOURCE_TYPES) select.createEl('option', { text: value, value });
+			select.value = resourceType;
+			select.onchange = () => { resourceType = select.value; };
+		}
 		form.createEl('button', { text: '取消', type: 'button' }).onclick = () => this.close();
 		const submit = form.createEl('button', { text: '创建并打开', type: 'submit' });
 		form.addEventListener('submit', (event) => {
 			event.preventDefault();
 			if (submit.disabled) return;
 			submit.disabled = true;
-			void ensureLearningNote(learningFiles(this.app), this.kind, input.value)
+			void ensureLearningNote(learningFiles(this.app), this.kind, input.value, resourceType)
 				.then((path) => openLearningFile(this.app, path)).then(() => this.close())
 				.catch((reason: unknown) => { error.setText(reason instanceof Error ? reason.message : '无法创建，请检查目录权限'); })
 				.finally(() => { submit.disabled = false; });

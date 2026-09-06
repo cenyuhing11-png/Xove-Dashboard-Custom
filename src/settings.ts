@@ -110,8 +110,8 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
 		templateFile: '',
 	},
 	diary: {
-		storagePath: 'Daily',
-		namingPattern: 'YYYY-MM-DD',
+		storagePath: '04-日记与复盘/日记',
+		namingPattern: 'YYYY-MM-DD 日记',
 		templateFile: '',
 	},
 	todoSourceFolder: '',

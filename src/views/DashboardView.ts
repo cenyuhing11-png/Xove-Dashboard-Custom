@@ -974,6 +974,10 @@ export class DashboardView extends ItemView {
 	/* ---- Create diary note ---- */
 	private async createDiary(): Promise<void> {
 		const dc = this.plugin.settings.diary;
+		if (dc.storagePath === '04-日记与复盘/日记' && dc.namingPattern === 'YYYY-MM-DD 日记' && !dc.templateFile) {
+			await this.openJournal('day');
+			return;
+		}
 		const now = new Date();
 
 		// Ensure folder

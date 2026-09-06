@@ -3,7 +3,14 @@ import type { PlanFiles } from './planning';
 
 export const LEARNING_ROOT = '01-学习与资料';
 export type LearningKind = '能力' | '学习主题' | '学习资源';
-const folders: Record<LearningKind, string> = { 能力: '能力', 学习主题: '学习主题', 学习资源: '学习资源' };
+export const RESOURCE_TYPES = ['书籍', '课程', '视频', '文章', '网页', '文档', 'PDF', '其他资料'] as const;
+export function resourceFolder(type: string): string {
+	const folders: Record<string, string> = { 书籍: '书籍', 课程: '课程', 视频: '视频', 文章: '文章与网页', 网页: '文章与网页', 文档: '文档资料', PDF: '文档资料' };
+	return `${LEARNING_ROOT}/${Object.prototype.hasOwnProperty.call(folders, type) ? folders[type] : '文档资料'}`;
+}
+export function learningFolder(kind: LearningKind, resourceType = '其他资料'): string {
+	return kind === '学习资源' ? resourceFolder(resourceType) : LEARNING_ROOT;
+}
 export interface LearningNote {
 	path: string; name: string; kind: LearningKind; status: string;
 	priority: string; abilities: string[]; topics: string[]; direction: string;
@@ -27,7 +34,7 @@ export function learningNote(path: string, name: string, properties: unknown): L
 	const kind = text(fm['类型']);
 	if (kind !== '能力' && kind !== '学习主题' && kind !== '学习资源') return null;
 	return { path, name, kind, status: text(fm['状态']), priority: text(fm['优先级']),
-		abilities: relationNames(fm['所属能力']), topics: relationNames(fm['关联主题']), direction: text(fm['方向']),
+		abilities: relationNames(fm['所属能力'] ?? fm['能力']), topics: relationNames(fm['关联主题'] ?? fm['学习主题']), direction: text(fm['方向']),
 		domain: text(fm['领域']), stage: text(fm['阶段']), resourceType: text(fm['资源类型']) };
 }
 export function currentTopics(notes: LearningNote[]): LearningNote[] {
@@ -58,12 +65,12 @@ export function learningName(input: string): string {
 	}
 	return name;
 }
-export function learningTemplate(kind: LearningKind, name: string): string {
+export function learningTemplate(kind: LearningKind, name: string, resourceType = '其他资料'): string {
 	const title = learningName(name);
 	const headers: Record<LearningKind, string> = {
 		能力: '状态: 培养中\n领域: ""\n阶段: ""',
 		学习主题: '状态: 学习中\n方向: ""\n所属能力: []\n优先级: 主攻',
-		学习资源: '资源类型: 其他资料\n状态: 待学习\n方向: ""\n关联主题: []\n来源: ""\n链接: ""',
+		学习资源: `资源类型: ${JSON.stringify(resourceType)}\n状态: 待学习\n方向: ""\n关联主题: []\n来源: ""\n链接: ""`,
 	};
 	const bodies: Record<LearningKind, string> = {
 		能力: '## 能力目标\n\n## 当前阶段\n\n## 能力标准\n\n- [ ]\n\n## 当前学习主题\n\n## 实践与作品\n\n## 备注\n',
@@ -73,9 +80,9 @@ export function learningTemplate(kind: LearningKind, name: string): string {
 	return `---\n类型: ${kind}\n${headers[kind]}\n---\n\n# ${title}\n\n${bodies[kind]}`;
 }
 
-export async function ensureLearningNote(files: PlanFiles, kind: LearningKind, input: string): Promise<string> {
+export async function ensureLearningNote(files: PlanFiles, kind: LearningKind, input: string, resourceType = '其他资料'): Promise<string> {
 	const name = learningName(input);
-	const folder = `${LEARNING_ROOT}/${folders[kind]}`;
+	const folder = learningFolder(kind, resourceType);
 	const path = `${folder}/${name}.md`;
 	if (files.kind(path) === 'file') return path;
 	if (files.kind(path)) throw new Error('同名路径是文件夹，无法创建笔记');
@@ -87,7 +94,7 @@ export async function ensureLearningNote(files: PlanFiles, kind: LearningKind, i
 		}
 	}
 	if (files.kind(path) === 'file') return path;
-	try { await files.create(path, learningTemplate(kind, name)); }
+	try { await files.create(path, learningTemplate(kind, name, resourceType)); }
 	catch (error) { if (files.kind(path) !== 'file') throw error; }
 	return path;
 }
