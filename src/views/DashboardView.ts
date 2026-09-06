@@ -17,6 +17,7 @@ import { fmtDate, todayStr, nowFmt, calcNextRemindDate, getTodayUniverse, getTod
 import { t, tArr } from '../i18n';
 import { UI_TEXT } from '../constants';
 import { renderWorkbenchHome } from '../components/workbench/WorkbenchHome';
+import { renderLifeCompass } from '../components/workbench/LifeCompass';
 import { processes } from '../data/processes';
 import { openProcess } from './ProjectView';
 import { calcHeatmapStats, getVaultNoteCounts } from '../utils/vaultOverview';
@@ -206,9 +207,14 @@ export class DashboardView extends ItemView {
 
 	// Which top-level page is currently shown (home / project overview / opportunity board)
 	private page: 'home' | 'project' | 'opportunity' = 'home';
+	private inboxCompass?: HTMLElement;
 	get currentPage() { return this.page; }
 	set currentPage(page: 'home' | 'project' | 'opportunity') {
 		this.page = page; this.shell?.setActive(page === 'opportunity' ? 'opportunity' : page === 'project' ? 'classic' : this.homeMode === 'classic' ? 'classic' : 'home');
+		if (page === 'opportunity' && this.dashboardEl && this.boardEl) {
+			if (!this.inboxCompass) this.inboxCompass = renderLifeCompass(this.dashboardEl, name => { void openDirection(this.app, name); });
+			this.dashboardEl.insertBefore(this.inboxCompass, this.boardEl);
+		} else { this.inboxCompass?.remove(); this.inboxCompass = undefined; }
 	}
 
 	public taskStore: TaskStore;
@@ -338,6 +344,7 @@ export class DashboardView extends ItemView {
 	}
 
 	async onClose(): Promise<void> {
+		this.inboxCompass?.remove(); this.inboxCompass = undefined;
 		if (this.shell) { this.removeChild(this.shell); this.shell = undefined; }
 		if (this.adRowHObs) { this.adRowHObs.disconnect(); this.adRowHObs = undefined; }
 		if (this.adHmObs) { this.adHmObs.disconnect(); this.adHmObs = undefined; this.adHmObsTarget = undefined; }

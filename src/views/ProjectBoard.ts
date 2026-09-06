@@ -13,12 +13,16 @@ import { computeWindow, filterWithOrig } from '../data/virtualList';
 import { UI_TEXT, MODAL_TEXT } from '../constants';
 import { t, tArr } from '../i18n';
 import { ICON_gantt, ICON_list, ICON_calendar, ICON_kanban, injectSvg } from '../icons';
-import { filterBoardItems, projectTimelineItems } from '../data/projectBoardAdapter';
+import { projectTimelineItems } from '../data/projectBoardAdapter';
 import type { ProjectBoardItem } from '../data/projectBoardAdapter';
 import { PROJECT_STATUSES } from '../data/projects';
 import type { ProjectStatus } from '../data/projects';
-import { hasProcessSchedule, processTypeLabel, taskProgressLabel } from '../data/processes';
+import { hasProcessSchedule, processTypeLabel } from '../data/processes';
 import type { ProcessBoardItem, ProcessType } from '../data/processes';
+import { compactProcessDate, processDateTitle, directionProcessCounts, matchesProcessFilters } from '../data/processNavigation';
+import { LIFE_COMPASS } from '../components/workbench/config';
+import { renderTaskProgressPill, updateTaskProgressPill } from './ProcessTaskProgress';
+import { ProcessTasksModal } from './ProcessTasksModal';
 
 type BoardItem = ProjectBoardItem | ProcessBoardItem;
 function itemType(item: BoardItem): ProcessType { return 'process' in item ? item.process.processType : 'project'; }
@@ -71,7 +75,8 @@ export class ProjectBoard {
 	private items: BoardItem[] = [];
 	private processTypeFilter: ProcessType | 'all' = 'all';
 	private projectFilter: ProjectStatus | '全部' = '全部';
-	private projectSelection: string | null = null;
+	private directionFilter: string | null = null;
+	private quickTasks?: ProcessTasksModal;
 	private calendarObserver?: ResizeObserver;
 	// New overview UI preferences are session-local, not changes to data.json.
 	private projectSettings: ProjectHost['plugin']['settings'] = { projectsFolder: '', currentPoView: 'gantt', poProjectOrder: [], poTaskOrder: [], npdpStages: [] };
@@ -104,7 +109,7 @@ export class ProjectBoard {
 	private get boardEl() { return this.source?.boardEl ?? this.host.boardEl; }
 	private get currentPage() { return this.source ? 'project' : this.host.currentPage; }
 	private set currentPage(v: 'home' | 'project' | 'opportunity') { this.host.currentPage = v; }
-	private get selectedProject() { return this.source ? this.projectSelection : this.host.selectedProject; }
+	private get selectedProject() { return this.source ? null : this.host.selectedProject; }
 	private set selectedProject(v: string | null) { this.host.selectedProject = v; }
 	private get showToast() { return this.host.showToast.bind(this.host); }
 	private get taskStore() { return this.host.taskStore; }
@@ -131,7 +136,6 @@ export class ProjectBoard {
 	private showMengxu(): void {
 		const source = this.source!;
 		this.items = source.items();
-		if (!this.filteredItems().some(p => p.key === this.projectSelection)) this.projectSelection = null;
 		source.boardEl.empty(); source.boardEl.addClass('po-board');
 		const container = source.boardEl.createDiv({ cls: 'po-container' });
 		const sidebar = container.createDiv({ cls: 'po-sidebar' });
@@ -139,8 +143,8 @@ export class ProjectBoard {
 		this.poMainEl = container.createDiv({ cls: 'po-main' });
 		this.renderMengxuPanels();
 	}
-	private filteredItems(selected: string | null = null): BoardItem[] {
-		return filterBoardItems(this.items, this.projectFilter, selected).filter(item => this.processTypeFilter === 'all' || itemType(item) === this.processTypeFilter);
+	private filteredItems(): BoardItem[] {
+		return this.items.filter(item => matchesProcessFilters({ direction: item.direction, processType: itemType(item), status: item.status }, { direction: this.directionFilter, type: this.processTypeFilter, status: this.projectFilter }));
 	}
 	private createProcess(event: MouseEvent): void {
 		if (!this.source!.createLearning) { this.source!.create(); return; }
@@ -153,20 +157,23 @@ export class ProjectBoard {
 	private renderMengxuSidebar(sidebar: HTMLElement): void {
 		sidebar.empty();
 		const list = sidebar.createDiv({ cls: 'po-sidebar__list' });
-		const visible = this.filteredItems();
-		const addItem = (item?: BoardItem) => {
-			const key = item?.key ?? null;
-			const el = list.createDiv({ cls: 'po-sidebar__item' + (key === this.projectSelection ? ' is-active' : ''), attr: { role: 'button', tabindex: '0' } });
+		const counts = this.items.map(item => ({ direction: item.direction, processType: itemType(item) }));
+		const addItem = (direction: string | null) => {
+			const el = list.createDiv({ cls: 'po-sidebar__item' + (direction === this.directionFilter ? ' is-active' : ''), attr: { role: 'button', tabindex: '0' } });
+			el.dataset.direction = direction ?? '';
 			el.createSpan({ cls: 'po-dot', attr: { style: 'background:#7BA7FF;color:#7BA7FF' } });
-			el.createSpan({ text: item?.name ?? '全部进程' });
-			const group = item ? [item] : visible;
-			el.createSpan({ cls: 'po-count', text: taskProgressLabel(group.reduce((n, p) => n + p.taskCount, 0), group.reduce((n, p) => n + (p.doneCount ?? 0), 0)) });
-			el.title = item ? [item.name, processTypeLabel(itemType(item)), item.status, item.direction].filter(Boolean).join(' · ') : '全部进程';
-			const select = () => { this.projectSelection = key; this.renderMengxuSidebar(sidebar); this.renderMengxuPanels(); };
+			el.createSpan({ text: direction ?? '全部进程' });
+			el.createSpan({ cls: 'po-count', text: direction ? directionProcessCounts(counts, direction).label : String(this.items.length) });
+			el.title = direction ? `${direction}方向的学习与项目进程总数，不随类型或状态筛选改变` : '全部进程总数；点击只清空方向筛选';
+			const select = () => { this.directionFilter = direction; this.renderMengxuSidebar(sidebar); this.renderMengxuPanels(); };
 			el.onclick = select;
 			el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); } };
 		};
-		addItem(); visible.forEach(addItem);
+		addItem(null);
+		for (const lane of LIFE_COMPASS) {
+			list.createDiv({ cls: 'po-toolbar__label po-direction-group', text: lane.label });
+			lane.items.forEach(addItem);
+		}
 		sidebar.createEl('button', { cls: 'po-add-btn', text: this.source!.createLearning ? '＋ 新建 ▾' : UI_TEXT.newProjectBtn }).onclick = event => this.createProcess(event);
 	}
 
@@ -187,7 +194,7 @@ export class ProjectBoard {
 			button.dataset.filter = status;
 			button.onclick = () => { this.projectFilter = status; this.showMengxu(); };
 		}
-		const items = this.filteredItems(this.projectSelection);
+		const items = this.filteredItems();
 		const tabs = main.createDiv({ cls: 'po-tabs' });
 		const content = main.createDiv({ cls: 'po-content' });
 		const panel = content.createDiv({ cls: 'po-panel is-active', attr: { 'data-view': this.currentView } });
@@ -220,9 +227,9 @@ export class ProjectBoard {
 				card.createDiv({ text: item.name });
 				card.createDiv({ cls: 'po-kanban__meta', text: [processTypeLabel(itemType(item)), item.status, item.direction].filter(Boolean).join(' · ') });
 				if (item.startDate || item.endDate) card.createDiv({ cls: 'po-kanban__meta', text: `${item.startDate || '未设置开始'} → ${item.endDate || '未设置截止'}` });
-				card.createDiv({ cls: 'po-kanban__meta', text: item.taskCount ? `任务 ${taskProgressLabel(item.taskCount, item.doneCount ?? 0)}` : '暂无任务' });
-				card.onclick = () => this.source!.open(item);
-				card.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.source!.open(item); } };
+				this.renderProcessProgress(card.createDiv({ cls: 'po-kanban__meta' }), item);
+				card.onclick = event => { if (!(event?.target as HTMLElement)?.closest?.('.po-task-progress')) this.source!.open(item); };
+				card.onkeydown = e => { if ((!e.target || e.target === card) && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); this.source!.open(item); } };
 			}
 		}
 	}
@@ -255,12 +262,30 @@ export class ProjectBoard {
 			row.createEl('td', { text: processTypeLabel(itemType(item)) });
 			row.createEl('td', { text: item.direction || '未关联' });
 			row.createEl('td').createSpan({ cls: 'po-status ' + statusClasses[item.status], text: item.status });
-			for (const text of [item.startDate || '—', item.endDate || '—', taskProgressLabel(item.taskCount, item.doneCount ?? 0)]) row.createEl('td', { text });
+			for (const date of [item.startDate, item.endDate]) row.createEl('td', { text: compactProcessDate(date), attr: { title: processDateTitle(date) } });
+			this.renderProcessProgress(row.createEl('td'), item);
 			return row;
 		});
 		if (!items.length) section.createDiv({ cls: 'po-empty', text: '暂无符合条件的进程' });
 		return { tbody, rows };
 	}
+	private renderProcessProgress(parent: HTMLElement, item: BoardItem): void {
+		renderTaskProgressPill(parent, item.name, item.key, item.taskCount, item.doneCount ?? 0, () => {
+			this.closeTaskPreview();
+			this.quickTasks = new ProcessTasksModal(this.app, this.source!.tasks, { name: item.name, processType: itemType(item), sourceFile: item.key }, () => this.source!.open(item));
+			this.quickTasks.open();
+		});
+	}
+	/** Checkbox updates only need to patch task pills; do not navigate or reload the view. */
+	refreshTaskProgress(): void {
+		if (!this.source) return;
+		this.items = this.source.items();
+		this.source.boardEl.querySelectorAll<HTMLButtonElement>('.po-task-progress').forEach(pill => {
+			const item = this.items.find(item => item.key === pill.dataset.sourceFile);
+			if (item) updateTaskProgressPill(pill, item.name, item.taskCount, item.doneCount ?? 0);
+		});
+	}
+	closeTaskPreview(): void { this.quickTasks?.close(); this.quickTasks = undefined; }
 
 	private scheduleStatus(task: TaskItem): string {
 		return this.source ? this.items.find(p => p.key === task.id)?.status ?? '' : UI_TEXT.statusLabel(task.status);
@@ -283,7 +308,7 @@ export class ProjectBoard {
 
 	/** 首页入口复用现有项目总览的指定视图，不另建日历或甘特图实现。 */
 	async openView(view: 'calendar' | 'gantt'): Promise<void> {
-		if (this.source) { this.projectSelection = null; this.projectFilter = '全部'; this.processTypeFilter = 'all'; }
+		if (this.source) { this.directionFilter = null; this.projectFilter = '全部'; this.processTypeFilter = 'all'; }
 		else this.host.selectedProject = null;
 		this.currentView = view;
 		await this.show(true);

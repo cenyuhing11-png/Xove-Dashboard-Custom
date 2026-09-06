@@ -2492,6 +2492,15 @@ body.theme-dark .ad-popover.ad-addmenu-backdrop[data-theme="light"] {
 .mx-project-overview .po-toolbar, .mx-project-overview .po-tabs, .mx-project-overview .po-kanban__meta { flex-wrap: wrap; }
 .mx-project-overview .po-sidebar__item > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mx-project-overview .po-kanban__card { overflow-wrap: anywhere; }
+.dashboard-plugin > .wb-compass { margin: 12px 0; }
+.po-direction-group { padding: 12px 10px 4px; }
+.po-sidebar .po-count { white-space: nowrap; }
+.ad-modal-btn.po-task-progress { margin: 0; padding: 2px 8px; min-height: 0; height: auto; line-height: 1.4; font-size: 11px; white-space: nowrap; }
+.ad-modal-btn.po-task-progress:disabled { cursor: default; opacity: 0.65; }
+.ad-task-modal.mx-quick-tasks { overflow: hidden; }
+.mx-quick-tasks > :not(.mx-quick-tasks__body) { flex-shrink: 0; }
+.mx-quick-tasks__body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.mx-quick-tasks summary { cursor: pointer; }
 /* Reused author controls in new lists: wrapping only, no second visual palette. */
 .ad-task-modal .po-toolbar { flex-wrap: wrap; }
 .ad-task-modal .ad-update-block button { max-width: 100%; height: auto; white-space: normal; overflow-wrap: anywhere; }

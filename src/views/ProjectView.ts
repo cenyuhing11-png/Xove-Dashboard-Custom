@@ -15,6 +15,8 @@ import { NewLearningModal } from './LearningModals';
 import { renderLearningProcessDetail } from './LearningProcessDetail';
 import { ProjectBoard } from './ProjectBoard';
 import { WorkbenchShell } from '../components/workbench/WorkbenchShell';
+import { renderLifeCompass } from '../components/workbench/LifeCompass';
+import { openDirection } from './DirectionView';
 import type Dashboard from '../main';
 
 export const PROJECT_VIEW = 'xove-dashboard-custom-projects';
@@ -106,10 +108,13 @@ export class ProjectView extends ItemView {
 		this.registerEvent(this.app.metadataCache.on('resolved', update));
 		this.registerEvent(this.app.vault.on('delete', update));
 		this.registerEvent(this.app.vault.on('rename', update));
-		this.register(this.tasks.subscribe(update));
+		this.register(this.tasks.subscribe(() => {
+			if (!this.projectId && !this.path && this.overview) this.overview.refreshTaskProgress();
+			else update();
+		}));
 		await this.render();
 	}
-	async onClose(): Promise<void> { this.generation++; this.overview?.dispose(); if (this.shell) this.removeChild(this.shell); this.shell = undefined; }
+	async onClose(): Promise<void> { this.generation++; this.overview?.closeTaskPreview(); this.overview?.dispose(); if (this.shell) this.removeChild(this.shell); this.shell = undefined; }
 	private async render(): Promise<void> {
 		const token = ++this.generation;
 		const projects = scanProjects(this.app);
@@ -120,6 +125,7 @@ export class ProjectView extends ItemView {
 			if (!this.overview || !this.overviewEl) {
 				el.empty();
 				this.overviewEl = el.createDiv({ cls: 'dashboard-plugin mx-project-overview' });
+				renderLifeCompass(this.overviewEl, name => { void openDirection(this.app, name); });
 				const boardEl = this.overviewEl.createDiv({ cls: 'po-board' });
 				this.overview = new ProjectBoard({ kind: 'mengxu', app: this.app, boardEl, tasks: this.tasks,
 					items: () => processBoardItems(processes(scanLearning(this.app), scanProjects(this.app), this.tasks.all())),

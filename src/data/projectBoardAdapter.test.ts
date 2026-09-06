@@ -99,9 +99,9 @@ class Element {
 }
 const bundle=buildSync({entryPoints:[fileURLToPath(new URL('../views/ProjectBoard.ts',import.meta.url))],bundle:true,platform:'node',format:'cjs',write:false,external:['obsidian']}).outputFiles[0]!.text;
 function boardFixture(view='kanban', values=[project], processItems?: ProcessBoardItem[]) {
-	const module:{exports:any}={exports:{}};const opened:any[]=[];let created=0,learningCreated=0;const menuItems:any[]=[];
+	const module:{exports:any}={exports:{}};const opened:any[]=[];let created=0,learningCreated=0;const menuItems:any[]=[],previews:any[]=[];
 	class Menu { addItem(fn:(item:any)=>void){const item={title:'',click:()=>{},setTitle(title:string){this.title=title;return this;},onClick(click:()=>void){this.click=click;return this;}};fn(item);menuItems.push(item);} showAtMouseEvent(){} }
-	runInNewContext(bundle,{module,exports:module.exports,require:(id:string)=>{assert.equal(id,'obsidian');return {Menu,Modal:class{},ItemView:class{}};},
+	runInNewContext(bundle,{module,exports:module.exports,require:(id:string)=>{assert.equal(id,'obsidian');return {Menu,Modal:class{open(){previews.push(this);}close(){}},ItemView:class{}};},
 		DOMParser:class{parseFromString(){return {documentElement:new Element('svg')};}},
 		document:{createElementNS:(_:string,t:string)=>new Element(t)},window:{requestAnimationFrame:()=>{}},
 		ResizeObserver:class{observe(){}disconnect(){}},requestAnimationFrame:()=>{},setTimeout:()=>{},
@@ -109,7 +109,7 @@ function boardFixture(view='kanban', values=[project], processItems?: ProcessBoa
 	const root=new Element();const items=processItems ?? projectBoardItems(values,tasks);
 	const board=new module.exports.ProjectBoard({kind:'mengxu',app:{},boardEl:root,tasks:{},items:()=>items,open:(p:any)=>opened.push(p.process ?? p.project),create:()=>created++,...(processItems ? {createLearning:()=>learningCreated++} : {})});
 	board.currentView=view;
-	return {board,root,items,opened,created:()=>created,learningCreated:()=>learningCreated,menuItems};
+	return {board,root,items,opened,created:()=>created,learningCreated:()=>learningCreated,menuItems,previews};
 }
 test('ProjectBoard uses original container/sidebar/tabs/card classes', async()=>{
 	const f=boardFixture();await f.board.show();for(const cls of ['po-board','po-container','po-sidebar','po-main','po-tabs','po-panel','po-kanban','po-kanban__card'])assert.ok(f.root.querySelector('.'+cls),cls);
@@ -120,23 +120,44 @@ const learningPath='01-学习与资料/产品建模.md';
 const learning=learningNote(learningPath,'产品建模',{类型:'学习主题',状态:'学习中',方向:'设计',开始日期:'2026-09-01',截止日期:'2026-09-30'})!;
 const learningBody='## 学习目标\n测试目标\n## 学习任务\n- [x] 一\n- [ ] 二\n- [ ] 三\n## 当前资源\n材料摘录\n## 下一步\n下一步内容\n## 实践\n实践内容';
 const mixed=processBoardItems(processes([learning],[project],[...tasks,...parseEmbeddedTasks(learningPath,learningBody)]));
+test('Direction sidebar shares compass order and counts whole processes',async()=>{
+	const f=boardFixture('list',[],mixed);await f.board.show();const links=f.root.querySelectorAll('.po-sidebar__item');assert.deepEqual(links.map(e=>e.dataset.direction),['','设计','AI','3D','英语','自媒体','阅读','绘画','摄影','理财','生活']);assert.equal(links[0]!.querySelector('.po-count')!.text,'2');assert.equal(links[1]!.querySelector('.po-count')!.text,'学1 · 项1');assert.equal(links[2]!.querySelector('.po-count')!.text,'学0 · 项0');assert.deepEqual(f.root.querySelectorAll('.po-direction-group').map(e=>e.text),['主攻','辅助推进','持续维护']);
+});
+test('All processes clears direction only while preserving type and status',async()=>{
+	const f=boardFixture('list',[],mixed);await f.board.show();f.root.querySelectorAll('.po-sidebar__item')[1]!.onclick();f.root.querySelectorAll('.po-chip').find(e=>e.dataset.processType==='learning')!.onclick();f.root.querySelectorAll('.po-chip').find(e=>e.dataset.filter==='进行中')!.onclick();f.root.querySelectorAll('.po-sidebar__item')[0]!.onclick();assert.equal(f.board.directionFilter,null);assert.equal(f.board.processTypeFilter,'learning');assert.equal(f.board.projectFilter,'进行中');assert.equal(f.root.querySelectorAll('.po-data-row').length,1);
+});
+test('An empty chosen direction stays active through type and status changes',async()=>{
+	const f=boardFixture('list',[],mixed);await f.board.show();f.root.querySelectorAll('.po-sidebar__item').find(e=>e.dataset.direction==='摄影')!.onclick();f.root.querySelectorAll('.po-chip').find(e=>e.dataset.processType==='learning')!.onclick();f.root.querySelectorAll('.po-chip').find(e=>e.dataset.filter==='暂停')!.onclick();assert.equal(f.board.directionFilter,'摄影');assert.equal(f.root.querySelectorAll('.po-data-row').length,0);assert.ok(f.root.querySelectorAll('.po-sidebar__item').find(e=>e.dataset.direction==='摄影')!.classes.has('is-active'));
+});
+for(const view of ['list','kanban'])test(`${view} progress opens only preview and footer retains each existing detail route`,async()=>{
+	const f=boardFixture(view,[],mixed);await f.board.show();for(const pill of f.root.querySelectorAll('.po-task-progress')){let stopped=0;(pill as any).onclick({stopPropagation(){stopped++;}});assert.equal(stopped,1);}assert.equal(f.opened.length,0);assert.equal(f.previews.length,2);assert.deepEqual(f.previews.map(p=>p.source.processType),['learning','project']);f.previews.forEach(p=>p.openDetail());assert.deepEqual(f.opened.map(p=>p.processType),['learning','project']);
+});
+test('Board checkbox notification patches existing list pills without rebuilding navigation',async()=>{
+	const items=mixed.map(p=>({...p}));const f=boardFixture('list',[],items);await f.board.show();const pill=f.root.querySelector('.po-task-progress')!;const sidebar=f.root.querySelector('.po-sidebar');items[0]!.doneCount=2;f.board.refreshTaskProgress();assert.equal(f.root.querySelector('.po-task-progress'),pill);assert.equal(pill.text,'2 / 3');assert.equal(f.root.querySelector('.po-sidebar'),sidebar);
+});
+test('Card body ignores a nested task progress click or keyboard target',async()=>{
+	const f=boardFixture('kanban',[],mixed);await f.board.show();const card=f.root.querySelector('.po-kanban__card')!;const pill=card.querySelector('.po-task-progress')!;(card as any).onclick({target:{closest:()=>pill}});card.onkeydown({target:pill,key:'Enter',preventDefault(){}});assert.equal(f.opened.length,0);card.onclick();assert.equal(f.opened.length,1);
+});
+test('List dates are ordinary text with full Chinese title, unlike task buttons',async()=>{
+	const f=boardFixture('list',[],mixed);await f.board.show();const row=f.root.querySelector('.po-data-row')!;const cells=row.children;assert.equal(cells[4]!.getAttribute('title'),'2026年9月1日');assert.equal(cells[5]!.getAttribute('title'),'2026年9月30日');assert.equal(cells[4]!.querySelector('button'),undefined);assert.ok(cells[6]!.querySelector('.po-task-progress'));
+});
 test('Process create menu routes exactly to the existing learning/project actions',async()=>{
 	const f=boardFixture('kanban',[],mixed);await f.board.show();f.root.querySelector('.po-add-btn')!.onclick();assert.deepEqual(f.menuItems.map(i=>i.title),['学习进程','项目']);f.menuItems[0].click();f.menuItems[1].click();assert.equal(f.learningCreated(),1);assert.equal(f.created(),1);
 });
 test('Mixed ProcessBoard keeps the original sidebar/cards/tabs without a second UI',async()=>{
 	const f=boardFixture('kanban',[],mixed);await f.board.show();assert.equal(f.root.querySelectorAll('.po-kanban__card').length,2);assert.equal(f.root.querySelectorAll('.po-container').length,1);assert.equal(f.root.querySelectorAll('.po-tab').length,4);assert.equal(f.root.querySelectorAll('.po-chip').filter(e=>e.dataset.processType).length,3);
 });
-test('Process type and status chips combine and clear a hidden sidebar selection',async()=>{
+test('Process type and status chips combine and preserve the chosen direction',async()=>{
 	const items=[...mixed,{...mixed[1]!,key:'paused',status:'暂停' as const,process:{...mixed[1]!.process,status:'暂停' as const}}];
 	const f=boardFixture('kanban',[],items);await f.board.show();f.root.querySelectorAll('.po-sidebar__item')[1]!.onclick();
 	f.root.querySelectorAll('.po-chip').find(e=>e.dataset.processType==='project')!.onclick();f.root.querySelectorAll('.po-chip').find(e=>e.dataset.filter==='暂停')!.onclick();
-	assert.equal(f.board.projectSelection,null);assert.equal(f.root.querySelectorAll('.po-kanban__card').length,1);assert.ok(f.root.querySelector('.po-kanban__card')!.all().some(e=>e.text==='项目 · 暂停 · 设计'));
+	assert.equal(f.board.directionFilter,'设计');assert.equal(f.root.querySelectorAll('.po-kanban__card').length,1);assert.ok(f.root.querySelector('.po-kanban__card')!.all().some(e=>e.text==='项目 · 暂停 · 设计'));
 });
 test('Mixed cards show type and correct task progress and route to their own sources',async()=>{
-	const f=boardFixture('kanban',[],mixed);await f.board.show();const cards=f.root.querySelectorAll('.po-kanban__card');cards.forEach(c=>c.onclick());assert.deepEqual(f.opened.map(p=>p.processType),['learning','project']);assert.ok(cards[0]!.all().some(e=>e.text==='任务 1 / 3'));assert.ok(cards[1]!.all().some(e=>e.text==='任务 1 / 2'));
+	const f=boardFixture('kanban',[],mixed);await f.board.show();const cards=f.root.querySelectorAll('.po-kanban__card');cards.forEach(c=>c.onclick());assert.deepEqual(f.opened.map(p=>p.processType),['learning','project']);assert.equal(cards[0]!.querySelector('.po-task-progress')!.text,'1 / 3');assert.equal(cards[1]!.querySelector('.po-task-progress')!.text,'1 / 2');
 });
-test('Zero-task process cards and sidebar say 暂无任务, never 0%',async()=>{
-	const f=boardFixture('kanban',[],processBoardItems(processes([learning],[],[])));await f.board.show();assert.ok(f.root.querySelector('.po-kanban__card')!.all().some(e=>e.text==='暂无任务'));assert.equal(f.root.querySelector('.po-count')!.text,'暂无任务');assert.equal(f.root.all().some(e=>e.text.includes('0%')),false);
+test('Zero-task process cards say 暂无任务 while sidebar counts whole processes',async()=>{
+	const f=boardFixture('kanban',[],processBoardItems(processes([learning],[],[])));await f.board.show();assert.ok(f.root.querySelector('.po-kanban__card')!.all().some(e=>e.text==='暂无任务'));assert.equal(f.root.querySelector('.po-count')!.text,'1');assert.equal(f.root.all().some(e=>e.text.includes('0%')),false);
 });
 test('One original process table includes type column, sorting and both sources',async()=>{
 	const f=boardFixture('list',[],mixed);await f.board.show();assert.equal(f.root.querySelectorAll('.po-table').length,1);assert.equal(f.root.querySelectorAll('.po-data-row').length,2);assert.deepEqual(f.root.querySelectorAll('th').map(e=>e.text),['名称','类型','方向','状态','开始','截止','任务进度']);f.root.querySelectorAll('th').find(e=>e.dataset.sortKey==='processType')!.onclick();assert.equal(f.root.querySelectorAll('.po-data-row').length,2);
@@ -186,14 +207,14 @@ test('Learning detail source edit and overview remain available',async()=>{
 test('ProjectBoard card opens new project reference and create uses supplied new Modal action',async()=>{
 	const f=boardFixture();await f.board.show();f.root.querySelector('.po-kanban__card')!.onclick();f.root.querySelector('.po-add-btn')!.onclick();assert.equal(f.opened[0],project);assert.equal(f.created(),1);
 });
-test('ProjectBoard status chips filter actual states and clear incompatible sidebar selection',async()=>{
+test('ProjectBoard status chips filter actual states without clearing direction',async()=>{
 	const paused={...project,path:'03-项目与作品/暂停/暂停.md',status:'暂停' as const};const f=boardFixture('kanban',[project,paused]);await f.board.show();
 	f.root.querySelectorAll('.po-sidebar__item')[1]!.onclick();f.root.querySelectorAll('.po-chip').find(e=>e.text==='暂停')!.onclick();
-	assert.equal(f.root.querySelectorAll('.po-kanban__card').length,1);assert.equal(f.board.projectSelection,null);assert.equal(f.root.querySelector('.po-kanban__col')!.dataset.status,'暂停');
+	assert.equal(f.root.querySelectorAll('.po-kanban__card').length,1);assert.equal(f.board.directionFilter,'设计');assert.equal(f.root.querySelector('.po-kanban__col')!.dataset.status,'暂停');
 });
 test('ProjectBoard cards display Embedded counts, direction and dates',async()=>{
 	const f=boardFixture();await f.board.show();const text=f.root.querySelector('.po-kanban__card')!.all().map(e=>e.text).join(' ');
-	for(const value of ['设计项目','进行中 · 设计','2026-09-06','2026-10-01','任务 1 / 2'])assert.ok(text.includes(value),value);
+	for(const value of ['设计项目','进行中 · 设计','2026-09-06','2026-10-01','1 / 2'])assert.ok(text.includes(value),value);
 });
 test('ProjectBoard list retains original table and opens new detail',async()=>{
 	const f=boardFixture('list');await f.board.show();assert.ok(f.root.querySelector('.po-table'));f.root.querySelector('.po-clickable')!.onclick();assert.equal(f.opened[0],project);

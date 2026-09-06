@@ -1,6 +1,6 @@
 import { LIFE_COMPASS } from './config.ts';
 
-export function renderLifeCompass(parent: HTMLElement, open: (name: string) => void): void {
+export function renderLifeCompass(parent: HTMLElement, open: (name: string) => void): HTMLElement {
 	const compass = parent.createEl('section', { cls: 'wb-compass' });
 	const title = compass.createEl('h2', { cls: 'wb-compass__title' });
 	title.createSpan({ cls: 'wb-compass__icon', text: '🧭', attr: { 'aria-hidden': 'true' } });
@@ -15,4 +15,5 @@ export function renderLifeCompass(parent: HTMLElement, open: (name: string) => v
 			wrapper.createEl('button', { cls: 'wb-compass__link', text: item, attr: { 'aria-label': `打开${item}方向` } }).onclick = () => open(item);
 		}
 	}
+	return compass;
 }
