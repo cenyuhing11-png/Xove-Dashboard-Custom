@@ -130,7 +130,7 @@ export const en: Dict = {
 		legendFew: 'Less', legendMany: 'More',
 		nav: {
 			home: 'Home', allProjects: 'All projects', board: 'Board',
-			newDiary: 'New note', newTask: 'New task', newProject: 'New project',
+			newDiary: 'New note', newTask: 'New task', newProject: 'New process',
 		},
 		openFailed: 'Open failed: ',
 		fileNotFound: 'File not found: ',

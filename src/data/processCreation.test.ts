@@ -1,0 +1,13 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createLearningProcess } from './processCreation.ts';
+import { currentTopics, learningNote } from './learning.ts';
+import { learningProcessStatus } from './processes.ts';
+import { PROJECT_STATUSES } from './projects.ts';
+import type { PlanFiles } from './planning';
+function store(){const notes=new Map<string,string>(),dirs=new Set<string>();const files:PlanFiles={kind:p=>notes.has(p)?'file':dirs.has(p)?'folder':undefined,read:async p=>notes.get(p)!,createFolder:async p=>{dirs.add(p);},create:async(p,text)=>{if(notes.has(p))throw Error('exists');notes.set(p,text);}};return{files,notes,dirs};}
+for(const status of PROJECT_STATUSES)test(`Learning creation preserves canonical ${status} without a new Process format`,async()=>{const s=store(),path=await createLearningProcess(s.files,{name:'示例',status});const raw=s.notes.get(path)!;assert.ok(raw.includes('类型: 学习主题'));assert.ok(raw.includes('状态: '+status));assert.equal(raw.includes('类型: 进程'),false);assert.equal(learningProcessStatus(status),status);});
+test('Legacy 学习中 and canonical 进行中 both remain current learning',()=>{const notes=['学习中','进行中'].map((状态,i)=>learningNote(`01-学习与资料/${i}.md`,String(i),{类型:'学习主题',状态})!);assert.equal(currentTopics(notes).length,2);assert.ok(notes.every(n=>learningProcessStatus(n.status)==='进行中'));});
+test('Learning creation rejects invalid fields before creating any directories',async()=>{for(const extra of [{status:'错误'},{direction:'未知方向'},{startDate:'2026-02-30'},{startDate:'2026-10-01',dueDate:'2026-09-01'},{name:'../非法'}]){const s=store();await assert.rejects(createLearningProcess(s.files,{name:'示例',status:'计划中',...extra} as any));assert.equal(s.notes.size,0);assert.equal(s.dirs.size,0);}});
+test('Learning same-name race rejects the losing create instead of adopting a different form',async()=>{const s=store();const results=await Promise.allSettled([createLearningProcess(s.files,{name:'示例',status:'计划中',goal:'甲'}),createLearningProcess(s.files,{name:'示例',status:'进行中',goal:'乙'})]);assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(results.filter(r=>r.status==='rejected').length,1);assert.equal(s.notes.size,1);});
+test('Learning Properties safely quote user strings without modifying unrelated template sections',async()=>{const s=store(),path=await createLearningProcess(s.files,{name:'示例',status:'计划中',ability:'能力: "引用"\n下一行',goal:'目标正文'});const raw=s.notes.get(path)!;assert.ok(raw.includes('所属能力: ["能力: \\"引用\\"\\n下一行"]'.replaceAll('\\\\"','\\"')));for(const h of ['## 学习任务','## 当前资源','## 下一步','## 实践','## 学习记录'])assert.ok(raw.includes(h));});

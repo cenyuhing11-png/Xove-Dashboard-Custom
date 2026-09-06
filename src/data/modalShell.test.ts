@@ -5,6 +5,7 @@ import { runInNewContext } from 'node:vm';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { DAILY_TASK_FILE, EmbeddedTaskIndex, parseEmbeddedTasks } from './embeddedTasks.ts';
+import { readFileSync } from 'node:fs';
 
 // A small Obsidian DOM/API double exercises the actual modal event handlers.
 // Browser layout/theme checks are performed separately in Obsidian.
@@ -22,6 +23,7 @@ class Element {
 	createDiv(opts: any = {}): Element { return this.createEl('div', opts); }
 	addClass(cls: string): void { this.classes.add(cls); }
 	removeClass(cls: string): void { this.classes.delete(cls); }
+	setText(text: string): void { this.text = text; }
 	closest(): Element { return this; }
 	empty(): void { this.children = []; }
 	focus(): void { this.focused = true; }
@@ -36,7 +38,7 @@ class Modal {
 	close(): void { this.closed = true; (this as any).onClose(); }
 }
 const code = buildSync({
-	stdin: { contents: "export { NewEmbeddedTaskModal } from './src/views/EmbeddedTaskModal'; export { NewProjectModal } from './src/views/ProjectView';", resolveDir: fileURLToPath(new URL('../../', import.meta.url)) },
+	stdin: { contents: "export { NewEmbeddedTaskModal } from './src/views/EmbeddedTaskModal'; export { UnifiedProcessModal } from './src/views/UnifiedProcessModal';", resolveDir: fileURLToPath(new URL('../../', import.meta.url)) },
 	bundle: true, platform: 'node', format: 'cjs', write: false, external: ['obsidian'],
 }).outputFiles[0]!.text;
 
@@ -57,14 +59,14 @@ function fixture() {
 			create: async (path: string, text: string) => { assert.ok(!files.has(path)); files.set(path, text); },
 		},
 		metadataCache: { getFileCache: (file: File) => ({ frontmatter: { 类型: file.path === project ? '项目' : '学习资源' } }) },
-		workspace: { getLeavesOfType: () => [], getLeaf: () => ({ setViewState: async (state: any) => opened.push(state) }), revealLeaf: async () => {} },
+		workspace: { getLeavesOfType: () => [], getLeaf: () => ({ setViewState: async (state: any) => opened.push(state), openFile: async (file:File) => opened.push({file:file.path}) }), revealLeaf: async () => {}, setActiveLeaf(){} },
 	};
 	const module: { exports: any } = { exports: {} };
 	runInNewContext(code, { module, exports: module.exports, crypto: { randomUUID }, require: (id: string) => {
 		assert.equal(id, 'obsidian'); return { Modal, ItemView: class {}, TFile: File, TFolder: Folder, Notice: class { constructor(text: string) { notices.push(text); } } };
 	} });
 	const store = new EmbeddedTaskIndex({ paths: () => [...files.keys()], read: async p => files.get(p)!, process: async (p, update) => { files.set(p, update(files.get(p)!)); }, ensureDaily: async () => {} }, randomUUID);
-	return { files, dirs, app, store, notices, opened, project, learning, Task: module.exports.NewEmbeddedTaskModal, Project: module.exports.NewProjectModal };
+	return { files, dirs, app, store, notices, opened, project, learning, Task: module.exports.NewEmbeddedTaskModal, Project: (class extends module.exports.UnifiedProcessModal { constructor(app:any) { super(app, 'project'); } }) as any, Unified: module.exports.UnifiedProcessModal };
 }
 function control(modal: Modal, label: string): Element { const el = modal.contentEl.all().find(e => e.attr['aria-label'] === label); assert.ok(el, label); return el; }
 function set(modal: Modal, label: string, value: string): void { const el = control(modal, label); el.value = value; el.oninput(); el.onchange(); }
@@ -119,18 +121,54 @@ test('project original controls save all Mengxu fields and stable UUID to one pr
 	const f = fixture(); const m = new f.Project(f.app); m.onOpen();
 	set(m, '项目名称', '新项目'); set(m, '方向（可选）', '设计'); set(m, '状态', '进行中');
 	set(m, '开始日期（可选）', '2026-09-06'); set(m, '截止日期（可选）', '2026-09-30'); set(m, '项目目标（可选）', '明确结果');
-	await button(m, '创建项目').onclick();
+	await button(m, '创建进程').onclick();
 	const path = '03-项目与作品/新项目/新项目.md'; const raw = f.files.get(path)!;
 	for (const text of ['类型: 项目', '方向: "设计"', '状态: 进行中', '开始日期: "2026-09-06"', '截止日期: "2026-09-30"', '明确结果', '## 项目任务']) assert.ok(raw.includes(text), text);
 	assert.match(raw, /项目ID: [0-9a-f-]{36}/); assert.equal(f.files.size, 4); assert.equal(m.closed, true); assert.equal(f.opened[0].state.path, path);
 });
 test('project optional fields stay optional and default status remains planned', async () => {
 	const f = fixture(); const m = new f.Project(f.app); m.onOpen(); set(m, '项目名称', '最小项目');
-	await button(m, '创建项目').onclick(); const raw = f.files.get('03-项目与作品/最小项目/最小项目.md')!;
+	await button(m, '创建进程').onclick(); const raw = f.files.get('03-项目与作品/最小项目/最小项目.md')!;
 	assert.ok(raw.includes('状态: 计划中')); assert.equal(m.closed, true);
 });
 test('project validation failure re-enables create without writing or closing', async () => {
 	const f = fixture(); const m = new f.Project(f.app); m.onOpen(); const before = [...f.files];
-	set(m, '项目名称', '../错误路径'); await button(m, '创建项目').onclick();
-	assert.deepEqual([...f.files], before); assert.equal(m.closed, false); assert.equal(button(m, '创建项目').disabled, false); assert.ok(f.notices.length);
+	set(m, '项目名称', '../错误路径'); await button(m, '创建进程').onclick();
+	assert.deepEqual([...f.files], before); assert.equal(m.closed, false); assert.equal(button(m, '创建进程').disabled, false); assert.ok(f.notices.length);
+});
+test('Global process creation opens one author-style UnifiedProcessModal, without a menu',()=>{
+	const f=fixture(),m=new f.Unified(f.app);m.onOpen();assert.equal(m.contentEl.all().find((e:Element)=>e.tag==='h3').text,'新建进程');assert.ok(m.contentEl.classes.has('ad-task-modal'));assert.deepEqual(m.contentEl.all().filter((e:Element)=>e.classes.has('ad-prio-btn')).map((e:Element)=>e.text),['学习','项目']);
+});
+test('Unified learning type exposes learning-only ability and goal labels',()=>{
+	const f=fixture(),m=new f.Unified(f.app);m.onOpen();for(const label of ['学习名称','方向（可选）','状态','开始日期（可选）','截止日期（可选）','所属能力（可选）','学习目标（可选）'])control(m,label);assert.equal(m.contentEl.all().some((e:Element)=>e.text==='学习进程'),false);
+});
+test('Unified project type hides ability and uses project labels',()=>{
+	const f=fixture(),m=new f.Unified(f.app);m.onOpen();button(m,'项目').onclick();control(m,'项目名称');control(m,'项目目标（可选）');assert.equal(m.contentEl.all().some((e:Element)=>e.attr['aria-label']==='所属能力（可选）'),false);
+});
+test('Type switching preserves entered shared fields and learning ability without writing',()=>{
+	const f=fixture(),m=new f.Unified(f.app);m.onOpen();const before=[...f.files];set(m,'学习名称','名称');set(m,'所属能力（可选）','能力');set(m,'学习目标（可选）','目标');set(m,'方向（可选）','设计');set(m,'状态','暂停');button(m,'项目').onclick();assert.equal(control(m,'项目名称').value,'名称');assert.equal(control(m,'项目目标（可选）').value,'目标');assert.equal(control(m,'状态').value,'暂停');button(m,'学习').onclick();assert.equal(control(m,'所属能力（可选）').value,'能力');assert.deepEqual([...f.files],before);
+});
+test('Unified status choices are identical for learning and project',()=>{
+	const f=fixture(),m=new f.Unified(f.app);m.onOpen();for(const type of ['学习','项目']){button(m,type).onclick();assert.deepEqual(control(m,'状态').children.map(e=>e.value),['计划中','进行中','暂停','已完成','归档']);}
+});
+test('Unified learning creation writes existing theme template and opens its Markdown',async()=>{
+	const f=fixture(),m=new f.Unified(f.app);m.onOpen();set(m,'学习名称','新学习');set(m,'方向（可选）','设计');set(m,'所属能力（可选）','[[建模]]');set(m,'状态','进行中');set(m,'开始日期（可选）','2026-09-01');set(m,'截止日期（可选）','2026-09-30');set(m,'学习目标（可选）','明确学习目标');await button(m,'创建进程').onclick();const path='01-学习与资料/新学习.md',raw=f.files.get(path)!;for(const s of ['类型: 学习主题','状态: 进行中','方向: "设计"','所属能力: ["[[建模]]"]','开始日期: "2026-09-01"','截止日期: "2026-09-30"','## 学习目标\n\n明确学习目标','## 学习任务','## 当前资源'])assert.ok(raw.includes(s),s);assert.equal(raw.includes('项目ID'),false);assert.deepEqual(f.opened,[{file:path}]);assert.equal(m.closed,true);
+});
+test('Learning duplicate creation leaves existing note untouched and modal open',async()=>{
+	const f=fixture(),m=new f.Unified(f.app);const path='01-学习与资料/已有学习.md';f.files.set(path,'真实内容');m.onOpen();set(m,'学习名称','已有学习');await button(m,'创建进程').onclick();assert.equal(f.files.get(path),'真实内容');assert.equal(m.closed,false);assert.equal(button(m,'创建进程').disabled,false);assert.ok(f.notices.some(n=>n.includes('不会覆盖')));
+});
+test('Double submit cannot create duplicate process notes',async()=>{
+	const f=fixture(),m=new f.Unified(f.app);m.onOpen();set(m,'学习名称','单次创建');const create=button(m,'创建进程');await Promise.all([create.onclick(),create.onclick()]);assert.equal([...f.files.keys()].filter(p=>p.includes('单次创建')).length,1);assert.equal(f.notices.length,0);
+});
+test('Project save never leaks learning-only ability into project Markdown',async()=>{
+	const f=fixture(),m=new f.Unified(f.app);m.onOpen();set(m,'学习名称','切换项目');set(m,'所属能力（可选）','仅学习字段');button(m,'项目').onclick();await button(m,'创建进程').onclick();const raw=f.files.get('03-项目与作品/切换项目/切换项目.md')!;assert.ok(raw.includes('类型: 项目'));assert.equal(raw.includes('所属能力'),false);assert.equal(raw.includes('仅学习字段'),false);
+});
+test('Both global shell dispatch paths use UnifiedProcessModal directly',()=>{
+	for(const file of ['../main.ts','../views/DashboardView.ts']){const code=readFileSync(new URL(file,import.meta.url),'utf8');assert.ok(code.includes("action === 'project'"));assert.ok(code.includes('new UnifiedProcessModal(this.app).open()'));assert.equal(code.includes('new NewProjectModal'),false);}
+});
+test('Homepage and theme list have no duplicate process creation while resource creation stays',()=>{
+	const card=readFileSync(new URL('../components/workbench/LearningCard.ts',import.meta.url),'utf8'),list=readFileSync(new URL('../views/LearningModals.ts',import.meta.url),'utf8');assert.equal(card.includes('actions.create'),false);assert.equal(card.includes('建立学习主题'),false);assert.ok(list.includes("if (this.mode !== 'topics')"));assert.ok(list.includes("this.mode === 'queue' ? '学习资源' : '能力'"));
+});
+test('Compact Quick Task Preview gains no creation button or UnifiedProcessModal dependency',()=>{
+	const source=readFileSync(new URL('../views/ProcessTasksModal.ts',import.meta.url),'utf8');for(const text of ['新增任务','新建任务','UnifiedProcessModal'])assert.equal(source.includes(text),false);assert.ok(source.includes('打开完整详情 →'));
 });

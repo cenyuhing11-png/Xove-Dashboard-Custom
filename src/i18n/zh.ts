@@ -131,7 +131,7 @@ export const zh: Dict = {
 		legendFew: '少', legendMany: '多',
 		nav: {
 			home: '主页', allProjects: '全部项目', board: '看板',
-			newDiary: '新建日记', newTask: '新建任务', newProject: '新建项目',
+			newDiary: '新建日记', newTask: '新建任务', newProject: '新建进程',
 		},
 		openFailed: '打开失败：',
 		fileNotFound: '文件不存在：',

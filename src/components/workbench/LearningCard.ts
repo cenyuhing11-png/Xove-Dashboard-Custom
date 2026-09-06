@@ -2,7 +2,6 @@ import type { CurrentLearning } from '../../data/learning';
 import { addEmpty, addEntry, createSection } from './shared';
 
 export interface LearningActions {
-	create(): void;
 	open(path: string): void;
 	list(mode: 'queue' | 'topics'): void;
 }
@@ -10,7 +9,6 @@ export function renderLearningCard(parent: HTMLElement, notes: CurrentLearning[]
 	const body = createSection(parent, '📚 当前学习');
 	if (!notes.length) {
 		addEmpty(body, '暂无当前学习内容');
-		addEntry(body, '建立学习主题', undefined, actions.create);
 	}
 	for (const note of notes) {
 		const group = body.createDiv({ cls: 'wb-group' });

@@ -7,7 +7,7 @@ import { learningFiles, openLearningFile, scanLearning } from '../data/learningV
 import { beginListModal, closeListModal, listEntry } from './viewPrimitives';
 
 export class NewLearningModal extends Modal {
-	constructor(app: App, private kind: LearningKind) { super(app); }
+	constructor(app: App, private kind: Exclude<LearningKind, '学习主题'>) { super(app); }
 	onOpen(): void {
 		const el = beginListModal(this, `新建${this.kind}`);
 		const form = el.createEl('form', { cls: 'ad-modal-field' });
@@ -45,8 +45,8 @@ export class LearningListModal extends Modal {
 	constructor(app: App, private mode: 'queue' | 'abilities' | 'topics') { super(app); }
 	onOpen(): void {
 		beginListModal(this, this.mode === 'queue' ? '学习队列' : this.mode === 'topics' ? '学习主题' : '能力地图');
-		const kind = this.mode === 'queue' ? '学习资源' : this.mode === 'topics' ? '学习主题' : '能力';
-		this.contentEl.createDiv({ cls: 'po-toolbar' }).createEl('button', { cls: 'ad-modal-btn', text: `＋ 新建${kind}` }).onclick = () => {
+		const kind = this.mode === 'queue' ? '学习资源' : '能力';
+		if (this.mode !== 'topics') this.contentEl.createDiv({ cls: 'po-toolbar' }).createEl('button', { cls: 'ad-modal-btn', text: `＋ 新建${kind}` }).onclick = () => {
 			this.close();
 			new NewLearningModal(this.app, kind).open();
 		};

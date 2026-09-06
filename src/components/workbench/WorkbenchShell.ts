@@ -378,7 +378,7 @@ export class WorkbenchShell extends Component {
 		if (this.plugin.settings.boardEnabled) {
 			navItems.push({ glyph: '\u25C8', label: '收件箱', action: 'opportunity', svg: ICON_opportunity });
 		}
-		// 动作组：建什么（新建日记 / 新建任务 / 新建项目）
+		// 全局创建入口；内部 action key 保持兼容。
 		const actionItems: Array<{ glyph: string; label: string; action: string; svg?: string }> = [
 			{ glyph: '+', label: t('home.nav.newDiary'), action: 'diary', svg: ICON_newDiary },
 			{ glyph: '\u25A1', label: t('home.nav.newTask'), action: 'task', svg: ICON_newTask },

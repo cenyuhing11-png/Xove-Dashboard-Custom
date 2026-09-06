@@ -32,8 +32,6 @@ export interface ProjectBoardSource {
 	kind: 'mengxu'; app: App; boardEl: HTMLElement; tasks: EmbeddedTaskStore;
 	items(): BoardItem[];
 	open(item: BoardItem): void;
-	create(): void;
-	createLearning?(): void;
 }
 
 /** 宿主接口：ProjectBoard 渲染器所需的宿主依赖。 */
@@ -122,7 +120,6 @@ export class ProjectBoard {
 	private get editProject() { return this.host.editProject.bind(this.host); }
 	private get createProjectFile() { return this.host.createProjectFile.bind(this.host); }
 	private get openTaskModalWithParent() {
-		if (this.source) return async (_parent: string, _project: string) => { this.source!.create(); };
 		return this.host.openTaskModalWithParent.bind(this.host);
 	}
 	private get toggleTask() { return this.host.toggleTask.bind(this.host); }
@@ -146,13 +143,6 @@ export class ProjectBoard {
 	private filteredItems(): BoardItem[] {
 		return this.items.filter(item => matchesProcessFilters({ direction: item.direction, processType: itemType(item), status: item.status }, { direction: this.directionFilter, type: this.processTypeFilter, status: this.projectFilter }));
 	}
-	private createProcess(event: MouseEvent): void {
-		if (!this.source!.createLearning) { this.source!.create(); return; }
-		const menu = new Menu();
-		menu.addItem(item => item.setTitle('学习进程').onClick(() => this.source!.createLearning!()));
-		menu.addItem(item => item.setTitle('项目').onClick(() => this.source!.create()));
-		menu.showAtMouseEvent(event);
-	}
 
 	private renderMengxuSidebar(sidebar: HTMLElement): void {
 		sidebar.empty();
@@ -174,7 +164,6 @@ export class ProjectBoard {
 			list.createDiv({ cls: 'po-toolbar__label po-direction-group', text: lane.label });
 			lane.items.forEach(addItem);
 		}
-		sidebar.createEl('button', { cls: 'po-add-btn', text: this.source!.createLearning ? '＋ 新建 ▾' : UI_TEXT.newProjectBtn }).onclick = event => this.createProcess(event);
 	}
 
 	private renderMengxuPanels(): void {
@@ -214,7 +203,7 @@ export class ProjectBoard {
 	}
 
 	private renderProjectCards(panel: HTMLElement, items: BoardItem[]): void {
-		if (!items.length) { panel.createDiv({ cls: 'po-empty', text: this.items.length ? '没有符合筛选条件的进程' : '暂无进程，点击左侧新建学习主题或项目。' }); return; }
+		if (!items.length) { panel.createDiv({ cls: 'po-empty', text: this.items.length ? '没有符合筛选条件的进程' : '暂无进程，请从顶部「新建进程」开始。' }); return; }
 		const board = panel.createDiv({ cls: 'po-kanban' });
 		for (const status of PROJECT_STATUSES) {
 			if (this.projectFilter !== '全部' && this.projectFilter !== status) continue;
@@ -2133,7 +2122,7 @@ export class ProjectBoard {
 					this.calSel = ds;
 					render();
 				});
-				dayEl.addEventListener('dblclick', (ev) => {
+				if (!this.source) dayEl.addEventListener('dblclick', (ev) => {
 					ev.stopPropagation();
 					this.calSel = ds;
 					// 默认带当前侧栏项目，避免保存时找不到项目文件夹
@@ -2312,7 +2301,7 @@ export class ProjectBoard {
 				// 日柱内只放锚定在当天的普通任务（跨天任务已在横条中，不再重复）
 				dayTasks.filter((task) => !isRangeTask(task)).forEach((task) => buildChip(col, task));
 				col.addEventListener('click', () => { this.calSel = ds; render(); });
-				col.addEventListener('dblclick', (ev) => {
+				if (!this.source) col.addEventListener('dblclick', (ev) => {
 					ev.stopPropagation();
 					this.calSel = ds;
 					void this.openTaskModalWithParent('', this.selectedProject ?? '');
@@ -2332,8 +2321,10 @@ export class ProjectBoard {
 			hd.createSpan({ cls: 'po-cal__det-ttl', text: dayFmt(dt) + ' · ' + (dt === todayStr ? t('ui.calAgendaToday') : UI_TEXT.calWeekdays[(dObj.getDay() + 6) % 7]) + ' · ' + (this.source ? `${dayTasks.length} 个进程` : t('ui.calTaskCount', { n: String(dayTasks.length) })) });
 			if (!dayTasks.length) det.createSpan({ cls: 'po-cal__det-empty', text: this.source ? '当日暂无进程日程' : t('ui.noTaskOnDay') });
 			dayTasks.forEach((task) => renderTaskRow(det, task));
-			const newBtn = det.createDiv({ cls: 'po-cal__new', text: this.source ? (this.source.createLearning ? '＋ 新建 ▾' : '＋ 新建项目') : t('ui.calNewTask') });
-			newBtn.addEventListener('click', event => { if (this.source) this.createProcess(event); else void this.openTaskModalWithParent('', this.selectedProject ?? ''); });
+			if (!this.source) {
+				const newBtn = det.createDiv({ cls: 'po-cal__new', text: t('ui.calNewTask') });
+				newBtn.addEventListener('click', () => { void this.openTaskModalWithParent('', this.selectedProject ?? ''); });
+			}
 		};
 
 		/** 组装 + 键盘导航（← / → 切月或周，T 回今天） */

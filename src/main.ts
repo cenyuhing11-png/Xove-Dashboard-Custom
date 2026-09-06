@@ -9,7 +9,8 @@ import { UpdateLogModal } from './views/UpdateLogModal';
 import { WelcomeModal } from './views/WelcomeModal';
 import { DirectionView, DIRECTION_VIEW } from './views/DirectionView';
 import { EmbeddedTaskStore } from './data/embeddedTaskVault';
-import { ProjectView, PROJECT_VIEW, NewProjectModal, openProjects } from './views/ProjectView';
+import { ProjectView, PROJECT_VIEW, openProjects } from './views/ProjectView';
+import { UnifiedProcessModal } from './views/UnifiedProcessModal';
 import { NewEmbeddedTaskModal } from './views/EmbeddedTaskModal';
 import { TaskStore } from './data/taskStore';
 import type { WorkbenchShell, WorkbenchAction } from './components/workbench/WorkbenchShell';
@@ -379,7 +380,7 @@ export default class Dashboard extends Plugin {
 	/** Reuse the existing home tab only for home/inbox/tools; project remains its own View. */
 	async navigateWorkbench(action: WorkbenchAction): Promise<void> {
 		if (action === 'all') { await openProjects(this.app); return; }
-		if (action === 'project') { new NewProjectModal(this.app).open(); return; }
+		if (action === 'project') { new UnifiedProcessModal(this.app).open(); return; }
 		if (action === 'task') { new NewEmbeddedTaskModal(this.app, this.embeddedTasks).open(); return; }
 		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0] ?? this.app.workspace.getLeaf('tab');
 		if (leaf.view.getViewType() !== VIEW_TYPE) await leaf.setViewState({ type: VIEW_TYPE, active: true });

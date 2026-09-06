@@ -4,7 +4,8 @@ import { CountdownSettings } from '../settings';
 import { CountdownModal, defaultEventName } from './CountdownModal';
 import { TaskEditModal } from './TaskEditModal';
 import { NewEmbeddedTaskModal, EmbeddedTaskListModal, renderEmbeddedRows } from './EmbeddedTaskModal';
-import { NewProjectModal, openProjects } from './ProjectView';
+import { openProjects } from './ProjectView';
+import { UnifiedProcessModal } from './UnifiedProcessModal';
 import { scanProjects } from '../data/projectVault';
 import { TaskItem, ProjectInfo, TaskStatus, ProjectType, priorityWeight, NodeState, RepeatRule, serializeDailyNodesBlock, parseDailyNodesFromBody } from '../data/taskParser';
 import { TaskStore } from '../data/taskStore';
@@ -27,7 +28,7 @@ import { PLAN_PERIODS, PLAN_ROOT, ensurePlan, readPlan } from '../data/planning'
 import type { PlanFiles, PlanPeriod } from '../data/planning';
 import { currentLearning } from '../data/learning';
 import { learningFiles, openLearningFile, scanLearning } from '../data/learningVault';
-import { LearningListModal, NewLearningModal } from './LearningModals';
+import { LearningListModal } from './LearningModals';
 import { ensureJournal, journalStates } from '../data/journal';
 import type { JournalKind } from '../data/journal';
 import { JournalHistoryModal } from './JournalHistoryModal';
@@ -249,7 +250,7 @@ export class DashboardView extends ItemView {
 		else if (action === 'opportunity') await this.oppBoard.show();
 		else if (action === 'diary') await this.createDiary();
 		else if (action === 'task') new NewEmbeddedTaskModal(this.app, this.plugin.embeddedTasks).open();
-		else if (action === 'project') new NewProjectModal(this.app).open();
+		else if (action === 'project') new UnifiedProcessModal(this.app).open();
 		else if (action === 'all') await openProjects(this.app);
 	}
 	getViewType(): string { return VIEW_TYPE; }
@@ -944,7 +945,6 @@ export class DashboardView extends ItemView {
 				history: (mode) => new JournalHistoryModal(this.app, mode, (path) => this.openJournalPath(path), (kind) => this.openJournal(kind)).open(),
 			},
 			learningActions: {
-				create: () => new NewLearningModal(this.app, '学习主题').open(),
 				open: (path) => { void openLearningFile(this.app, path).catch(() => this.showToast('笔记不存在或已移动')); },
 				list: (mode) => new LearningListModal(this.app, mode).open(),
 			},

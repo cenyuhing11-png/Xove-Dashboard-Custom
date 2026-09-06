@@ -73,11 +73,12 @@ export function learningName(input: string): string {
 	}
 	return name;
 }
-export function learningTemplate(kind: LearningKind, name: string, resourceType = '其他资料'): string {
+export interface LearningTopicFields { status: string; direction?: string; ability?: string; startDate?: string; dueDate?: string; goal?: string }
+export function learningTemplate(kind: LearningKind, name: string, resourceType = '其他资料', topic?: LearningTopicFields): string {
 	const title = learningName(name);
 	const headers: Record<LearningKind, string> = {
 		能力: '状态: 培养中\n领域: ""\n阶段: ""',
-		学习主题: '状态: 学习中\n方向: ""\n所属能力: []\n优先级: 主攻\n开始日期:\n截止日期:',
+		学习主题: `状态: ${topic?.status ?? '学习中'}\n方向: ${JSON.stringify(topic?.direction || '')}\n所属能力: ${JSON.stringify(topic?.ability?.trim() ? [topic.ability.trim()] : [])}\n优先级: 主攻\n开始日期:${topic?.startDate ? ' ' + JSON.stringify(topic.startDate) : ''}\n截止日期:${topic?.dueDate ? ' ' + JSON.stringify(topic.dueDate) : ''}`,
 		学习资源: `资源类型: ${JSON.stringify(resourceType)}\n状态: 待学习\n方向: ""\n关联主题: []\n来源: ""\n链接: ""`,
 	};
 	const bodies: Record<LearningKind, string> = {
@@ -85,14 +86,18 @@ export function learningTemplate(kind: LearningKind, name: string, resourceType 
 		学习主题: '## 学习目标\n\n## 学习任务\n\n## 当前资源\n\n-\n\n## 下一步\n\n-\n\n## 实践\n\n-\n\n## 学习记录\n',
 		学习资源: '## 为什么要学\n\n## 学习任务\n\n## 学习记录\n\n## 备注\n',
 	};
-	return `---\n类型: ${kind}\n${headers[kind]}\n---\n\n# ${title}\n\n${bodies[kind]}`;
+	const body = kind === '学习主题' && topic?.goal?.trim() ? bodies[kind].replace('## 学习目标\n\n', `## 学习目标\n\n${topic.goal.trim()}\n\n`) : bodies[kind];
+	return `---\n类型: ${kind}\n${headers[kind]}\n---\n\n# ${title}\n\n${body}`;
 }
 
-export async function ensureLearningNote(files: PlanFiles, kind: LearningKind, input: string, resourceType = '其他资料'): Promise<string> {
+export async function ensureLearningNote(files: PlanFiles, kind: LearningKind, input: string, resourceType = '其他资料', topic?: LearningTopicFields): Promise<string> {
 	const name = learningName(input);
 	const folder = learningFolder(kind, resourceType);
 	const path = `${folder}/${name}.md`;
-	if (files.kind(path) === 'file') return path;
+	// A filled creation form must never silently adopt or overwrite an existing note.
+	const existing = (): string => { if (topic) throw new Error('同名学习笔记已存在，请打开已有笔记；不会覆盖'); return path; };
+	const content = learningTemplate(kind, name, resourceType, topic);
+	if (files.kind(path) === 'file') return existing();
 	if (files.kind(path)) throw new Error('同名路径是文件夹，无法创建笔记');
 	for (const dir of [LEARNING_ROOT, folder]) {
 		if (files.kind(dir) === 'file') throw new Error('学习目录被文件占用');
@@ -101,8 +106,8 @@ export async function ensureLearningNote(files: PlanFiles, kind: LearningKind, i
 			catch (error) { if (files.kind(dir) !== 'folder') throw error; }
 		}
 	}
-	if (files.kind(path) === 'file') return path;
-	try { await files.create(path, learningTemplate(kind, name, resourceType)); }
-	catch (error) { if (files.kind(path) !== 'file') throw error; }
+	if (files.kind(path) === 'file') return existing();
+	try { await files.create(path, content); }
+	catch (error) { if (topic || files.kind(path) !== 'file') throw error; }
 	return path;
 }

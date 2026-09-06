@@ -141,9 +141,11 @@ test('Card body ignores a nested task progress click or keyboard target',async()
 test('List dates are ordinary text with full Chinese title, unlike task buttons',async()=>{
 	const f=boardFixture('list',[],mixed);await f.board.show();const row=f.root.querySelector('.po-data-row')!;const cells=row.children;assert.equal(cells[4]!.getAttribute('title'),'2026年9月1日');assert.equal(cells[5]!.getAttribute('title'),'2026年9月30日');assert.equal(cells[4]!.querySelector('button'),undefined);assert.ok(cells[6]!.querySelector('.po-task-progress'));
 });
-test('Process create menu routes exactly to the existing learning/project actions',async()=>{
-	const f=boardFixture('kanban',[],mixed);await f.board.show();f.root.querySelector('.po-add-btn')!.onclick();assert.deepEqual(f.menuItems.map(i=>i.title),['学习进程','项目']);f.menuItems[0].click();f.menuItems[1].click();assert.equal(f.learningCreated(),1);assert.equal(f.created(),1);
+test('Process overview exposes no duplicate create button or learning/project menu',async()=>{
+	const f=boardFixture('kanban',[],mixed);await f.board.show();assert.equal(f.root.querySelector('.po-add-btn'),undefined);assert.deepEqual(f.menuItems,[]);assert.equal(f.learningCreated(),0);assert.equal(f.created(),0);
 });
+for(const mode of ['month','week'])test(`Process ${mode} calendar has no creation button or double-click creation listener`,async()=>{const f=boardFixture('calendar',[],mixed);f.board.calView=mode;await f.board.show();assert.equal(f.root.querySelector('.po-cal__new'),undefined);assert.ok(f.root.all().every(e=>!e.events.dblclick?.length));assert.deepEqual(f.menuItems,[]);});
+test('Direction-only sidebar contains no empty creation footer',async()=>{const f=boardFixture('list',[],mixed);await f.board.show();const sidebar=f.root.querySelector('.po-sidebar')!;assert.equal(sidebar.children.length,1);assert.ok(sidebar.children[0]!.classes.has('po-sidebar__list'));assert.equal(sidebar.querySelectorAll('button').length,0);});
 test('Mixed ProcessBoard keeps the original sidebar/cards/tabs without a second UI',async()=>{
 	const f=boardFixture('kanban',[],mixed);await f.board.show();assert.equal(f.root.querySelectorAll('.po-kanban__card').length,2);assert.equal(f.root.querySelectorAll('.po-container').length,1);assert.equal(f.root.querySelectorAll('.po-tab').length,4);assert.equal(f.root.querySelectorAll('.po-chip').filter(e=>e.dataset.processType).length,3);
 });
@@ -204,8 +206,8 @@ test('Learning detail add-task action keeps the theme preset, not a task file',(
 test('Learning detail source edit and overview remain available',async()=>{
 	const f=learningDetail();f.root.querySelectorAll('button').find(e=>e.text==='编辑学习笔记 →')!.onclick();await Promise.resolve();assert.deepEqual(f.opened,[learning.path]);f.root.querySelectorAll('button').find(e=>e.text==='全部进程 →')!.onclick();assert.equal(f.back(),1);
 });
-test('ProjectBoard card opens new project reference and create uses supplied new Modal action',async()=>{
-	const f=boardFixture();await f.board.show();f.root.querySelector('.po-kanban__card')!.onclick();f.root.querySelector('.po-add-btn')!.onclick();assert.equal(f.opened[0],project);assert.equal(f.created(),1);
+test('ProjectBoard card opens new project reference without a local creation action',async()=>{
+	const f=boardFixture();await f.board.show();f.root.querySelector('.po-kanban__card')!.onclick();assert.equal(f.opened[0],project);assert.equal(f.root.querySelector('.po-add-btn'),undefined);assert.equal(f.created(),0);
 });
 test('ProjectBoard status chips filter actual states without clearing direction',async()=>{
 	const paused={...project,path:'03-项目与作品/暂停/暂停.md',status:'暂停' as const};const f=boardFixture('kanban',[project,paused]);await f.board.show();
@@ -236,7 +238,7 @@ test('Project schedule drag/drop cannot reach legacy task file writers',async()=
 	row.events.dragstart![0]!({preventDefault:()=>prevented++});assert.equal(prevented,2);assert.deepEqual(f.opened,[]);
 });
 test('Original calendar renders project date range, not daily task execution controls',async()=>{
-	const f=boardFixture('calendar');f.board.calYear=2026;f.board.calMonth=8;await f.board.show();assert.ok(f.root.querySelector('.po-cal'));assert.ok(f.root.querySelector('.po-cal__mbar'));assert.equal(f.root.querySelector('.po-cal__expand'),undefined);assert.equal(f.root.querySelector('.po-cal__new')!.text,'＋ 新建项目');
+	const f=boardFixture('calendar');f.board.calYear=2026;f.board.calMonth=8;await f.board.show();assert.ok(f.root.querySelector('.po-cal'));assert.ok(f.root.querySelector('.po-cal__mbar'));assert.equal(f.root.querySelector('.po-cal__expand'),undefined);assert.equal(f.root.querySelector('.po-cal__new'),undefined);
 });
 test('Projects due today are not shown overdue before the day has ended',async()=>{
 	const now=new Date();const today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
@@ -246,8 +248,8 @@ test('Projects due today are not shown overdue before the day has ended',async()
 test('Empty overview retains view tabs, status filter and original empty state',async()=>{
 	const f=boardFixture('gantt',[]);await f.board.show();assert.ok(f.root.querySelector('.po-empty'));assert.equal(f.root.querySelectorAll('.po-tab').length,4);assert.equal(f.root.querySelectorAll('.po-chip').filter(e=>e.dataset.filter).length,6);assert.equal(f.root.querySelectorAll('.po-chip').filter(e=>e.dataset.processType).length,3);
 });
-test('ProjectView routes board callbacks to modern detail and restored new-project modal',()=>{
-	const source=readFileSync(new URL('../views/ProjectView.ts',import.meta.url),'utf8');assert.ok(source.includes('openProjects(this.app, item.project)'));assert.ok(source.includes('create: () => new NewProjectModal(this.app).open()'));assert.equal(source.includes('mx-project-card'),false);assert.equal(source.includes('new Setting('),false);
+test('ProjectView routes board callbacks only to modern detail; creation belongs to global navigation',()=>{
+	const source=readFileSync(new URL('../views/ProjectView.ts',import.meta.url),'utf8');assert.ok(source.includes('openProjects(this.app, item.project)'));assert.equal(source.includes('create: () =>'),false);assert.equal(source.includes('mx-project-card'),false);assert.equal(source.includes('new Setting('),false);
 });
 test('First overview after direct detail navigation leaves only the original Board shell',async()=>{
 	const code=buildSync({entryPoints:[fileURLToPath(new URL('../views/ProjectView.ts',import.meta.url))],bundle:true,platform:'node',format:'cjs',write:false,external:['obsidian']}).outputFiles[0]!.text;
