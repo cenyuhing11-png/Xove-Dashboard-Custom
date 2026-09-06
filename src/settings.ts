@@ -1,5 +1,6 @@
 import { App, PluginSettingTab, Setting, TFile, TFolder } from 'obsidian';
 import Dashboard from './main';
+import { DIARY_FOLDER } from './data/vaultPaths';
 import type { BoardStage } from './data/opportunityParser';
 import { t, setLang, getLang } from './i18n';
 
@@ -110,7 +111,7 @@ export const DEFAULT_SETTINGS: DashboardSettings = {
 		templateFile: '',
 	},
 	diary: {
-		storagePath: '04-日记与复盘/日记',
+		storagePath: DIARY_FOLDER,
 		namingPattern: 'YYYY-MM-DD 日记',
 		templateFile: '',
 	},

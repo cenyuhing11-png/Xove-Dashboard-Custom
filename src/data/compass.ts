@@ -4,8 +4,9 @@ import type { LearningNote } from './learning';
 import { readSection } from './planning.ts';
 import type { PlanFiles } from './planning';
 import { ensureSafeNote } from './safeNote.ts';
+import { DIRECTION_ROOT, PLAN_ROOT } from './vaultPaths.ts';
+export { DIRECTION_ROOT } from './vaultPaths.ts';
 
-export const DIRECTION_ROOT = '05-计划/人生方向';
 export function directionInfo(input: string) {
 	const name = learningName(input);
 	const lane = LIFE_COMPASS.find(lane => lane.items.includes(name));
@@ -17,7 +18,7 @@ export function directionTemplate(input: string): string {
 	return `---\n类型: 人生方向\n方向: ${name}\n优先级: ${priority}\n状态: 进行中\n---\n\n# ${name}\n\n## 这条方向对我意味着什么\n\n\n## 长期能力\n\n-\n\n## 当前阶段\n\n\n## 备注\n\n`;
 }
 export function ensureDirection(files: PlanFiles, name: string): Promise<string> {
-	return ensureSafeNote(files, directionInfo(name).path, ['05-计划', DIRECTION_ROOT], directionTemplate(name));
+	return ensureSafeNote(files, directionInfo(name).path, [PLAN_ROOT, DIRECTION_ROOT], directionTemplate(name));
 }
 export function directionAbilities(markdown: string): string[] { return readSection(markdown, '长期能力').content; }
 export function allLearningTopics(notes: LearningNote[]): LearningNote[] {

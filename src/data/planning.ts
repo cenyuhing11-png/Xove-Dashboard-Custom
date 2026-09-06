@@ -1,8 +1,9 @@
 import { ensureSafeNote } from './safeNote.ts';
+import { PLAN_ROOT, PLAN_FOLDERS } from './vaultPaths.ts';
+export { PLAN_ROOT } from './vaultPaths.ts';
 
 export type PlanPeriod = 'year' | 'quarter' | 'month' | 'week';
 export const PLAN_PERIODS: PlanPeriod[] = ['week', 'month', 'quarter', 'year'];
-export const PLAN_ROOT = '05-计划';
 const folders: Record<PlanPeriod, string> = { year: '年度', quarter: '季度', month: '月度', week: '周计划' };
 
 /** Use local calendar dates; count calendar days rather than elapsed DST hours. */
@@ -24,7 +25,7 @@ export function planInfo(period: PlanPeriod, date = new Date()) {
 	const key = keys[period];
 	const name = `${key} ${period === 'week' ? '周计划' : `${folders[period]}计划`}`;
 	const parent = period === 'quarter' ? `${year} 年度计划` : period === 'month' ? `${quarter} 季度计划` : period === 'week' ? `${month} 月度计划` : undefined;
-	return { period, key, name, parent, folder: `${PLAN_ROOT}/${folders[period]}`, path: `${PLAN_ROOT}/${folders[period]}/${name}.md` };
+	return { period, key, name, parent, folder: `${PLAN_ROOT}/${PLAN_FOLDERS[period]}`, path: `${PLAN_ROOT}/${PLAN_FOLDERS[period]}/${name}.md` };
 }
 
 export function planTemplate(period: PlanPeriod, date = new Date()): string {

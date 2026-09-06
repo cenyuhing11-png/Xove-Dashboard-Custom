@@ -25,6 +25,7 @@ import { ensureJournal, journalStates } from '../data/journal';
 import type { JournalKind } from '../data/journal';
 import { JournalHistoryModal } from './JournalHistoryModal';
 import { openDirection } from './DirectionView';
+import { DIARY_FOLDER } from '../data/vaultPaths';
 
 import type Dashboard from '../main';
 import {
@@ -974,7 +975,7 @@ export class DashboardView extends ItemView {
 	/* ---- Create diary note ---- */
 	private async createDiary(): Promise<void> {
 		const dc = this.plugin.settings.diary;
-		if (dc.storagePath === '04-日记与复盘/日记' && dc.namingPattern === 'YYYY-MM-DD 日记' && !dc.templateFile) {
+		if (dc.storagePath === DIARY_FOLDER && dc.namingPattern === 'YYYY-MM-DD 日记' && !dc.templateFile) {
 			await this.openJournal('day');
 			return;
 		}

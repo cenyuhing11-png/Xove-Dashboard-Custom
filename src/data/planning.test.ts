@@ -5,7 +5,7 @@ import type { PlanFiles, PlanPeriod } from './planning.ts';
 
 const date = new Date(2026, 8, 6, 23, 59);
 for (const [period, path] of Object.entries({
-	year: '年度/2026 年度计划', quarter: '季度/2026-Q3 季度计划', month: '月度/2026-09 月度计划', week: '周计划/2026-W36 周计划',
+	year: '02-年度/2026 年度计划', quarter: '03-季度/2026-Q3 季度计划', month: '04-月度/2026-09 月度计划', week: '05-周计划/2026-W36 周计划',
 })) test(`${period} local plan path`, () => assert.equal(planInfo(period as PlanPeriod, date).path, `05-计划/${path}.md`));
 
 test('ISO week-year boundaries', () => {

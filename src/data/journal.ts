@@ -1,8 +1,9 @@
 import { isoWeek, planInfo } from './planning.ts';
 import type { PlanFiles } from './planning';
 import { ensureSafeNote } from './safeNote.ts';
+import { JOURNAL_ROOT, JOURNAL_FOLDERS } from './vaultPaths.ts';
+export { JOURNAL_ROOT } from './vaultPaths.ts';
 
-export const JOURNAL_ROOT = '04-日记与复盘';
 export type JournalKind = 'day' | 'week' | 'month' | 'year';
 export const JOURNAL_KINDS: JournalKind[] = ['day', 'week', 'month', 'year'];
 const folders: Record<JournalKind, string> = { day: '日记', week: '周记', month: '月度复盘', year: '年度复盘' };
@@ -11,7 +12,7 @@ export function journalInfo(kind: JournalKind, date = new Date()) {
 	const month = `${year}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 	const day = `${month}-${String(date.getDate()).padStart(2, '0')}`;
 	const period = kind === 'day' ? day : planInfo(kind, date).key;
-	const folder = `${JOURNAL_ROOT}/${folders[kind]}`;
+	const folder = `${JOURNAL_ROOT}/${JOURNAL_FOLDERS[kind]}`;
 	return { kind, period, folder, path: `${folder}/${period} ${folders[kind]}.md`, name: `${period} ${folders[kind]}` };
 }
 export function journalTemplate(kind: JournalKind, date = new Date()): string {
@@ -70,7 +71,7 @@ export function journalEntry(path: string, title: string, properties: unknown): 
 	if (!properties || typeof properties !== 'object' || Array.isArray(properties)) return null;
 	const fm = properties as Record<string, unknown>;
 	const kind = fm['类型'] === '日记' ? 'day' : fm['类型'] === '周记' ? 'week' : fm['类型'] === '复盘' && fm['周期'] === '月度' ? 'month' : fm['类型'] === '复盘' && fm['周期'] === '年度' ? 'year' : null;
-	if (!kind || !path.startsWith(`${JOURNAL_ROOT}/${folders[kind]}/`)) return null;
+	if (!kind || !path.startsWith(`${JOURNAL_ROOT}/${JOURNAL_FOLDERS[kind]}/`)) return null;
 	const value = fm[kind === 'day' ? '日期' : '期间'];
 	const period = typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : '';
 	const date = periodDate(kind, period);

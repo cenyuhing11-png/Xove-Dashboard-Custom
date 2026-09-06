@@ -8,7 +8,7 @@ import type { PlanFiles } from './planning';
 
 for (const [name, priority] of [['设计','主攻'],['AI','主攻'],['3D','主攻'],['英语','辅助推进'],['阅读','持续维护']] as const) {
 	test(`direction path and priority: ${name}`, () => {
-		assert.deepEqual(directionInfo(name), { name, priority, path: `05-计划/人生方向/${name}.md` });
+		assert.deepEqual(directionInfo(name), { name, priority, path: `05-计划/01-人生方向/${name}.md` });
 		assert.ok(directionTemplate(name).includes(`优先级: ${priority}`));
 	});
 }

@@ -5,7 +5,7 @@ import type { JournalEntry, JournalKind } from './journal.ts';
 import type { PlanFiles } from './planning.ts';
 
 const date = new Date(2026, 8, 6, 0, 1);
-for (const [kind, suffix] of Object.entries({ day: '日记/2026-09-06 日记', week: '周记/2026-W36 周记', month: '月度复盘/2026-09 月度复盘', year: '年度复盘/2026 年度复盘' })) {
+for (const [kind, suffix] of Object.entries({ day: '01-日记/2026-09-06 日记', week: '02-周记/2026-W36 周记', month: '03-月度复盘/2026-09 月度复盘', year: '04-年度复盘/2026 年度复盘' })) {
 	test(`${kind} local path`, () => assert.equal(journalInfo(kind as JournalKind, date).path, `04-日记与复盘/${suffix}.md`));
 }
 test('week journal shares ISO week-year boundaries with planning', () => {
@@ -86,7 +86,7 @@ test('file and folder collisions fail without destroying data', async () => {
 	assert.equal(s.contents.get('04-日记与复盘'), '保留');
 });
 function entry(kind: JournalKind, period: string): JournalEntry {
-	const folder = { day: '日记', week: '周记', month: '月度复盘', year: '年度复盘' }[kind];
+	const folder = { day: '01-日记', week: '02-周记', month: '03-月度复盘', year: '04-年度复盘' }[kind];
 	return journalEntry(`04-日记与复盘/${folder}/${period}.md`, period, {
 		类型: kind === 'day' ? '日记' : kind === 'week' ? '周记' : '复盘',
 		周期: kind === 'month' ? '月度' : '年度', 日期: period, 期间: period,
@@ -107,7 +107,7 @@ test('history is limited to 30 entries', () => {
 });
 test('invalid properties, periods and dates are skipped', () => {
 	for (const fm of [null, undefined, [], 'invalid YAML', { 类型: '其它' }, { 类型: '日记', 日期: '2026-02-30' }, { 类型: '日记', 日期: ['2026-09-06'] }]) {
-		assert.equal(journalEntry('04-日记与复盘/日记/x.md', 'x', fm), null);
+		assert.equal(journalEntry('04-日记与复盘/01-日记/x.md', 'x', fm), null);
 	}
 	assert.equal(entry('week', '2026-W99'), null);
 	assert.equal(entry('month', '2026-13'), null);
@@ -117,5 +117,5 @@ test('history does not pick up unrelated legacy diary directories', () => {
 	assert.equal(journalEntry('Daily/2026-09-06.md', '旧日记', { 类型: '日记', 日期: '2026-09-06' }), null);
 });
 test('numeric annual property from YAML is supported', () => {
-	assert.equal(journalEntry('04-日记与复盘/年度复盘/2026 年度复盘.md', '2026 年度复盘', { 类型: '复盘', 周期: '年度', 期间: 2026 })?.period, '2026');
+	assert.equal(journalEntry('04-日记与复盘/04-年度复盘/2026 年度复盘.md', '2026 年度复盘', { 类型: '复盘', 周期: '年度', 期间: 2026 })?.period, '2026');
 });
