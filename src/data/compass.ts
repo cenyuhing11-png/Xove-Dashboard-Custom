@@ -22,7 +22,7 @@ export function ensureDirection(files: PlanFiles, name: string): Promise<string>
 }
 export function directionAbilities(markdown: string): string[] { return readSection(markdown, '长期能力').content; }
 export function allLearningTopics(notes: LearningNote[]): LearningNote[] {
-	return notes.filter(n => n.kind === '学习主题').sort((a,b) => Number(b.status === '学习中') - Number(a.status === '学习中') || a.path.localeCompare(b.path, 'zh-CN'));
+	return notes.filter(n => n.kind === '学习主题').sort((a,b) => Number(['学习中', '进行中'].includes(b.status)) - Number(['学习中', '进行中'].includes(a.status)) || a.path.localeCompare(b.path, 'zh-CN'));
 }
 export function directionTopics(notes: LearningNote[], name: string): LearningNote[] { return allLearningTopics(notes).filter(n => n.direction === name); }
 // v1 uses explicit direction only; it avoids ambiguous same-name topic links.

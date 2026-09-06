@@ -21,7 +21,7 @@ export function projectBoardItems(projects: MengxuProject[], tasks: readonly Emb
 			type: 'nostage', stage: -1 };
 	});
 }
-export function filterBoardItems(items: ProjectBoardItem[], status: ProjectStatus | '全部', selected: string | null = null): ProjectBoardItem[] {
+export function filterBoardItems<T extends Pick<ProjectBoardItem, 'status' | 'key'>>(items: T[], status: ProjectStatus | '全部', selected: string | null = null): T[] {
 	return items.filter(item => (status === '全部' || item.status === status) && (!selected || item.key === selected));
 }
 /** Read-only schedule projection for the original Gantt/calendar geometry.
@@ -29,7 +29,7 @@ export function filterBoardItems(items: ProjectBoardItem[], status: ProjectStatu
  * Empty sourceFile prevents legacy file mutations as an additional safeguard.
  * Embedded Task dates are deliberately not projected as project schedules.
  */
-export function projectTimelineItems(items: ProjectBoardItem[]): TaskItem[] {
+export function projectTimelineItems(items: Array<Omit<ProjectBoardItem, 'project'>>): TaskItem[] {
 	return items.map(item => ({ id: item.key, content: item.name, projectId: item.name, color: item.color,
 		status: item.status === '已完成' ? '已完成' : '待办', priority: null,
 		startDate: item.startDate, dueDate: item.endDate, tags: [], type: '普通', repeatRule: null,

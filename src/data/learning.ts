@@ -1,5 +1,6 @@
 import { readSection } from './planning.ts';
 import type { PlanFiles } from './planning';
+import { validTaskDate } from './embeddedTasks.ts';
 
 export const LEARNING_ROOT = '01-学习与资料';
 export type LearningKind = '能力' | '学习主题' | '学习资源';
@@ -15,10 +16,15 @@ export interface LearningNote {
 	path: string; name: string; kind: LearningKind; status: string;
 	priority: string; abilities: string[]; topics: string[]; direction: string;
 	domain: string; stage: string; resourceType: string;
+	startDate?: string; dueDate?: string;
 }
 export interface CurrentLearning extends LearningNote { next: string }
 
 function text(value: unknown): string { return typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : ''; }
+function optionalDate(value: unknown): string | undefined {
+	const date = value instanceof Date && !Number.isNaN(value.getTime()) ? value.toISOString().slice(0, 10) : text(value);
+	return validTaskDate(date) ? date : undefined;
+}
 export function relationNames(value: unknown): string[] {
 	return (Array.isArray(value) ? value : [value]).map(text).filter(Boolean).map((name) => {
 		const link = /^\[\[(.*)\]\]$/.exec(name)?.[1];
@@ -35,11 +41,13 @@ export function learningNote(path: string, name: string, properties: unknown): L
 	if (kind !== '能力' && kind !== '学习主题' && kind !== '学习资源') return null;
 	return { path, name, kind, status: text(fm['状态']), priority: text(fm['优先级']),
 		abilities: relationNames(fm['所属能力'] ?? fm['能力']), topics: relationNames(fm['关联主题'] ?? fm['学习主题']), direction: text(fm['方向']),
-		domain: text(fm['领域']), stage: text(fm['阶段']), resourceType: text(fm['资源类型']) };
+		domain: text(fm['领域']), stage: text(fm['阶段']), resourceType: text(fm['资源类型']),
+		...(optionalDate(fm['开始日期']) ? { startDate: optionalDate(fm['开始日期']) } : {}),
+		...(optionalDate(fm['截止日期']) ? { dueDate: optionalDate(fm['截止日期']) } : {}) };
 }
 export function currentTopics(notes: LearningNote[]): LearningNote[] {
 	const priorities: Record<string, number> = { 主攻: 0, 辅助: 1, 维护: 2 };
-	return notes.filter((note) => note.kind === '学习主题' && note.status === '学习中')
+	return notes.filter((note) => note.kind === '学习主题' && ['学习中', '进行中'].includes(note.status))
 		.sort((a, b) => (priorities[a.priority] ?? 3) - (priorities[b.priority] ?? 3) || a.path.localeCompare(b.path, 'zh-CN')).slice(0, 3);
 }
 export function queuedResources(notes: LearningNote[]): LearningNote[] {
@@ -69,12 +77,12 @@ export function learningTemplate(kind: LearningKind, name: string, resourceType 
 	const title = learningName(name);
 	const headers: Record<LearningKind, string> = {
 		能力: '状态: 培养中\n领域: ""\n阶段: ""',
-		学习主题: '状态: 学习中\n方向: ""\n所属能力: []\n优先级: 主攻',
+		学习主题: '状态: 学习中\n方向: ""\n所属能力: []\n优先级: 主攻\n开始日期:\n截止日期:',
 		学习资源: `资源类型: ${JSON.stringify(resourceType)}\n状态: 待学习\n方向: ""\n关联主题: []\n来源: ""\n链接: ""`,
 	};
 	const bodies: Record<LearningKind, string> = {
 		能力: '## 能力目标\n\n## 当前阶段\n\n## 能力标准\n\n- [ ]\n\n## 当前学习主题\n\n## 实践与作品\n\n## 备注\n',
-		学习主题: '## 学习目标\n\n## 当前资源\n\n-\n\n## 下一步\n\n-\n\n## 实践\n\n-\n\n## 学习记录\n',
+		学习主题: '## 学习目标\n\n## 学习任务\n\n## 当前资源\n\n-\n\n## 下一步\n\n-\n\n## 实践\n\n-\n\n## 学习记录\n',
 		学习资源: '## 为什么要学\n\n## 学习任务\n\n## 学习记录\n\n## 备注\n',
 	};
 	return `---\n类型: ${kind}\n${headers[kind]}\n---\n\n# ${title}\n\n${bodies[kind]}`;

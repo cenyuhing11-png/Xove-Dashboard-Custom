@@ -17,6 +17,8 @@ import { fmtDate, todayStr, nowFmt, calcNextRemindDate, getTodayUniverse, getTod
 import { t, tArr } from '../i18n';
 import { UI_TEXT } from '../constants';
 import { renderWorkbenchHome } from '../components/workbench/WorkbenchHome';
+import { processes } from '../data/processes';
+import { openProcess } from './ProjectView';
 import { calcHeatmapStats, getVaultNoteCounts } from '../utils/vaultOverview';
 import { WorkbenchShell } from '../components/workbench/WorkbenchShell';
 import type { WorkbenchAction } from '../components/workbench/WorkbenchShell';
@@ -924,6 +926,7 @@ export class DashboardView extends ItemView {
 			todayTasks: getTodayTasks(allTasks, today, this.plugin.settings.todoShowCompleted),
 			upcomingTasks,
 			projects,
+			processes: processes(scanLearning(this.app), projects, this.plugin.embeddedTasks.all()),
 			existingPaths,
 			plans,
 			learning,
@@ -942,7 +945,8 @@ export class DashboardView extends ItemView {
 			onOpenTask: (task) => this.openTaskEditModal(task),
 			onOpenProjects: () => void openProjects(this.app),
 			onOpenProject: (project) => void openProjects(this.app, project),
-			onOpenProjectView: (view) => void this.projectBoard.openView(view),
+			onOpenProcess: (process) => void openProcess(this.app, process),
+			onOpenProjectView: (view) => void openProjects(this.app, undefined, view),
 			onOpenPath: (path) => void this.revealFolder(path),
 		});
 	}

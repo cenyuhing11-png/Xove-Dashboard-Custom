@@ -17,13 +17,19 @@ import { filterBoardItems, projectTimelineItems } from '../data/projectBoardAdap
 import type { ProjectBoardItem } from '../data/projectBoardAdapter';
 import { PROJECT_STATUSES } from '../data/projects';
 import type { ProjectStatus } from '../data/projects';
+import { hasProcessSchedule, processTypeLabel, taskProgressLabel } from '../data/processes';
+import type { ProcessBoardItem, ProcessType } from '../data/processes';
+
+type BoardItem = ProjectBoardItem | ProcessBoardItem;
+function itemType(item: BoardItem): ProcessType { return 'process' in item ? item.process.processType : 'project'; }
 
 /** Explicit read-only project source; no legacy task/file mutation capabilities. */
 export interface ProjectBoardSource {
 	kind: 'mengxu'; app: App; boardEl: HTMLElement; tasks: EmbeddedTaskStore;
-	items(): ProjectBoardItem[];
-	open(item: ProjectBoardItem): void;
+	items(): BoardItem[];
+	open(item: BoardItem): void;
 	create(): void;
+	createLearning?(): void;
 }
 
 /** 宿主接口：ProjectBoard 渲染器所需的宿主依赖。 */
@@ -62,7 +68,8 @@ export interface ProjectHost {
 export class ProjectBoard {
 	private legacyHost?: ProjectHost;
 	private source?: ProjectBoardSource;
-	private items: ProjectBoardItem[] = [];
+	private items: BoardItem[] = [];
+	private processTypeFilter: ProcessType | 'all' = 'all';
 	private projectFilter: ProjectStatus | '全部' = '全部';
 	private projectSelection: string | null = null;
 	private calendarObserver?: ResizeObserver;
@@ -124,7 +131,7 @@ export class ProjectBoard {
 	private showMengxu(): void {
 		const source = this.source!;
 		this.items = source.items();
-		if (!filterBoardItems(this.items, this.projectFilter).some(p => p.key === this.projectSelection)) this.projectSelection = null;
+		if (!this.filteredItems().some(p => p.key === this.projectSelection)) this.projectSelection = null;
 		source.boardEl.empty(); source.boardEl.addClass('po-board');
 		const container = source.boardEl.createDiv({ cls: 'po-container' });
 		const sidebar = container.createDiv({ cls: 'po-sidebar' });
@@ -132,38 +139,55 @@ export class ProjectBoard {
 		this.poMainEl = container.createDiv({ cls: 'po-main' });
 		this.renderMengxuPanels();
 	}
+	private filteredItems(selected: string | null = null): BoardItem[] {
+		return filterBoardItems(this.items, this.projectFilter, selected).filter(item => this.processTypeFilter === 'all' || itemType(item) === this.processTypeFilter);
+	}
+	private createProcess(event: MouseEvent): void {
+		if (!this.source!.createLearning) { this.source!.create(); return; }
+		const menu = new Menu();
+		menu.addItem(item => item.setTitle('学习进程').onClick(() => this.source!.createLearning!()));
+		menu.addItem(item => item.setTitle('项目').onClick(() => this.source!.create()));
+		menu.showAtMouseEvent(event);
+	}
 
 	private renderMengxuSidebar(sidebar: HTMLElement): void {
 		sidebar.empty();
 		const list = sidebar.createDiv({ cls: 'po-sidebar__list' });
-		const visible = filterBoardItems(this.items, this.projectFilter);
-		const addItem = (item?: ProjectBoardItem) => {
+		const visible = this.filteredItems();
+		const addItem = (item?: BoardItem) => {
 			const key = item?.key ?? null;
 			const el = list.createDiv({ cls: 'po-sidebar__item' + (key === this.projectSelection ? ' is-active' : ''), attr: { role: 'button', tabindex: '0' } });
 			el.createSpan({ cls: 'po-dot', attr: { style: 'background:#7BA7FF;color:#7BA7FF' } });
-			el.createSpan({ text: item?.name ?? '全部项目' });
+			el.createSpan({ text: item?.name ?? '全部进程' });
 			const group = item ? [item] : visible;
-			el.createSpan({ cls: 'po-count', text: `${group.reduce((n, p) => n + (p.doneCount ?? 0), 0)}/${group.reduce((n, p) => n + p.taskCount, 0)}` });
-			el.title = item ? [item.name, item.status, item.direction].filter(Boolean).join(' · ') : '全部项目';
+			el.createSpan({ cls: 'po-count', text: taskProgressLabel(group.reduce((n, p) => n + p.taskCount, 0), group.reduce((n, p) => n + (p.doneCount ?? 0), 0)) });
+			el.title = item ? [item.name, processTypeLabel(itemType(item)), item.status, item.direction].filter(Boolean).join(' · ') : '全部进程';
 			const select = () => { this.projectSelection = key; this.renderMengxuSidebar(sidebar); this.renderMengxuPanels(); };
 			el.onclick = select;
 			el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(); } };
 		};
 		addItem(); visible.forEach(addItem);
-		sidebar.createEl('button', { cls: 'po-add-btn', text: UI_TEXT.newProjectBtn }).onclick = () => this.source!.create();
+		sidebar.createEl('button', { cls: 'po-add-btn', text: this.source!.createLearning ? '＋ 新建 ▾' : UI_TEXT.newProjectBtn }).onclick = event => this.createProcess(event);
 	}
 
 	private renderMengxuPanels(): void {
 		this.dispose();
 		const main = this.poMainEl!; main.empty();
+		const types = main.createDiv({ cls: 'po-toolbar' });
+		types.createSpan({ cls: 'po-toolbar__label', text: '进程类型' });
+		for (const [type, label] of [['all', '全部'], ['learning', '学习'], ['project', '项目']] as const) {
+			const button = types.createEl('button', { cls: 'po-chip' + (type === this.processTypeFilter ? ' is-active' : ''), text: label });
+			button.dataset.processType = type;
+			button.onclick = () => { this.processTypeFilter = type; this.showMengxu(); };
+		}
 		const toolbar = main.createDiv({ cls: 'po-toolbar' });
-		toolbar.createSpan({ cls: 'po-toolbar__label', text: '项目状态' });
+		toolbar.createSpan({ cls: 'po-toolbar__label', text: '进程状态' });
 		for (const status of ['全部', ...PROJECT_STATUSES] as const) {
 			const button = toolbar.createEl('button', { cls: 'po-chip' + (status === this.projectFilter ? ' is-active' : ''), text: status });
 			button.dataset.filter = status;
 			button.onclick = () => { this.projectFilter = status; this.showMengxu(); };
 		}
-		const items = filterBoardItems(this.items, this.projectFilter, this.projectSelection);
+		const items = this.filteredItems(this.projectSelection);
 		const tabs = main.createDiv({ cls: 'po-tabs' });
 		const content = main.createDiv({ cls: 'po-content' });
 		const panel = content.createDiv({ cls: 'po-panel is-active', attr: { 'data-view': this.currentView } });
@@ -174,16 +198,16 @@ export class ProjectBoard {
 		}
 		// Same tab strip and lazy view switching, but no inferred NPDP phase control.
 		if (this.currentView === 'gantt' || this.currentView === 'calendar') {
-			panel.createDiv({ cls: 'po-toolbar' }).createSpan({ cls: 'po-toolbar__label', text: '显示项目开始／截止日期；页面内任务日期暂未接入。日期修改请编辑项目笔记。' });
-			const timelines = projectTimelineItems(items);
+			panel.createDiv({ cls: 'po-toolbar' }).createSpan({ cls: 'po-toolbar__label', text: '显示学习／项目进程的开始与截止日期；未设日期或日期倒置的进程不显示。页面内任务日期暂未接入，日期请编辑来源笔记。' });
+			const timelines = projectTimelineItems(items.filter(hasProcessSchedule));
 			if (this.currentView === 'gantt') this.renderGanttPanel(panel, timelines, items);
 			else this.renderCalendarPanel(panel, timelines, items);
 		} else if (this.currentView === 'list') this.renderProjectTable(panel, items);
 		else this.renderProjectCards(panel, items);
 	}
 
-	private renderProjectCards(panel: HTMLElement, items: ProjectBoardItem[]): void {
-		if (!items.length) { panel.createDiv({ cls: 'po-empty', text: this.items.length ? '没有符合筛选条件的项目' : '暂无项目，点击左侧新建项目开始。' }); return; }
+	private renderProjectCards(panel: HTMLElement, items: BoardItem[]): void {
+		if (!items.length) { panel.createDiv({ cls: 'po-empty', text: this.items.length ? '没有符合筛选条件的进程' : '暂无进程，点击左侧新建学习主题或项目。' }); return; }
 		const board = panel.createDiv({ cls: 'po-kanban' });
 		for (const status of PROJECT_STATUSES) {
 			if (this.projectFilter !== '全部' && this.projectFilter !== status) continue;
@@ -194,21 +218,21 @@ export class ProjectBoard {
 			for (const item of group) {
 				const card = col.createDiv({ cls: 'po-kanban__card', attr: { 'data-project-path': item.key, role: 'button', tabindex: '0' } });
 				card.createDiv({ text: item.name });
-				card.createDiv({ cls: 'po-kanban__meta', text: [item.status, item.direction].filter(Boolean).join(' · ') });
+				card.createDiv({ cls: 'po-kanban__meta', text: [processTypeLabel(itemType(item)), item.status, item.direction].filter(Boolean).join(' · ') });
 				if (item.startDate || item.endDate) card.createDiv({ cls: 'po-kanban__meta', text: `${item.startDate || '未设置开始'} → ${item.endDate || '未设置截止'}` });
-				card.createDiv({ cls: 'po-kanban__meta', text: `任务 ${item.doneCount} / ${item.taskCount}` });
+				card.createDiv({ cls: 'po-kanban__meta', text: item.taskCount ? `任务 ${taskProgressLabel(item.taskCount, item.doneCount ?? 0)}` : '暂无任务' });
 				card.onclick = () => this.source!.open(item);
 				card.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.source!.open(item); } };
 			}
 		}
 	}
 
-	private renderProjectTable(panel: HTMLElement, items: ProjectBoardItem[]): { tbody: HTMLElement; rows: HTMLElement[] } {
+	private renderProjectTable(panel: HTMLElement, items: BoardItem[]): { tbody: HTMLElement; rows: HTMLElement[] } {
 		const section = panel.createDiv({ cls: 'po-tasklist' });
 		const wrap = section.createDiv({ cls: 'po-table-wrap' });
 		const table = wrap.createEl('table', { cls: 'po-table' });
 		const head = table.createEl('thead').createEl('tr');
-		const cols = [['name', '项目名称'], ['status', '状态'], ['direction', '方向'], ['startDate', '开始日期'], ['endDate', '截止日期'], ['', '任务完成']] as const;
+		const cols = [['name', '名称'], ['processType', '类型'], ['direction', '方向'], ['status', '状态'], ['startDate', '开始'], ['endDate', '截止'], ['', '任务进度']] as const;
 		for (const [key, text] of cols) {
 			const th = head.createEl('th', { text });
 			if (!key) continue;
@@ -219,23 +243,33 @@ export class ProjectBoard {
 		const tbody = table.createEl('tbody');
 		const sorted = [...items];
 		const key = cols.find(([key]) => key && key === this.sortCol)?.[0];
-		if (key) sorted.sort((a, b) => String(a[key] ?? '').localeCompare(String(b[key] ?? ''), 'zh-CN') * (this.sortDir === 'asc' ? 1 : -1));
+		if (key) {
+			const value = (item: BoardItem) => key === 'processType' ? processTypeLabel(itemType(item)) : String(item[key] ?? '');
+			sorted.sort((a, b) => value(a).localeCompare(value(b), 'zh-CN') * (this.sortDir === 'asc' ? 1 : -1));
+		}
 		const statusClasses = { '计划中': 'po-todo', '进行中': 'po-progress', '暂停': 'po-blocked', '已完成': 'po-done', '归档': 'po-cancelled' };
 		const rows = sorted.map(item => {
 			const row = tbody.createEl('tr', { cls: 'po-data-row' }); row.dataset.projectPath = item.key;
 			const name = row.createEl('td', { cls: 'po-name-cell po-clickable', text: item.name, attr: { role: 'button', tabindex: '0' } }); name.onclick = () => this.source!.open(item);
 			name.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.source!.open(item); } };
+			row.createEl('td', { text: processTypeLabel(itemType(item)) });
+			row.createEl('td', { text: item.direction || '未关联' });
 			row.createEl('td').createSpan({ cls: 'po-status ' + statusClasses[item.status], text: item.status });
-			for (const text of [item.direction || '未关联', item.startDate || '—', item.endDate || '—', `${item.doneCount} / ${item.taskCount}`]) row.createEl('td', { text });
+			for (const text of [item.startDate || '—', item.endDate || '—', taskProgressLabel(item.taskCount, item.doneCount ?? 0)]) row.createEl('td', { text });
 			return row;
 		});
-		if (!items.length) section.createDiv({ cls: 'po-empty', text: '暂无符合条件的项目' });
+		if (!items.length) section.createDiv({ cls: 'po-empty', text: '暂无符合条件的进程' });
 		return { tbody, rows };
 	}
 
 	private scheduleStatus(task: TaskItem): string {
 		return this.source ? this.items.find(p => p.key === task.id)?.status ?? '' : UI_TEXT.statusLabel(task.status);
 	}
+	private scheduleType(task: TaskItem): string {
+		const item = this.items.find(p => p.key === task.id);
+		return item ? processTypeLabel(itemType(item)) : '';
+	}
+	private scheduleName(task: TaskItem): string { return this.source ? `${this.scheduleType(task)} · ${task.content}` : task.content; }
 
 	/** Release geometry observers when the overview/tab is detached. */
 	dispose(): void { this.calendarObserver?.disconnect(); this.calendarObserver = undefined; }
@@ -249,7 +283,8 @@ export class ProjectBoard {
 
 	/** 首页入口复用现有项目总览的指定视图，不另建日历或甘特图实现。 */
 	async openView(view: 'calendar' | 'gantt'): Promise<void> {
-		this.host.selectedProject = null;
+		if (this.source) { this.projectSelection = null; this.projectFilter = '全部'; this.processTypeFilter = 'all'; }
+		else this.host.selectedProject = null;
 		this.currentView = view;
 		await this.show(true);
 	}
@@ -666,7 +701,8 @@ export class ProjectBoard {
 		});
 
 		// Group root tasks by left sidebar project order; time-sub-sort within each project
-		const projOrder = projects.map((p) => p.name);
+		// Modern processes can share a title across learning/project sources.
+		const projOrder = this.source ? [...new Set(projects.map(p => p.name))] : projects.map(p => p.name);
 		const byProject: Record<string, TaskItem[]> = {};
 		const ungrouped: TaskItem[] = [];
 		for (const t of rootTasks) {
@@ -870,7 +906,7 @@ export class ProjectBoard {
 
 	// 筛选结果为空时，筛选栏（缩放 + 状态筛选）仍必须渲染，不能整块消失
 	if (tasks.length === 0) {
-		panel.createDiv({ cls: 'po-empty', text: this.source ? '暂无符合条件的项目，点击左侧新建项目开始。' : UI_TEXT.noTasks });
+		panel.createDiv({ cls: 'po-empty', text: this.source ? '暂无符合条件且已设日期的进程。' : UI_TEXT.noTasks });
 		return;
 	}
 
@@ -881,7 +917,7 @@ export class ProjectBoard {
 		const left = wrapper.createDiv({ cls: 'po-gantt__left' });
 		const leftHeader = left.createDiv({ cls: 'po-gantt__left-hd' });
 		leftHeader.style.height = HEADER_HEIGHT + 'px';
-		leftHeader.createSpan({ text: this.source ? '项目名称' : UI_TEXT.poTaskName, cls: 'po-gantt__left-hd-label' });
+		leftHeader.createSpan({ text: this.source ? '进程名称' : UI_TEXT.poTaskName, cls: 'po-gantt__left-hd-label' });
 		const leftBody = left.createDiv({ cls: 'po-gantt__left-body' });
 		// 拖动指示线（插入位置）+ 清理函数（拖动结束/放下时复位所有拖动 UI）
 		const dropLine = leftBody.createDiv({ cls: 'po-gantt__drop-line' });
@@ -1061,7 +1097,7 @@ export class ProjectBoard {
 					this.renderGanttPanel(panel, tasks, projects);
 				});
 			}
-			lr.createSpan({ cls: 'po-gantt__label-title', text: t.content });
+			lr.createSpan({ cls: 'po-gantt__label-title', text: this.scheduleName(t) });
 			if (!this.source) {
 			const addBtn = lr.createSpan({ cls: 'po-gantt__label-add', text: '+' });
 			addBtn.addEventListener('click', (e) => {
@@ -1272,7 +1308,7 @@ export class ProjectBoard {
 		bar.addEventListener('mouseenter', (e: MouseEvent) => {
 			const prioLabel = t.priority || UI_TEXT.notSet;
 			tooltip.empty();
-			tooltip.createEl('strong', { text: t.content });
+			tooltip.createEl('strong', { text: this.scheduleName(t) });
 			tooltip.createEl('br');
 			tooltip.appendText((t.startDate || '?') + ' → ' + (t.dueDate || '?'));
 			tooltip.createEl('br');
@@ -1411,7 +1447,7 @@ export class ProjectBoard {
 		task.startDate = newStart;
 		task.dueDate = newEnd;
 	}	private renderTaskTable(panel: HTMLElement, tbodyId: string, tasks: TaskItem[], projects: ProjectInfo[]): { tbody: HTMLElement; rows: (HTMLElement | null)[] } {
-		if (this.source) return this.renderProjectTable(panel, tasks.map(t => this.items.find(p => p.key === t.id)).filter((p): p is ProjectBoardItem => !!p));
+		if (this.source) return this.renderProjectTable(panel, tasks.map(t => this.items.find(p => p.key === t.id)).filter((p): p is BoardItem => !!p));
 		const section = panel.createDiv({ cls: 'po-tasklist' });
 		const toolbar = section.createDiv({ cls: 'po-toolbar' });
 		toolbar.createSpan({ cls: 'po-toolbar__label', text: UI_TEXT.filter });
@@ -1740,7 +1776,7 @@ export class ProjectBoard {
 			row.draggable = !this.source;
 			row.dataset.taskId = task.id;
 			row.createSpan({ cls: 'po-mini-dot', attr: { style: 'background:' + projColor(task) } });
-			const nameSpan = row.createSpan({ cls: 'po-cal__task-name po-clickable', text: task.content });
+			const nameSpan = row.createSpan({ cls: 'po-cal__task-name po-clickable', text: this.scheduleName(task) });
 			nameSpan.addEventListener('click', (ev) => {
 				ev.stopPropagation();
 				this.openTaskEditModal(task);
@@ -1796,7 +1832,7 @@ export class ProjectBoard {
 			const isRange = isRangeTask(task);
 			const isRecur = task.type === '重复';
 			const cls = isOverdue(task) ? 'is-overdue' : task.status === '已完成' ? 'is-done' : 'is-normal';
-			const chip = holder.createDiv({ cls: 'po-cal__chip ' + cls + (isRange ? ' is-range' : '') + (isRecur ? ' is-recur' : ''), text: (isRecur ? '↻ ' : '') + task.content });
+			const chip = holder.createDiv({ cls: 'po-cal__chip ' + cls + (isRange ? ' is-range' : '') + (isRecur ? ' is-recur' : ''), text: (isRecur ? '↻ ' : '') + this.scheduleName(task) });
 			chip.setAttr('style', '--chip-color:' + projColor(task));
 			if (isRange) chip.setAttr('title', rangeLabel(task));
 			chip.addEventListener('click', (ev) => {
@@ -2123,7 +2159,7 @@ export class ProjectBoard {
 						let st = 'is-empty';
 						if (node && node.s === 'done') st = 'is-done';
 						else if (node && node.s === 'skip') st = 'is-skip';
-						const piece = bar.createDiv({ cls: 'po-cal__mbar-seg ' + st, text: c === seg.c1 ? seg.task.content : '' });
+						const piece = bar.createDiv({ cls: 'po-cal__mbar-seg ' + st, text: c === seg.c1 ? this.scheduleName(seg.task) : '' });
 						piece.setAttr('title', dayStateLabel(seg.task, segDate));
 						piece.style.width = 'calc(' + (100 / segCount).toFixed(4) + '% - 1px)';
 						// 右键：删除任务 / 打开源文件
@@ -2214,7 +2250,7 @@ export class ProjectBoard {
 					let st = 'is-empty';
 					if (node && node.s === 'done') st = 'is-done';
 					else if (node && node.s === 'skip') st = 'is-skip';
-					const piece = bar.createDiv({ cls: 'po-cal__mbar-seg ' + st, text: c === si ? task.content : '' });
+					const piece = bar.createDiv({ cls: 'po-cal__mbar-seg ' + st, text: c === si ? this.scheduleName(task) : '' });
 					piece.setAttr('title', dayStateLabel(task, ds));
 					piece.style.width = 'calc(' + (100 / segCount).toFixed(4) + '% - 1px)';
 					// 右键：删除任务 / 打开源文件
@@ -2268,11 +2304,11 @@ export class ProjectBoard {
 			const dObj = new Date(dt + 'T00:00:00');
 			const det = root.createDiv({ cls: 'po-cal__det' });
 			const hd = det.createDiv({ cls: 'po-cal__det-hd' });
-			hd.createSpan({ cls: 'po-cal__det-ttl', text: dayFmt(dt) + ' · ' + (dt === todayStr ? t('ui.calAgendaToday') : UI_TEXT.calWeekdays[(dObj.getDay() + 6) % 7]) + ' · ' + (this.source ? `${dayTasks.length} 个项目` : t('ui.calTaskCount', { n: String(dayTasks.length) })) });
-			if (!dayTasks.length) det.createSpan({ cls: 'po-cal__det-empty', text: this.source ? '当日暂无项目日程' : t('ui.noTaskOnDay') });
+			hd.createSpan({ cls: 'po-cal__det-ttl', text: dayFmt(dt) + ' · ' + (dt === todayStr ? t('ui.calAgendaToday') : UI_TEXT.calWeekdays[(dObj.getDay() + 6) % 7]) + ' · ' + (this.source ? `${dayTasks.length} 个进程` : t('ui.calTaskCount', { n: String(dayTasks.length) })) });
+			if (!dayTasks.length) det.createSpan({ cls: 'po-cal__det-empty', text: this.source ? '当日暂无进程日程' : t('ui.noTaskOnDay') });
 			dayTasks.forEach((task) => renderTaskRow(det, task));
-			const newBtn = det.createDiv({ cls: 'po-cal__new', text: this.source ? '＋ 新建项目' : t('ui.calNewTask') });
-			newBtn.addEventListener('click', () => { void this.openTaskModalWithParent('', this.selectedProject ?? ''); });
+			const newBtn = det.createDiv({ cls: 'po-cal__new', text: this.source ? (this.source.createLearning ? '＋ 新建 ▾' : '＋ 新建项目') : t('ui.calNewTask') });
+			newBtn.addEventListener('click', event => { if (this.source) this.createProcess(event); else void this.openTaskModalWithParent('', this.selectedProject ?? ''); });
 		};
 
 		/** 组装 + 键盘导航（← / → 切月或周，T 回今天） */

@@ -1,6 +1,7 @@
 import type { TaskItem } from '../../data/taskParser';
 import type { MengxuProject } from '../../data/projects';
-import { currentProjects } from '../../data/projects';
+import { currentProcesses, processTypeLabel } from '../../data/processes';
+import type { Process } from '../../data/processes';
 import { KNOWLEDGE_AREAS } from './config';
 import { renderLifeCompass } from './LifeCompass';
 import { renderPlanningCard } from './PlanningCard';
@@ -20,6 +21,7 @@ export interface WorkbenchHomeData {
 	todayTasks: TaskItem[];
 	upcomingTasks: TaskItem[];
 	projects: MengxuProject[];
+	processes: Process[];
 	existingPaths: Set<string>;
 	plans: PlanState[];
 	learning: CurrentLearning[];
@@ -30,6 +32,7 @@ export interface WorkbenchHomeData {
 	onOpenTask(task: TaskItem): void;
 	onOpenProjects(): void;
 	onOpenProject(project: MengxuProject): void;
+	onOpenProcess(process: Process): void;
 	onOpenProjectView(view: 'calendar' | 'gantt'): void;
 	onOpenPath(path: string): void;
 }
@@ -50,14 +53,18 @@ function renderToday(parent: HTMLElement, data: WorkbenchHomeData): void {
 }
 
 function renderProjects(parent: HTMLElement, data: WorkbenchHomeData): void {
-	const body = createSection(parent, '📅 项目与日程');
-	const projects = currentProjects(data.projects);
-	if (!projects.length) addEmpty(body, '暂无当前项目');
-	for (const p of projects) addEntry(body, p.name, `${p.status}${p.dueDate ? ` · 截止 ${p.dueDate}` : ''}`, () => data.onOpenProject(p));
-	addEntry(body, '月历', '旧任务月历，暂不含新项目', () => data.onOpenProjectView('calendar'));
-	addEntry(body, '甘特图', '旧任务甘特图，暂不含新项目', () => data.onOpenProjectView('gantt'));
-	if (data.upcomingTasks.length) addEntry(body, '即将截止', `${data.upcomingTasks.length} 项`, data.onOpenProjects);
-	else addEmpty(body, '近期暂无截止任务');
+	const body = createSection(parent, '📅 进程与日程');
+	const active = currentProcesses(data.processes);
+	if (!active.length) addEmpty(body, '暂无当前进程');
+	for (const p of active) addEntry(body, p.name, `${processTypeLabel(p.processType)} · ${p.status}${p.dueDate ? ` · 截止 ${p.dueDate}` : ''}`, () => data.onOpenProcess(p));
+	addEntry(body, '月历', '学习 / 项目进程日程', () => data.onOpenProjectView('calendar'));
+	addEntry(body, '甘特图', '学习 / 项目进程时间条', () => data.onOpenProjectView('gantt'));
+	const today = new Date();
+	const horizon = new Date(today); horizon.setDate(horizon.getDate() + 14);
+	const date = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+	const upcoming = data.processes.filter(p => !['已完成', '归档'].includes(p.status) && p.dueDate && p.dueDate >= date(today) && p.dueDate <= date(horizon));
+	if (upcoming.length) addEntry(body, '即将截止', `${upcoming.length} 项进程`, data.onOpenProjects);
+	else addEmpty(body, '近期暂无截止进程');
 }
 
 function renderKnowledge(parent: HTMLElement, data: WorkbenchHomeData): void {
