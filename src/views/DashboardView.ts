@@ -414,7 +414,7 @@ export class DashboardView extends ItemView {
 		this.bannerPh = ph;
 
 		const img = banner.createEl('img', { cls: 'ad-banner__img ad-banner__img--hidden' });
-		img.alt = 'Banner';
+		img.alt = '封面';
 		this.bannerImg = img;
 
 		// toolbar
@@ -581,7 +581,7 @@ export class DashboardView extends ItemView {
 	   ============================================================ */
 	private async renderPulse(root: HTMLElement, d: DashboardData): Promise<void> {
 		const bar = root.createDiv({ cls: 'ad-pulse' });
-		bar.createSpan({ cls: 'ad-pulse__tag', text: '[ VAULT PULSE ]' });
+		bar.createSpan({ cls: 'ad-pulse__tag', text: '[ 工作台概览 ]' });
 
 		const today = new Date();
 		const todayKey = todayStr();
@@ -596,22 +596,14 @@ export class DashboardView extends ItemView {
 			pendingCount = all.filter((t) => t.status !== '\u5DF2\u5B8C\u6210' && t.status !== '\u5DF2\u53D6\u6D88').length;
 		} catch { /* keep 0 */ }
 
-		const totalEl = bar.createSpan({ text: `${hs.total} NOTES` });
+		const totalEl = bar.createSpan({ text: `${hs.total} 篇笔记` });
 		bar.createSpan({ cls: 'ad-pulse__sep', text: '\u00B7' });
-		const pendingEl = bar.createSpan({ text: `${pendingCount} PENDING` });
+		const pendingEl = bar.createSpan({ text: `${pendingCount} 待处理` });
 		bar.createSpan({ cls: 'ad-pulse__sep', text: '\u00B7' });
 		const todayEl = bar.createSpan();
-		todayEl.textContent = `\u0394 TODAY +${todayCount}`;
+		todayEl.textContent = `今日新增 +${todayCount}`;
 		bar.createSpan({ cls: 'ad-pulse__sep', text: '\u00B7' });
-		const streakEl = bar.createSpan({ text: `${hs.streak}D STREAK` });
-
-		// Fix 4: JS-based caret blink
-		const caret = bar.createSpan({ cls: 'ad-pulse__caret' });
-		let caretOn = true;
-		this.registerInterval(window.setInterval(() => {
-			caretOn = !caretOn;
-			caret.style.opacity = caretOn ? '1' : '0';
-		}, 525));
+		const streakEl = bar.createSpan({ text: `连续 ${hs.streak} 天` });
 
 		this.pulseEls = { total: totalEl, pending: pendingEl, today: todayEl, streak: streakEl };
 	}
@@ -623,14 +615,14 @@ export class DashboardView extends ItemView {
 		const noteCounts = this.getVaultNoteCounts();
 		const hs = calcHeatmapStats(noteCounts, today.getFullYear(), today);
 		const todayCount = noteCounts.get(todayKey) ?? 0;
-		this.pulseEls.total.textContent = `${hs.total} NOTES`;
-		this.pulseEls.today.textContent = `\u0394 TODAY +${todayCount}`;
-		this.pulseEls.streak.textContent = `${hs.streak}D STREAK`;
+		this.pulseEls.total.textContent = `${hs.total} 篇笔记`;
+		this.pulseEls.today.textContent = `今日新增 +${todayCount}`;
+		this.pulseEls.streak.textContent = `连续 ${hs.streak} 天`;
 		// Update pending with real task count
 		try {
 			const all = await this.taskStore.scanAllTasks();
 			const pending = all.filter((t) => t.status !== '\u5DF2\u5B8C\u6210' && t.status !== '\u5DF2\u53D6\u6D88').length;
-			this.pulseEls.pending.textContent = `${pending} PENDING`;
+			this.pulseEls.pending.textContent = `${pending} 待处理`;
 		} catch { /* keep current */ }
 	}
 
@@ -651,7 +643,7 @@ export class DashboardView extends ItemView {
 	private renderHeader(root: HTMLElement, d: DashboardData): void {
 		const h = root.createEl('header', { cls: 'ad-header' });
 		const left = h.createDiv({ cls: 'ad-header__left' });
-		left.createEl('p', { cls: 'ad-eyebrow', text: 'PERSONAL WORKBENCH' });
+		left.createEl('p', { cls: 'ad-eyebrow', text: '个人工作台' });
 		this.adTitleEl = left.createEl('h1', { cls: 'ad-title', text: this.resolvedDashboardTitle() });
 		left.createEl('p', { cls: 'ad-subtitle', text: 'Obsidian · 我的工作台 · v' + (this.plugin.manifest?.version ?? d.header.subtitle.replace(/^.*v/, 'v')) });
 

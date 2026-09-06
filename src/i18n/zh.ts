@@ -72,7 +72,7 @@ export const zh: Dict = {
 			weekly: '本周待办 & 逾期', projects: '项目情况',
 			heatmap: '笔记统计', countdown: '倒计时', pomodoro: '番茄钟',
 		},
-		bannerPlaceholder: '[ banner ]  ·  点击右上角按钮插入封面图片',
+		bannerPlaceholder: '点击右上角按钮添加封面',
 		changeImage: '更换图片',
 		renderError: 'Dashboard 渲染出错',
 		settingsBtn: '设置',

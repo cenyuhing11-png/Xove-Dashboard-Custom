@@ -71,7 +71,7 @@ export const en: Dict = {
 			weekly: 'This week & overdue', projects: 'Projects',
 			heatmap: 'Note stats', countdown: 'Countdown', pomodoro: 'Pomodoro',
 		},
-		bannerPlaceholder: '[ banner ]  ·  Click the top-right button to insert a cover image',
+		bannerPlaceholder: 'Click the top-right button to add a cover image',
 		changeImage: 'Change image',
 		renderError: 'Dashboard render error',
 		settingsBtn: 'Settings',

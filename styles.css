@@ -545,10 +545,6 @@
 }
 .ad-pulse__tag { color: var(--ad-accent); letter-spacing: 0.18em; text-transform: uppercase; }
 .ad-pulse__sep { color: var(--ad-text-dim); }
-.ad-pulse__caret {
-  display: inline-block; width: 8px; height: 14px;
-  background: var(--ad-accent); margin-left: 6px; vertical-align: -2px;
-}
 
 /* ============================================================ header */
 .ad-header {
