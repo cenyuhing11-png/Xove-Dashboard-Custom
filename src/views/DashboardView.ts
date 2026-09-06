@@ -21,7 +21,7 @@ import {
 	ICON_allProjects, ICON_opportunity, ICON_gear, ICON_moon, ICON_sun, injectSvg,
 } from '../icons';
 
-export const VIEW_TYPE = 'dashboard-view';
+export const VIEW_TYPE = 'xove-dashboard-custom-view';
 
 /** 首页模块描述符：id 对应 settings.homeModules，render 为对应渲染函数 */
 interface HomeModule {

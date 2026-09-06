@@ -631,7 +631,7 @@ export class DashboardSettingTab extends PluginSettingTab {
 			: t;
 		// Refresh every open dashboard view (not just the foreground one), so a
 		// theme switch in Settings applies immediately to all of them.
-		this.app.workspace.getLeavesOfType('dashboard-view').forEach((leaf) => {
+		this.app.workspace.getLeavesOfType('xove-dashboard-custom-view').forEach((leaf) => {
 			leaf.view?.containerEl?.querySelector('.dashboard-plugin')?.setAttribute('data-theme', effective);
 		});
 		// Fallback for any stray element still in the DOM.
