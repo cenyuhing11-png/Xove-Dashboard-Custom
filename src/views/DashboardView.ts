@@ -1,7 +1,6 @@
 import { ItemView, Menu, TFile, TFolder, WorkspaceLeaf } from 'obsidian';
 import { MOCK_DATA, DashboardData } from '../data/mockData';
-import { BannerSettings, DEFAULT_SETTINGS, CountdownSettings } from '../settings';
-import { BannerModal } from './BannerModal';
+import { CountdownSettings } from '../settings';
 import { CountdownModal, defaultEventName } from './CountdownModal';
 import { TaskEditModal } from './TaskEditModal';
 import { NewEmbeddedTaskModal, EmbeddedTaskListModal, renderEmbeddedRows } from './EmbeddedTaskModal';
@@ -15,10 +14,12 @@ import { DashboardStore } from '../data/dashboardStore';
 import { OpportunityBoard } from './OpportunityBoard';
 import { ProjectBoard } from './ProjectBoard';
 import { fmtDate, todayStr, nowFmt, calcNextRemindDate, getTodayUniverse, getTodayTasks, isDoneToday, isSkipToday, overdueDays } from '../data/taskLogic';
-import { t, tArr, isEnglish } from '../i18n';
+import { t, tArr } from '../i18n';
 import { UI_TEXT } from '../constants';
 import { renderWorkbenchHome } from '../components/workbench/WorkbenchHome';
-import { naturalTimeSummary } from '../utils/timeProgress';
+import { calcHeatmapStats, getVaultNoteCounts } from '../utils/vaultOverview';
+import { WorkbenchShell } from '../components/workbench/WorkbenchShell';
+import type { WorkbenchAction } from '../components/workbench/WorkbenchShell';
 import { PLAN_PERIODS, PLAN_ROOT, ensurePlan, readPlan } from '../data/planning';
 import type { PlanFiles, PlanPeriod } from '../data/planning';
 import { currentLearning } from '../data/learning';
@@ -31,10 +32,7 @@ import { openDirection } from './DirectionView';
 import { DIARY_FOLDER } from '../data/vaultPaths';
 
 import type Dashboard from '../main';
-import {
-	ICON_home, ICON_newDiary, ICON_newTask, ICON_newProject,
-	ICON_allProjects, ICON_opportunity, ICON_gear, ICON_moon, ICON_sun, injectSvg,
-} from '../icons';
+import { injectSvg } from '../icons';
 
 export const VIEW_TYPE = 'xove-dashboard-custom-view';
 
@@ -147,85 +145,14 @@ function buildRepeatRule(data: {
 	return rule;
 }
 
-function calcHeatmapStats(data: Map<string, number>, year: number, today: Date): { total: number; active: number; streak: number } {
-	let total = 0;
-	let active = 0;
-	const prefix = `${year}-`;
-	const todayStr = fmtDate(today);
-
-	for (const [date, count] of data) {
-		if (!date.startsWith(prefix) || date > todayStr) continue;
-		total += count;
-		if (count > 0) active++;
-	}
-
-	// current streak counted backwards from today
-	let streak = 0;
-	const d = new Date(today);
-	while (d.getFullYear() === year) {
-		const key = fmtDate(d);
-		if ((data.get(key) ?? 0) > 0) streak++;
-		else break;
-		d.setDate(d.getDate() - 1);
-	}
-
-	return { total, active, streak };
-}
-
-/** Format lunar date as "五月廿二" style */
-function getLunarDate(d: Date): string {
-	try {
-		const parts = new Intl.DateTimeFormat('zh-CN-u-ca-chinese', {
-			timeZone: 'Asia/Shanghai', month: 'long', day: 'numeric',
-		}).formatToParts(d);
-		const monthStr = parts.find((p) => p.type === 'month')?.value ?? '';
-		const dayStr = parts.find((p) => p.type === 'day')?.value ?? '';
-		if (/[\u4e00-\u9fff]/.test(monthStr)) {
-			// Convert numeric day to Chinese ordinal (e.g. "1" → "初一", "15" → "十五")
-			const dayNum = parseInt(dayStr);
-			if (!isNaN(dayNum) && dayNum >= 1 && dayNum <= 30) {
-				const LUNAR_DAYS = ['\u521D\u4E00','\u521D\u4E8C','\u521D\u4E09','\u521D\u56DB','\u521D\u4E94','\u521D\u516D','\u521D\u4E03','\u521D\u516B','\u521D\u4E5D','\u521D\u5341',
-					'\u5341\u4E00','\u5341\u4E8C','\u5341\u4E09','\u5341\u56DB','\u5341\u4E94','\u5341\u516D','\u5341\u4E03','\u5341\u516B','\u5341\u4E5D','\u4E8C\u5341',
-					'\u5EFF\u4E00','\u5EFF\u4E8C','\u5EFF\u4E09','\u5EFF\u56DB','\u5EFF\u4E94','\u5EFF\u516D','\u5EFF\u4E03','\u5EFF\u516B','\u5EFF\u4E5D','\u4E09\u5341'];
-				return monthStr + (LUNAR_DAYS[dayNum - 1] ?? dayStr);
-			}
-			return monthStr + dayStr.replace('\u65E5', '');
-		}
-		const m = parseInt(monthStr) || 1;
-		const day = parseInt(dayStr) || 1;
-		const MONTHS = ['\u6B63\u6708','\u4E8C\u6708','\u4E09\u6708','\u56DB\u6708','\u4E94\u6708','\u516D\u6708','\u4E03\u6708','\u516B\u6708','\u4E5D\u6708','\u5341\u6708','\u51AC\u6708','\u814A\u6708'];
-		const DAYS = ['\u521D\u4E00','\u521D\u4E8C','\u521D\u4E09','\u521D\u56DB','\u521D\u4E94','\u521D\u516D','\u521D\u4E03','\u521D\u516B','\u521D\u4E5D','\u521D\u5341','\u5341\u4E00','\u5341\u4E8C','\u5341\u4E09','\u5341\u56DB','\u5341\u4E94','\u5341\u516D','\u5341\u4E03','\u5341\u516B','\u5341\u4E5D','\u4E8C\u5341','\u5EFF\u4E00','\u5EFF\u4E8C','\u5EFF\u4E09','\u5EFF\u56DB','\u5EFF\u4E94','\u5EFF\u516D','\u5EFF\u4E03','\u5EFF\u516B','\u5EFF\u4E5D','\u4E09\u5341'];
-		return MONTHS[m - 1] + (DAYS[day - 1] ?? '');
-	} catch {
-		return '';
-	}
-}
-
 export class DashboardView extends ItemView {
 	public plugin: Dashboard;
-	private bannerState: BannerSettings;
-	private bannerImg: HTMLImageElement | null = null;
-	private bannerPh: HTMLElement | null = null;
 	public boardEl: HTMLElement | null = null;
 	private heatmapCard: HTMLElement | null = null;
 	private heatmapTimer: number | null = null;
-	private noiseId: number | null = null;
-	private pulseEls: { total: HTMLElement; pending: HTMLElement; today: HTMLElement; streak: HTMLElement } | null = null;
-	private dateEl: HTMLElement | null = null;
-	// NOTE: deliberately NOT named `titleEl` — Obsidian's ItemView has its own
-	// `titleEl` (view-header title). Declaring a field with that name would
-	// overwrite the parent's after super() and break ItemView.load()
-	// ("Cannot read properties of null (reading 'setText')" → blank view).
-	private adTitleEl: HTMLElement | null = null;
-	private weekdayEl: HTMLElement | null = null;
 	private parseIssuesEl: HTMLElement | null = null;
-	private lunarEl: HTMLElement | null = null;
-	private isoWeekEl: HTMLElement | null = null;
-	private monthProgressEl: HTMLElement | null = null;
-	private yearProgressEl: HTMLElement | null = null;
 	private dashboardEl: HTMLElement | null = null;
-	/** Header theme-toggle button. Prefixed to avoid clashing with ItemView fields. */
-	private adThemeBtn: HTMLElement | null = null;
+	private shell?: WorkbenchShell;
 
 	// 首页编辑态（长按进入，仿手机桌面：拖拽排序 / 拖入垃圾桶删除 / 添加卡片）
 	private adEditMode = false;
@@ -276,7 +203,11 @@ export class DashboardView extends ItemView {
 	public selectedProject: string | null = null;
 
 	// Which top-level page is currently shown (home / project overview / opportunity board)
-	public currentPage: 'home' | 'project' | 'opportunity' = 'home';
+	private page: 'home' | 'project' | 'opportunity' = 'home';
+	get currentPage() { return this.page; }
+	set currentPage(page: 'home' | 'project' | 'opportunity') {
+		this.page = page; this.shell?.setActive(page === 'opportunity' ? 'opportunity' : page === 'project' ? 'classic' : this.homeMode === 'classic' ? 'classic' : 'home');
+	}
 
 	public taskStore: TaskStore;
 	private dashboardStore: DashboardStore;
@@ -294,36 +225,25 @@ export class DashboardView extends ItemView {
 		this.plugin = plugin;
 		// 首次使用时按当前设置初始化工作时长（开始过后保持实际剩余，不覆盖）
 		if (!this.plugin.pomoState.started) this.plugin.pomoState.remaining = this.pomoWorkMs();
-		this.bannerState = { ...DEFAULT_SETTINGS.banner, ...plugin.settings.banner };
 		this.taskStore = new TaskStore(this.app, () => this.plugin.settings, (msg) => this.showToast(msg));
 		this.dashboardStore = new DashboardStore(this.taskStore);
 		this.oppBoard = new OpportunityBoard(this);
 		this.projectBoard = new ProjectBoard(this);
 	}
 
-	/** Theme actually in effect for the dashboard right now. */
-	private effectiveTheme(): 'light' | 'dark' {
-		const t = this.plugin.settings.theme;
-		if (t === 'auto') return document.body.classList.contains('theme-light') ? 'light' : 'dark';
-		return t;
+	refreshThemeButton(): void { this.shell?.refreshSettings(); }
+	refreshTitle(): void { this.shell?.refreshTitle(); }
+	refreshBanner(): void { this.shell?.refreshBanner(); }
+	private async updatePulse(): Promise<void> { await this.shell?.updatePulse(); }
+	async navigateWorkbench(action: WorkbenchAction): Promise<void> {
+		if (action === 'home') await this.showDashboard();
+		else if (action === 'classic') await this.showClassicDashboard();
+		else if (action === 'opportunity') await this.oppBoard.show();
+		else if (action === 'diary') await this.createDiary();
+		else if (action === 'task') new NewEmbeddedTaskModal(this.app, this.plugin.embeddedTasks).open();
+		else if (action === 'project') new NewProjectModal(this.app).open();
+		else if (action === 'all') await openProjects(this.app);
 	}
-
-	private applyTheme(): void {
-		const root = this.dashboardEl ?? (this.containerEl.querySelector('.dashboard-plugin'));
-		if (root) root.setAttribute('data-theme', this.effectiveTheme());
-		this.refreshThemeButton();
-	}
-
-	/** Keep the header toggle's icon/tooltip in sync with the effective theme. */
-	refreshThemeButton(): void {
-		const btn = this.adThemeBtn;
-		if (!btn) return;
-		const eff = this.effectiveTheme();
-		btn.textContent = '';
-		injectSvg(btn, eff === 'dark' ? ICON_sun : ICON_moon);
-		btn.title = eff === 'dark' ? t('home.themeToLight') : t('home.themeToDark');
-	}
-
 	getViewType(): string { return VIEW_TYPE; }
 	getDisplayText(): string { return '夏知之 · 梦序'; }
 	getIcon(): string { return 'layout-dashboard'; }
@@ -340,17 +260,11 @@ export class DashboardView extends ItemView {
 		// create a child <div class="dashboard-plugin"> and render into it.
 		this.containerEl.empty();
 		this.dashboardEl = this.containerEl.createDiv({ cls: 'dashboard-plugin' });
-		this.applyTheme();
-		this.registerEvent(this.app.workspace.on('css-change', () => this.applyTheme()));
 
 		try {
 		const d = MOCK_DATA;
-		this.renderBanner(this.dashboardEl);
-		this.renderParseIssues(this.dashboardEl);
-		this.renderNoise(this.dashboardEl);
-		void this.renderPulse(this.dashboardEl, d);
-		this.renderHeader(this.dashboardEl, d);
-		this.renderActions(this.dashboardEl);
+		this.shell = new WorkbenchShell(this.plugin, this.dashboardEl, action => this.navigateWorkbench(action), 'home', root => this.renderParseIssues(root));
+		this.addChild(this.shell);
 		this.renderBoard(this.dashboardEl, d);
 
 		// Auto-refresh on vault changes (home cards incl. progress + weekly, or project overview)
@@ -422,7 +336,7 @@ export class DashboardView extends ItemView {
 	}
 
 	async onClose(): Promise<void> {
-		if (this.noiseId) { window.cancelAnimationFrame(this.noiseId); this.noiseId = null; }
+		if (this.shell) { this.removeChild(this.shell); this.shell = undefined; }
 		if (this.adRowHObs) { this.adRowHObs.disconnect(); this.adRowHObs = undefined; }
 		if (this.adHmObs) { this.adHmObs.disconnect(); this.adHmObs = undefined; this.adHmObsTarget = undefined; }
 		if (this.adLimitTimer !== null) { window.clearTimeout(this.adLimitTimer); this.adLimitTimer = null; }
@@ -433,125 +347,8 @@ export class DashboardView extends ItemView {
 		this.dashboardEl?.empty();
 	}
 
-	/* ============================================================
-	   BANNER — image insert via modal, vertical drag only
-	   ============================================================ */
-	private renderBanner(root: HTMLElement): void {
-		if (!this.plugin.settings.banner.enabled) return;
-		const banner = root.createDiv({ cls: 'ad-banner ad-banner--empty' });
-		const ph = banner.createDiv({ cls: 'ad-banner__ph', text: t('home.bannerPlaceholder') });
-		this.bannerPh = ph;
-
-		const img = banner.createEl('img', { cls: 'ad-banner__img ad-banner__img--hidden' });
-		img.alt = '封面';
-		this.bannerImg = img;
-
-		// toolbar
-		const bar = banner.createDiv({ cls: 'ad-banner__bar' });
-		const pickBtn = bar.createEl('button', { cls: 'ad-banner__btn', text: t('home.changeImage') });
-
-		// hidden file input
-		const fileInput = root.createEl('input', { cls: 'ad-banner__fileinput', attr: { type: 'file', accept: 'image/*' } });
-
-		// restore saved image
-		if (this.bannerState.imageDataUrl && this.bannerImg && this.bannerPh) {
-			this.displayBannerImage(this.bannerState.imageDataUrl, this.bannerState.offsetY);
-		}
-
-		// pick → read → open modal
-		pickBtn.addEventListener('click', (e) => {
-			e.stopPropagation();
-			fileInput.click();
-		});
-
-		fileInput.addEventListener('change', () => {
-			const file = fileInput.files?.[0];
-			if (!file) return;
-			const reader = new FileReader();
-			reader.onload = (ev) => {
-				const dataUrl = ev.target?.result as string;
-				this.openBannerModal(dataUrl, 0);
-			};
-			reader.readAsDataURL(file);
-			fileInput.value = '';
-		});
-
-		// click image to re-adjust position
-		img.addEventListener('click', (e) => {
-			e.stopPropagation();
-			if (this.bannerState.imageDataUrl) {
-				this.openBannerModal(this.bannerState.imageDataUrl, this.bannerState.offsetY);
-			}
-		});
-	}
-
-	private openBannerModal(dataUrl: string, currentOffsetY: number): void {
-		new BannerModal(
-			this.app,
-			dataUrl,
-			currentOffsetY,
-			(offsetY: number) => {
-				this.bannerState.imageDataUrl = dataUrl;
-				this.bannerState.offsetY = offsetY;
-				void this.saveBanner().then(() => {
-					this.displayBannerImage(dataUrl, offsetY);
-				});
-			},
-		).open();
-	}
-
-	private displayBannerImage(dataUrl: string, offsetY: number): void {
-		const img = this.bannerImg;
-		const ph = this.bannerPh;
-		if (!img || !ph) return;
-		img.parentElement?.removeClass('ad-banner--empty');
-		img.onload = () => {
-			img.style.transform = `translateY(${offsetY}px)`;
-		};
-		img.src = dataUrl;
-		img.removeClass('ad-banner__img--hidden');
-		ph.addClass('ad-banner__ph--hidden');
-	}
-
-	private async saveBanner(): Promise<void> {
-		// 保留设置中当前的 enabled（横幅开关可能在视图打开后被设置页改过）
-		const enabled = this.plugin.settings.banner?.enabled ?? true;
-		this.plugin.settings.banner = { ...this.bannerState, enabled };
-		await this.plugin.saveSettings();
-	}
-
-	/** 设置页开关横幅后，立即重建横幅显隐（无需重载视图） */
-	refreshBanner(): void {
-		const root = this.dashboardEl;
-		if (!root) return;
-		const old = root.querySelector('.ad-banner');
-		const enabled = !!this.plugin.settings.banner.enabled;
-		if (!enabled) {
-			if (old) old.remove();
-			this.bannerPh = null;
-			this.bannerImg = null;
-			return;
-		}
-		if (old) return; // 已显示，无需重建
-		this.bannerPh = null;
-		this.bannerImg = null;
-		this.bannerState = { ...DEFAULT_SETTINGS.banner, ...this.plugin.settings.banner };
-		this.renderBanner(root);
-		const nb = root.querySelector('.ad-banner');
-		if (nb) root.insertBefore(nb, root.firstChild);
-	}
-
 	/* ---- Vault note counts by creation date ---- */
-	private getVaultNoteCounts(): Map<string, number> {
-		const counts = new Map<string, number>();
-		const files = this.app.vault.getMarkdownFiles();
-		for (const file of files) {
-			const d = new Date(file.stat.ctime);
-			const key = fmtDate(d);
-			counts.set(key, (counts.get(key) ?? 0) + 1);
-		}
-		return counts;
-	}
+	private getVaultNoteCounts(): Map<string, number> { return getVaultNoteCounts(this.app); }
 
 	private scheduleHeatmapRefresh(): void {
 		if (this.heatmapTimer) window.clearTimeout(this.heatmapTimer);
@@ -563,230 +360,6 @@ export class DashboardView extends ItemView {
 		// 重建会丢掉卡片的 --cols/--rows（回退 1×1），且造成无谓的重排闪烁。
 		if (!this.boardEl) return;
 		this.renderHeatmap(this.boardEl);
-	}
-
-	/* ============================================================
-	   Noise background (canvas grain overlay)
-	   ============================================================ */
-	private renderNoise(root: HTMLElement): void {
-		const canvas = root.createEl('canvas', { cls: 'ad-noise' });
-		// Inline fallback so the grain overlay never occupies normal-flow space
-		// (covers flex %-height quirks + CSS load-order issues).
-		canvas.setCssProps({
-			position: 'absolute',
-			inset: '0',
-			width: '100%',
-			height: '100%',
-			zIndex: '0',
-			pointerEvents: 'none',
-			imageRendering: 'pixelated',
-			display: 'block',
-		});
-		const ctx = canvas.getContext('2d', { alpha: true });
-		if (!ctx) return;
-		const size = 1024;
-		canvas.width = size;
-		canvas.height = size;
-		// disable antialiasing for crisp pixel edges
-		ctx.imageSmoothingEnabled = false;
-		let frame = 0;
-		const draw = () => {
-			if (frame % 2 === 0) {
-				const img = ctx.createImageData(size, size);
-				const d = img.data;
-				for (let i = 0; i < d.length; i += 4) {
-					const v = Math.random() * 255;
-					d[i] = v; d[i + 1] = v; d[i + 2] = v; d[i + 3] = 18;
-				}
-				ctx.putImageData(img, 0, 0);
-			}
-			frame++;
-			this.noiseId = window.requestAnimationFrame(draw);
-		};
-		this.noiseId = window.requestAnimationFrame(draw);
-	}
-
-	/* ============================================================
-	   Pulse
-	   ============================================================ */
-	private async renderPulse(root: HTMLElement, d: DashboardData): Promise<void> {
-		const bar = root.createDiv({ cls: 'ad-pulse' });
-		bar.createSpan({ cls: 'ad-pulse__tag', text: '[ 工作台概览 ]' });
-
-		const today = new Date();
-		const todayKey = todayStr();
-		const noteCounts = this.getVaultNoteCounts();
-		const hs = calcHeatmapStats(noteCounts, today.getFullYear(), today);
-		const todayCount = noteCounts.get(todayKey) ?? 0;
-
-		// Compute real pending task count (not done / not cancelled)
-		let pendingCount = 0;
-		try {
-			const all = await this.taskStore.scanAllTasks();
-			pendingCount = all.filter((t) => t.status !== '\u5DF2\u5B8C\u6210' && t.status !== '\u5DF2\u53D6\u6D88').length;
-		} catch { /* keep 0 */ }
-
-		const totalEl = bar.createSpan({ text: `${hs.total} 篇笔记` });
-		bar.createSpan({ cls: 'ad-pulse__sep', text: '\u00B7' });
-		const pendingEl = bar.createSpan({ text: `${pendingCount} 待处理` });
-		bar.createSpan({ cls: 'ad-pulse__sep', text: '\u00B7' });
-		const todayEl = bar.createSpan();
-		todayEl.textContent = `今日新增 +${todayCount}`;
-		bar.createSpan({ cls: 'ad-pulse__sep', text: '\u00B7' });
-		const streakEl = bar.createSpan({ text: `连续 ${hs.streak} 天` });
-
-		this.pulseEls = { total: totalEl, pending: pendingEl, today: todayEl, streak: streakEl };
-	}
-
-	private async updatePulse(): Promise<void> {
-		if (!this.pulseEls) return;
-		const today = new Date();
-		const todayKey = todayStr();
-		const noteCounts = this.getVaultNoteCounts();
-		const hs = calcHeatmapStats(noteCounts, today.getFullYear(), today);
-		const todayCount = noteCounts.get(todayKey) ?? 0;
-		this.pulseEls.total.textContent = `${hs.total} 篇笔记`;
-		this.pulseEls.today.textContent = `今日新增 +${todayCount}`;
-		this.pulseEls.streak.textContent = `连续 ${hs.streak} 天`;
-		// Update pending with real task count
-		try {
-			const all = await this.taskStore.scanAllTasks();
-			const pending = all.filter((t) => t.status !== '\u5DF2\u5B8C\u6210' && t.status !== '\u5DF2\u53D6\u6D88').length;
-			this.pulseEls.pending.textContent = `${pending} 待处理`;
-		} catch { /* keep current */ }
-	}
-
-	/** Live-update only the dashboard title text (cheap; no full re-render). */
-	refreshTitle(): void {
-		if (!this.adTitleEl) return;
-		this.adTitleEl.textContent = this.resolvedDashboardTitle();
-	}
-
-	private resolvedDashboardTitle(): string {
-		const custom = this.plugin.settings.dashboardTitle.trim();
-		return !custom || custom === '我的工作台' || /xove\s*dashboard/i.test(custom) ? '夏知之 · 梦序' : custom;
-	}
-
-	/* ============================================================
-	   Header
-	   ============================================================ */
-	private renderHeader(root: HTMLElement, d: DashboardData): void {
-		const h = root.createEl('header', { cls: 'ad-header' });
-		const left = h.createDiv({ cls: 'ad-header__left' });
-		this.adTitleEl = left.createEl('h1', { cls: 'ad-title', text: this.resolvedDashboardTitle() });
-		left.createEl('p', { cls: 'ad-subtitle', text: 'Obsidian · 个人系统 · v' + (this.plugin.manifest?.version ?? d.header.subtitle.replace(/^.*v/, 'v')) });
-
-		const right = h.createDiv({ cls: 'ad-header__right' });
-
-		const now = new Date();
-		const summary = naturalTimeSummary(now);
-		this.dateEl = right.createDiv({ cls: 'ad-header__date', text: summary.date });
-
-		const meta = right.createDiv({ cls: 'ad-header__meta' });
-		this.weekdayEl = meta.createSpan({ text: summary.weekday });
-		meta.createSpan({ cls: 'ad-dot' });
-		this.isoWeekEl = meta.createSpan({ text: `W${summary.isoWeek}` });
-		if (!isEnglish()) {
-			meta.createSpan({ cls: 'ad-dot' });
-			this.lunarEl = meta.createSpan({ text: t('home.lunarPrefix') + getLunarDate(now) });
-		}
-		const progress = right.createDiv({ cls: 'wb-time-progress' });
-		this.monthProgressEl = progress.createSpan({ text: `${summary.monthLabel} · ${summary.monthProgress}%` });
-		this.yearProgressEl = progress.createSpan({ text: `${summary.yearLabel} · ${summary.yearProgress}%` });
-
-		// Buttons row: theme toggle (left) + settings (right), same line
-		const btns = right.createDiv({ cls: 'ad-header__btns' });
-
-		const themeBtn = btns.createEl('button', { cls: 'ad-header__theme' });
-		this.adThemeBtn = themeBtn;
-		this.refreshThemeButton();
-		themeBtn.addEventListener('click', () => { void (async () => {
-			const next: 'light' | 'dark' = this.effectiveTheme() === 'light' ? 'dark' : 'light';
-			// 手动切换主题时直接驱动 Obsidian 整体外观，仪表盘通过 'auto' 跟随。
-			this.plugin.setObsidianTheme(next);
-			this.plugin.settings.theme = 'auto';
-			await this.plugin.saveSettings();
-			this.plugin.refreshThemeButtons();
-			this.applyTheme();
-		})(); });
-
-		const settings = btns.createEl('button', { cls: 'ad-header__settings', attr: { 'aria-label': t('home.settingsBtn') } });
-		injectSvg(settings, ICON_gear);
-		settings.addEventListener('click', () => {
-			interface SettingApi { open(): void; openTabById(id: string): void }
-			const app = this.app as unknown as { setting?: SettingApi };
-			app.setting?.open();
-			app.setting?.openTabById(this.plugin.manifest.id);
-		});
-
-		// Update time every 30 seconds
-		this.registerInterval(window.setInterval(() => {
-			const n = new Date();
-			const current = naturalTimeSummary(n);
-			if (this.dateEl) {
-				this.dateEl.textContent = current.date;
-			}
-			if (this.weekdayEl) this.weekdayEl.textContent = current.weekday;
-			if (this.isoWeekEl) this.isoWeekEl.textContent = `W${current.isoWeek}`;
-			if (this.lunarEl) this.lunarEl.textContent = t('home.lunarPrefix') + getLunarDate(n);
-			if (this.monthProgressEl) this.monthProgressEl.textContent = `${current.monthLabel} · ${current.monthProgress}%`;
-			if (this.yearProgressEl) this.yearProgressEl.textContent = `${current.yearLabel} · ${current.yearProgress}%`;
-		}, 30000));
-	}
-
-	/* ============================================================
-	   Actions toolbar
-	   ============================================================ */
-	private renderActions(root: HTMLElement): void {
-		const nav = root.createEl('nav', { cls: 'ad-toolbar' });
-
-		// 仅调整工作台导航标签，保留原有页面与数据行为。
-		const navItems: Array<{ glyph: string; label: string; action: string; svg?: string }> = [
-			{ glyph: '\u2302', label: '首页', action: 'home', svg: ICON_home },
-			{ glyph: '\u203A', label: '项目', action: 'all', svg: ICON_allProjects },
-		];
-		if (this.plugin.settings.boardEnabled) {
-			navItems.push({ glyph: '\u25C8', label: '收件箱', action: 'opportunity', svg: ICON_opportunity });
-		}
-		// 动作组：建什么（新建日记 / 新建任务 / 新建项目）
-		const actionItems: Array<{ glyph: string; label: string; action: string; svg?: string }> = [
-			{ glyph: '+', label: t('home.nav.newDiary'), action: 'diary', svg: ICON_newDiary },
-			{ glyph: '\u25A1', label: t('home.nav.newTask'), action: 'task', svg: ICON_newTask },
-			{ glyph: '\u25A3', label: t('home.nav.newProject'), action: 'project', svg: ICON_newProject },
-		];
-
-		const makeBtn = (it: { glyph: string; label: string; action: string; svg?: string }, extraCls = ''): HTMLElement => {
-			const btn = nav.createEl('button', { cls: 'ad-toolbar__btn' + (extraCls ? ' ' + extraCls : '') });
-			const glyphEl = btn.createSpan({ cls: 'ad-glyph' });
-			if (it.svg) injectSvg(glyphEl, it.svg);
-			else glyphEl.textContent = it.glyph;
-			btn.createSpan({ text: it.label });
-			btn.addEventListener('click', () => {
-				btn.addClass('is-active');
-				try {
-					if (it.action === 'home') void this.showDashboard();
-					if (it.action === 'classic') void this.showClassicDashboard();
-					if (it.action === 'diary') void this.createDiary();
-					if (it.action === 'task') new NewEmbeddedTaskModal(this.app, this.plugin.embeddedTasks).open();
-					if (it.action === 'project') new NewProjectModal(this.app).open();
-					if (it.action === 'all') void openProjects(this.app);
-					if (it.action === 'opportunity') void this.oppBoard.show();
-				} catch (e) {
-					const msg = e instanceof Error ? e.message : String(e);
-					this.showToast(t('home.openFailed') + msg, 'error');
-					console.error('[Dashboard] toolbar action "' + it.action + '" failed', e);
-				}
-				window.setTimeout(() => btn.removeClass('is-active'), 350);
-			});
-			return btn;
-		};
-
-		const navGroup = nav.createDiv({ cls: 'ad-toolbar__group' });
-		navItems.forEach((it) => navGroup.appendChild(makeBtn(it)));
-		nav.createDiv({ cls: 'ad-toolbar__sep' });
-		const actGroup = nav.createDiv({ cls: 'ad-toolbar__group ad-toolbar__group--action' });
-		actionItems.forEach((it) => actGroup.appendChild(makeBtn(it, 'ad-toolbar__btn--action')));
-		makeBtn({ glyph: '\u25A6', label: '更多工具', action: 'classic' }, 'ad-toolbar__btn--more');
 	}
 
 	/* ============================================================
@@ -1286,6 +859,7 @@ export class DashboardView extends ItemView {
 		this.boardEl.addClass('wb-home');
 		this.currentPage = 'home';
 		this.homeMode = 'workbench';
+		this.shell?.setActive('home');
 		await this.renderWorkbenchDashboard();
 	}
 
@@ -1300,6 +874,7 @@ export class DashboardView extends ItemView {
 		this.boardEl.addClass('ad-board');
 		this.currentPage = 'home';
 		this.homeMode = 'classic';
+		this.shell?.setActive('classic');
 		await this.renderEnabledModules(this.boardEl);
 		this.boardEl.createEl('button', { text: '旧任务工具 / 高级任务工具' }).onclick = () => { void this.openTaskModal(this.selectedProject ?? undefined); };
 		this.boardEl.createEl('button', { text: '旧项目 / 月历 / 甘特图' }).onclick = () => { void this.projectBoard.show(); };
@@ -1948,27 +1523,7 @@ export class DashboardView extends ItemView {
 	/** 设置页修改看板开关/名称/阶段配置后，立即刷新导航与看板页（无需重启） */
 	refreshNav(): void {
 		if (!this.dashboardEl) return;
-		// 1) 重渲染顶部导航：看板入口显隐 + 看板名称 label 实时生效。
-		//    renderActions 会把 nav append 到末尾，故先在临时容器渲染，再插回 header 之后。
-		//    ⚠️ 锚点必须用 .ad-header（始终存在），不能用 .ad-board：当视图停在项目/机会页时
-		//    boardEl 已移除 .ad-board class，querySelector 找不到会 fallback 到 appendChild，
-		//    把 toolbar 插到页面最底部（=「按钮栏漂移到卡片下方」的偶发 bug）。
-		const oldToolbar = this.dashboardEl.querySelector('.ad-toolbar');
-		if (oldToolbar) oldToolbar.remove();
-		const tmp = this.dashboardEl.createDiv();
-		this.renderActions(tmp);
-		const nav = tmp.firstElementChild;
-		tmp.remove();
-		if (nav) {
-			const header = this.dashboardEl.querySelector('.ad-header');
-			if (header) {
-				header.after(nav);
-			} else {
-				const boardEl = this.dashboardEl.querySelector('.ad-board');
-				if (boardEl) this.dashboardEl.insertBefore(nav, boardEl);
-				else this.dashboardEl.appendChild(nav);
-			}
-		}
+		this.shell?.refreshNav();
 		// 2) 看板被关闭且当前正停在看板页 → 切回主页
 		if (!this.plugin.settings.boardEnabled && this.currentPage === 'opportunity') {
 			void this.showDashboard();

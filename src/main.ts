@@ -9,7 +9,10 @@ import { UpdateLogModal } from './views/UpdateLogModal';
 import { WelcomeModal } from './views/WelcomeModal';
 import { DirectionView, DIRECTION_VIEW } from './views/DirectionView';
 import { EmbeddedTaskStore } from './data/embeddedTaskVault';
-import { ProjectView, PROJECT_VIEW } from './views/ProjectView';
+import { ProjectView, PROJECT_VIEW, NewProjectModal, openProjects } from './views/ProjectView';
+import { NewEmbeddedTaskModal } from './views/EmbeddedTaskModal';
+import { TaskStore } from './data/taskStore';
+import type { WorkbenchShell, WorkbenchAction } from './components/workbench/WorkbenchShell';
 
 /** 番茄钟运行时状态（与主页卡片共享，状态栏实时显示） */
 export interface PomoState {
@@ -26,6 +29,8 @@ export interface PomoState {
 export default class Dashboard extends Plugin {
 	settings!: DashboardSettings;
 	embeddedTasks!: EmbeddedTaskStore;
+	shellTaskStore!: TaskStore;
+	readonly pageShells = new Set<WorkbenchShell>();
 
 	/** 番茄钟运行时状态（主页卡片与状态栏共用同一数据源） */
 	pomoState: PomoState = {
@@ -43,10 +48,11 @@ export default class Dashboard extends Plugin {
 	async onload(): Promise<void> {
 		await this.loadSettings();
 		this.embeddedTasks = new EmbeddedTaskStore(this.app, this);
+		this.shellTaskStore = new TaskStore(this.app, () => this.settings);
 
 		this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
 		this.registerView(DIRECTION_VIEW, (leaf) => new DirectionView(leaf));
-		this.registerView(PROJECT_VIEW, (leaf) => new ProjectView(leaf, this.embeddedTasks, () => this.settings.theme));
+		this.registerView(PROJECT_VIEW, (leaf) => new ProjectView(leaf, this.embeddedTasks, () => this.settings.theme, this));
 
 		this.addRibbonIcon('layout-dashboard', '打开梦序', () => {
 			void this.activateView();
@@ -367,6 +373,19 @@ export default class Dashboard extends Plugin {
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
+		this.pageShells.forEach(shell => shell.refreshSettings());
+	}
+
+	/** Reuse the existing home tab only for home/inbox/tools; project remains its own View. */
+	async navigateWorkbench(action: WorkbenchAction): Promise<void> {
+		if (action === 'all') { await openProjects(this.app); return; }
+		if (action === 'project') { new NewProjectModal(this.app).open(); return; }
+		if (action === 'task') { new NewEmbeddedTaskModal(this.app, this.embeddedTasks).open(); return; }
+		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0] ?? this.app.workspace.getLeaf('tab');
+		if (leaf.view.getViewType() !== VIEW_TYPE) await leaf.setViewState({ type: VIEW_TYPE, active: true });
+		await this.app.workspace.revealLeaf(leaf);
+		this.app.workspace.setActiveLeaf(leaf, { focus: true });
+		if (leaf.view instanceof DashboardView) await leaf.view.navigateWorkbench(action);
 	}
 
 	/**

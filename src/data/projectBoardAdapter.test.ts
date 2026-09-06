@@ -159,7 +159,7 @@ test('ProjectView routes board callbacks to modern detail and restored new-proje
 test('First overview after direct detail navigation leaves only the original Board shell',async()=>{
 	const code=buildSync({entryPoints:[fileURLToPath(new URL('../views/ProjectView.ts',import.meta.url))],bundle:true,platform:'node',format:'cjs',write:false,external:['obsidian']}).outputFiles[0]!.text;
 	const module:{exports:any}={exports:{}};
-	runInNewContext(code,{module,exports:module.exports,require:()=>({Modal:class{},ItemView:class{contentEl=new Element();app={vault:{getMarkdownFiles:()=>[]}};}}),
+	runInNewContext(code,{module,exports:module.exports,require:()=>({Component:class{},Modal:class{},ItemView:class{contentEl=new Element();app={vault:{getMarkdownFiles:()=>[]}};}}),
 		DOMParser:class{parseFromString(){return {documentElement:new Element('svg')};}},
 	});
 	const view=new module.exports.ProjectView({}, {all:()=>[]},()=> 'light');

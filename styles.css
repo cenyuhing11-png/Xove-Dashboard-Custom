@@ -2486,11 +2486,16 @@ body.theme-dark .ad-popover.ad-addmenu-backdrop[data-theme="light"] {
 
 /* Original ProjectBoard in its own ItemView: viewport sizing only, no new skin. */
 .mx-project-overview { display: flex; flex-direction: column; min-width: 0; container-type: inline-size; }
-.mx-project-overview > .po-board { flex: 1; min-height: 0; }
+.mx-project-overview > :not(.ad-noise) { flex-shrink: 0; }
+.mx-project-overview > .po-board { flex: 1 0 auto; min-height: 360px; }
 .mx-project-overview .po-container { height: auto; min-height: 0; margin-top: 0; }
 .mx-project-overview .po-toolbar, .mx-project-overview .po-tabs, .mx-project-overview .po-kanban__meta { flex-wrap: wrap; }
 .mx-project-overview .po-sidebar__item > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mx-project-overview .po-kanban__card { overflow-wrap: anywhere; }
+/* Reused author controls in new lists: wrapping only, no second visual palette. */
+.ad-task-modal .po-toolbar { flex-wrap: wrap; }
+.ad-task-modal .ad-update-block button { max-width: 100%; height: auto; white-space: normal; overflow-wrap: anywhere; }
+.mx-direction .ad-update-block, .mx-project-view .ad-update-block { overflow-wrap: anywhere; }
 @container (max-width: 720px) {
   .mx-project-overview .po-container { flex-direction: column; }
   .mx-project-overview .po-sidebar { width: auto; max-height: 160px; }

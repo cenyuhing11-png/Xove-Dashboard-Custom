@@ -3,6 +3,7 @@ import { DAILY_TASK_FILE, embeddedSource, groupEmbedded } from '../data/embedded
 import type { EmbeddedTask, EmbeddedSourceType } from '../data/embeddedTasks';
 import type { EmbeddedTaskStore } from '../data/embeddedTaskVault';
 import { scanProjects } from '../data/projectVault';
+import { beginListModal, closeListModal } from './viewPrimitives';
 
 const LABELS = { project: '项目', learning: '学习', daily: '日常' };
 export function openEmbeddedSource(app: App, task: EmbeddedTask): void {
@@ -86,22 +87,22 @@ export class EmbeddedTaskListModal extends Modal {
 	private unsubscribe?: () => void;
 	constructor(app: App, private store: EmbeddedTaskStore, private path?: string) { super(app); }
 	onOpen(): void {
-		this.titleEl.setText(this.path ? '项目任务' : '全部任务');
 		this.unsubscribe = this.store.subscribe(() => this.render());
 		this.render();
 		void this.store.refresh().catch(e => new Notice(String(e)));
 	}
 	private render(): void {
-		this.contentEl.empty();
+		beginListModal(this, this.path ? '项目任务' : '全部任务');
 		const tasks = this.path ? this.store.bySource(this.path) : this.store.all();
-		this.contentEl.createEl('p', { text: `总数 ${tasks.length} · 已完成 ${tasks.filter(t => t.completed).length} · 未完成 ${tasks.filter(t => !t.completed).length}` });
-		this.contentEl.createEl('button', { text: '新建任务' }).onclick = () => new NewEmbeddedTaskModal(this.app, this.store, this.path).open();
+		this.contentEl.createEl('p', { cls: 'ad-modal-hint', text: `总数 ${tasks.length} · 已完成 ${tasks.filter(t => t.completed).length} · 未完成 ${tasks.filter(t => !t.completed).length}` });
+		this.contentEl.createDiv({ cls: 'po-toolbar' }).createEl('button', { cls: 'ad-modal-btn', text: '新建任务' }).onclick = () => new NewEmbeddedTaskModal(this.app, this.store, this.path).open();
 		const groups = groupEmbedded(tasks);
 		for (const type of ['project', 'learning', 'daily'] as const) {
 			if (this.path && type !== 'project') continue;
-			this.contentEl.createEl('h3', { text: `${LABELS[type]}任务` });
-			renderEmbeddedRows(this.contentEl, groups[type], this.app, this.store, () => this.close());
+			const group = this.contentEl.createDiv({ cls: 'ad-update-block' });
+			group.createEl('h3', { cls: 'ad-modal-title', text: `${LABELS[type]}任务` });
+			renderEmbeddedRows(group, groups[type], this.app, this.store, () => this.close());
 		}
 	}
-	onClose(): void { this.unsubscribe?.(); this.contentEl.empty(); }
+	onClose(): void { this.unsubscribe?.(); this.unsubscribe = undefined; closeListModal(this); }
 }

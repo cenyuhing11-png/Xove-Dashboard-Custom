@@ -5,6 +5,7 @@ import { learningFiles, openLearningFile, scanLearning } from '../data/learningV
 import { scanProjects } from '../data/projectVault';
 import { directionProjects } from '../data/projects';
 import { openProjects } from './ProjectView';
+import { listEntry } from './viewPrimitives';
 
 export const DIRECTION_VIEW = 'xove-dashboard-custom-direction';
 export async function openDirection(app: App, name: string): Promise<void> {
@@ -36,6 +37,7 @@ export class DirectionView extends ItemView {
 		this.registerEvent(this.app.vault.on('delete', update));
 		this.registerEvent(this.app.vault.on('rename', update));
 		this.contentEl.addClass('mx-direction');
+		this.contentEl.addClass('ad-modal');
 		await this.render();
 	}
 	async onClose(): Promise<void> { this.generation++; }
@@ -48,30 +50,31 @@ export class DirectionView extends ItemView {
 			if (token !== this.generation) return;
 			const el = this.contentEl;
 			el.empty();
-			el.createEl('h1', { text: info.name });
+			el.createEl('h1', { cls: 'ad-modal-title', text: info.name });
 			const priority = this.app.metadataCache.getCache(info.path)?.frontmatter?.['优先级'];
-			el.createEl('p', { text: `优先级：${typeof priority === 'string' ? priority : info.priority}` });
-			el.createEl('h2', { text: '长期能力' });
+			el.createEl('p', { cls: 'ad-modal-hint', text: `优先级：${typeof priority === 'string' ? priority : info.priority}` });
+			const skills = el.createDiv({ cls: 'ad-update-block' });
+			skills.createEl('h2', { cls: 'ad-modal-title', text: '长期能力' });
 			const abilities = directionAbilities(markdown);
-			if (!abilities.length) el.createEl('p', { text: '尚未填写长期能力' });
-			else { const list = el.createEl('ul'); for (const ability of abilities) list.createEl('li', { text: ability }); }
+			if (!abilities.length) skills.createEl('p', { cls: 'ad-modal-hint', text: '尚未填写长期能力' });
+			else { const list = skills.createEl('ul', { cls: 'ad-update-list' }); for (const ability of abilities) list.createEl('li', { text: ability }); }
 			const notes = scanLearning(this.app);
 			for (const [title, entries] of [['当前学习主题', directionTopics(notes, info.name)], ['相关学习资源', directionResources(notes, info.name)]] as const) {
-				el.createEl('h2', { text: title });
-				if (!entries.length) el.createEl('p', { text: '暂无关联内容' });
+				const section = el.createDiv({ cls: 'ad-update-block' });
+				section.createEl('h2', { cls: 'ad-modal-title', text: title });
+				if (!entries.length) section.createEl('p', { cls: 'ad-modal-hint', text: '暂无关联内容' });
 				for (const note of entries) {
-					el.createEl('button', { text: note.name }).onclick = () => { void openLearningFile(this.app, note.path).catch(() => new Notice('笔记不存在或已移动')); };
-					el.createEl('p', { text: `状态：${note.status || '未填写'} · 能力：${note.abilities.join('、') || '未填写'}` });
+					listEntry(section, note.name, `状态：${note.status || '未填写'} · 能力：${note.abilities.join('、') || '未填写'}`, () => { void openLearningFile(this.app, note.path).catch(() => new Notice('笔记不存在或已移动')); });
 				}
 			}
-			el.createEl('h2', { text: '相关项目' });
+			const projectSection = el.createDiv({ cls: 'ad-update-block' });
+			projectSection.createEl('h2', { cls: 'ad-modal-title', text: '相关项目' });
 			const projects = directionProjects(scanProjects(this.app), info.name);
-			if (!projects.length) el.createEl('p', { text: '暂无关联项目' });
+			if (!projects.length) projectSection.createEl('p', { cls: 'ad-modal-hint', text: '暂无关联项目' });
 			for (const p of projects) {
-				el.createEl('button', { text: p.name }).onclick = () => { void openProjects(this.app, p); };
-				el.createEl('p', { text: `${p.status}${p.dueDate ? ` · 截止 ${p.dueDate}` : ''}` });
+				listEntry(projectSection, p.name, `${p.status}${p.dueDate ? ` · 截止 ${p.dueDate}` : ''}`, () => { void openProjects(this.app, p); });
 			}
-			el.createEl('button', { text: '编辑方向笔记 →' }).onclick = () => { void openLearningFile(this.app, info.path).catch(() => new Notice('方向笔记不存在或已移动')); };
+			el.createEl('button', { cls: 'ad-modal-btn', text: '编辑方向笔记 →' }).onclick = () => { void openLearningFile(this.app, info.path).catch(() => new Notice('方向笔记不存在或已移动')); };
 		} catch { if (token === this.generation) { this.contentEl.empty(); this.contentEl.createEl('p', { text: '方向笔记无法读取，请检查是否已移动或删除。' }); } }
 	}
 }

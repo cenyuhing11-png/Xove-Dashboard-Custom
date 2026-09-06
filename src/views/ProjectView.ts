@@ -10,6 +10,8 @@ import { NewEmbeddedTaskModal, renderEmbeddedRows } from './EmbeddedTaskModal';
 import { parseEmbeddedTasks } from '../data/embeddedTasks';
 import { projectBoardItems } from '../data/projectBoardAdapter';
 import { ProjectBoard } from './ProjectBoard';
+import { WorkbenchShell } from '../components/workbench/WorkbenchShell';
+import type Dashboard from '../main';
 
 export const PROJECT_VIEW = 'xove-dashboard-custom-projects';
 export async function openProjects(app: App, project?: Pick<MengxuProject, 'id' | 'path'>): Promise<void> {
@@ -75,8 +77,9 @@ export class ProjectView extends ItemView {
 	private path = '';
 	private overview?: ProjectBoard;
 	private overviewEl?: HTMLElement;
+	private shell?: WorkbenchShell;
 	private generation = 0;
-	constructor(leaf: WorkspaceLeaf, private tasks: EmbeddedTaskStore, private theme: () => 'light' | 'dark' | 'auto' = () => 'auto') { super(leaf); }
+	constructor(leaf: WorkspaceLeaf, private tasks: EmbeddedTaskStore, private theme: () => 'light' | 'dark' | 'auto' = () => 'auto', private plugin?: Dashboard) { super(leaf); }
 	getViewType(): string { return PROJECT_VIEW; }
 	getDisplayText(): string { return this.path ? this.path.split('/').pop()!.replace(/\.md$/, '') : '全部项目'; }
 	getIcon(): string { return 'folder-kanban'; }
@@ -96,13 +99,14 @@ export class ProjectView extends ItemView {
 		this.register(this.tasks.subscribe(update));
 		await this.render();
 	}
-	async onClose(): Promise<void> { this.generation++; this.overview?.dispose(); }
+	async onClose(): Promise<void> { this.generation++; this.overview?.dispose(); if (this.shell) this.removeChild(this.shell); this.shell = undefined; }
 	private async render(): Promise<void> {
 		const token = ++this.generation;
 		const projects = scanProjects(this.app);
 		const el = this.contentEl;
 		if (!this.projectId && !this.path) {
 			el.removeClass('mx-project-view');
+			el.removeClass('ad-modal');
 			if (!this.overview || !this.overviewEl) {
 				el.empty();
 				this.overviewEl = el.createDiv({ cls: 'dashboard-plugin mx-project-overview' });
@@ -114,17 +118,23 @@ export class ProjectView extends ItemView {
 				});
 			}
 			if (this.overviewEl.parentElement !== el) { el.empty(); el.appendChild(this.overviewEl); }
+			if (!this.shell && this.plugin) {
+				this.shell = new WorkbenchShell(this.plugin, this.overviewEl, action => this.plugin!.navigateWorkbench(action), 'all');
+				this.addChild(this.shell);
+			}
 			const theme = this.theme();
 			this.overviewEl.setAttribute('data-theme', theme === 'auto' ? (document.body.classList.contains('theme-light') ? 'light' : 'dark') : theme);
 			await this.overview.show();
 			return;
 		}
 		this.overview?.dispose();
+		if (this.shell) { this.removeChild(this.shell); this.shell = undefined; }
 		el.addClass('mx-project-view');
+		el.addClass('ad-modal');
 		const matches = projects.filter(p => this.projectId ? p.id === this.projectId : p.path === this.path);
 		if (matches.length !== 1) {
-			el.empty(); el.createEl('p', { text: matches.length > 1 ? '项目 ID 重复，请在原笔记中修正后重试。' : '项目不存在、正在索引或 Properties 无效。' });
-			el.createEl('button', { text: '全部项目 →' }).onclick = () => { void openProjects(this.app); }; return;
+			el.empty(); el.createEl('p', { cls: 'po-empty', text: matches.length > 1 ? '项目 ID 重复，请在原笔记中修正后重试。' : '项目不存在、正在索引或 Properties 无效。' });
+			el.createEl('button', { cls: 'ad-modal-btn', text: '全部项目 →' }).onclick = () => { void openProjects(this.app); }; return;
 		}
 		const project = matches[0]!;
 		try {
@@ -133,20 +143,23 @@ export class ProjectView extends ItemView {
 			this.path = project.path;
 			const summary = projectSummary(project, content);
 			el.empty();
-			el.createEl('button', { text: '全部项目 →' }).onclick = () => { void openProjects(this.app); };
-			el.createEl('h1', { text: project.name });
-			el.createEl('p', { text: `${project.status} · 方向：${project.direction || '未关联'}` });
-			el.createEl('p', { text: `开始日期：${project.startDate || '未设置'} · 截止日期：${project.dueDate || '未设置'}` });
-			el.createEl('h2', { text: '项目目标' }); el.createEl('p', { text: summary.goal || '尚未填写项目目标' });
-			el.createEl('h2', { text: '项目任务' });
-			el.createEl('p', { text: `总数 ${summary.total} · 已完成 ${summary.done} · 未完成 ${summary.total - summary.done}` });
-			el.createEl('button', { text: '添加项目任务' }).onclick = () => new NewEmbeddedTaskModal(this.app, this.tasks, project.path).open();
+			el.createDiv({ cls: 'po-topbar' }).createEl('button', { cls: 'ad-modal-btn', text: '全部项目 →' }).onclick = () => { void openProjects(this.app); };
+			el.createEl('h1', { cls: 'ad-modal-title', text: project.name });
+			el.createEl('p', { cls: 'ad-modal-hint', text: `${project.status} · 方向：${project.direction || '未关联'}` });
+			el.createEl('p', { cls: 'ad-modal-hint', text: `开始日期：${project.startDate || '未设置'} · 截止日期：${project.dueDate || '未设置'}` });
+			const goal = el.createDiv({ cls: 'ad-update-block' });
+			goal.createEl('h2', { cls: 'ad-modal-title', text: '项目目标' }); goal.createEl('p', { cls: 'ad-modal-desc', text: summary.goal || '尚未填写项目目标' });
+			const tasks = el.createDiv({ cls: 'ad-update-block' });
+			tasks.createEl('h2', { cls: 'ad-modal-title', text: '项目任务' });
+			tasks.createEl('p', { cls: 'ad-modal-hint', text: `总数 ${summary.total} · 已完成 ${summary.done} · 未完成 ${summary.total - summary.done}` });
+			tasks.createEl('button', { cls: 'ad-modal-btn', text: '添加项目任务' }).onclick = () => new NewEmbeddedTaskModal(this.app, this.tasks, project.path).open();
 			// Keep counts and rows on the same Markdown snapshot during metadata/index refreshes.
-			renderEmbeddedRows(el, parseEmbeddedTasks(project.path, content), this.app, this.tasks);
+			renderEmbeddedRows(tasks, parseEmbeddedTasks(project.path, content), this.app, this.tasks);
 			for (const [heading, text] of [['项目资料', summary.materials], ['过程记录', summary.progress], ['最终成果', summary.outcome]]) {
-				el.createEl('h2', { text: heading }); el.createEl('p', { text: text || '尚未填写，详情见项目笔记' });
+				const section = el.createDiv({ cls: 'ad-update-block' });
+				section.createEl('h2', { cls: 'ad-modal-title', text: heading }); section.createEl('p', { cls: 'ad-modal-desc', text: text || '尚未填写，详情见项目笔记' });
 			}
-			el.createEl('button', { text: '编辑项目笔记 →' }).onclick = () => { void openLearningFile(this.app, project.path).catch(e => new Notice(String(e))); };
+			el.createEl('button', { cls: 'ad-modal-btn', text: '编辑项目笔记 →' }).onclick = () => { void openLearningFile(this.app, project.path).catch(e => new Notice(String(e))); };
 		} catch { if (token === this.generation) { el.empty(); el.createEl('p', { text: '项目笔记无法读取，请检查是否已移动或删除。' }); } }
 	}
 }

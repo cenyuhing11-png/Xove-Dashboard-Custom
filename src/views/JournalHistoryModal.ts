@@ -1,16 +1,18 @@
 import { App, Modal } from 'obsidian';
 import { journalEntry, journalHistory } from '../data/journal';
 import type { JournalEntry, JournalKind } from '../data/journal';
+import { beginListModal, closeListModal, listEntry } from './viewPrimitives';
 
 export class JournalHistoryModal extends Modal {
 	private list!: HTMLElement;
 	private off: Array<() => void> = [];
 	constructor(app: App, private mode: 'records' | 'reviews', private openNote: (path: string) => Promise<void>, private create: (kind: JournalKind) => Promise<void>) { super(app); }
 	onOpen(): void {
-		this.contentEl.createEl('h2', { text: this.mode === 'records' ? '最近记录' : '查看复盘' });
+		beginListModal(this, this.mode === 'records' ? '最近记录' : '查看复盘');
 		if (this.mode === 'reviews') {
+			const actions = this.contentEl.createDiv({ cls: 'po-toolbar' });
 			for (const [kind, label] of [['month', '月度复盘'], ['year', '年度复盘']] as const) {
-				this.contentEl.createEl('button', { text: `＋ 新建${label}` }).onclick = () => { this.close(); void this.create(kind); };
+				actions.createEl('button', { cls: 'ad-modal-btn', text: `＋ 新建${label}` }).onclick = () => { this.close(); void this.create(kind); };
 			}
 		}
 		this.list = this.contentEl.createDiv();
@@ -30,12 +32,10 @@ export class JournalHistoryModal extends Modal {
 			if (entry) entries.push(entry);
 		}
 		const recent = journalHistory(entries, this.mode);
-		if (!recent.length) this.list.createEl('p', { text: this.mode === 'records' ? '暂无日记或周记' : '暂无月度或年度复盘' });
+		if (!recent.length) this.list.createEl('p', { cls: 'po-empty', text: this.mode === 'records' ? '暂无日记或周记' : '暂无月度或年度复盘' });
 		for (const entry of recent) {
-			const row = this.list.createEl('section');
-			row.createEl('h3').createEl('button', { text: entry.title }).onclick = () => { this.close(); void this.openNote(entry.path); };
-			row.createEl('p', { text: `${entry.label} · ${entry.period}` });
+			listEntry(this.list, entry.title, `${entry.label} · ${entry.period}`, () => { this.close(); void this.openNote(entry.path); });
 		}
 	}
-	onClose(): void { this.off.forEach((off) => off()); this.off = []; this.contentEl.empty(); }
+	onClose(): void { this.off.forEach((off) => off()); this.off = []; closeListModal(this); }
 }
