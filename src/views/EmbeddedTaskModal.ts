@@ -1,4 +1,4 @@
-import { App, Modal, Notice, Setting, TFile } from 'obsidian';
+import { App, Modal, Notice, TFile } from 'obsidian';
 import { DAILY_TASK_FILE, embeddedSource, groupEmbedded } from '../data/embeddedTasks';
 import type { EmbeddedTask, EmbeddedSourceType } from '../data/embeddedTasks';
 import type { EmbeddedTaskStore } from '../data/embeddedTaskVault';
@@ -33,36 +33,54 @@ export function renderEmbeddedRows(parent: HTMLElement, tasks: EmbeddedTask[], a
 export class NewEmbeddedTaskModal extends Modal {
 	constructor(app: App, private store: EmbeddedTaskStore, private presetPath?: string) { super(app); }
 	onOpen(): void {
-		this.titleEl.setText('新建任务');
-		let text = ''; let date = ''; let type: EmbeddedSourceType = (this.presetPath && embeddedSource(this.presetPath)) || 'daily'; let path = this.presetPath ?? DAILY_TASK_FILE;
-		new Setting(this.contentEl).setName('任务内容').addText(input => input.setPlaceholder('一次可以完成的具体行动').onChange(value => text = value));
-		const sources = this.contentEl.createDiv();
-		const picker = this.contentEl.createDiv();
+		const { contentEl } = this;
+		// Keep the original TaskModal shell; only its fields and save target differ.
+		contentEl.addClass('ad-task-modal');
+		this.containerEl.closest('.modal-container')?.addClass('dashboard-modal');
+		contentEl.createEl('h3', { cls: 'ad-modal-title', text: '新建任务' });
+		let type: EmbeddedSourceType = (this.presetPath && embeddedSource(this.presetPath)) || 'daily'; let path = this.presetPath ?? DAILY_TASK_FILE;
+		const titleField = contentEl.createDiv({ cls: 'ad-modal-field' });
+		titleField.createEl('label', { cls: 'ad-modal-label', text: '任务内容' });
+		const textInput = titleField.createEl('input', { cls: 'ad-modal-input ad-input-title', attr: { type: 'text', placeholder: '一次可以完成的具体行动', 'aria-label': '任务内容' } });
+		const row = contentEl.createDiv({ cls: 'ad-modal-row' });
+		const sources = row.createDiv({ cls: 'ad-modal-col' });
+		sources.createEl('label', { cls: 'ad-modal-label', text: '归属' });
+		const sourceSelect = sources.createEl('select', { cls: 'ad-modal-input', attr: { 'aria-label': '归属' } });
+		for (const value of ['daily', 'project', 'learning'] as const) sourceSelect.createEl('option', { value, text: LABELS[value] });
+		sourceSelect.value = type;
+		const dateCol = row.createDiv({ cls: 'ad-modal-col' });
+		dateCol.createEl('label', { cls: 'ad-modal-label', text: '日期（可选）' });
+		const dateInput = dateCol.createEl('input', { cls: 'ad-modal-input', attr: { type: 'date', 'aria-label': '日期（可选）' } });
+		const picker = contentEl.createDiv({ cls: 'ad-modal-field' });
 		const renderPicker = () => {
 			picker.empty();
-			if (type === 'daily') { path = DAILY_TASK_FILE; picker.createEl('p', { text: '保存到：日常任务 → 日常待办' }); return; }
+			if (type === 'daily') { path = DAILY_TASK_FILE; picker.createEl('div', { cls: 'ad-modal-hint', text: '保存到：日常任务 → 日常待办' }); return; }
 			const projectPaths = new Set(scanProjects(this.app).map(p => p.path));
 			const files = this.app.vault.getMarkdownFiles().filter(f => embeddedSource(f.path) === type && (type !== 'project' || projectPaths.has(f.path))).sort((a, b) => a.path.localeCompare(b.path, 'zh-CN'));
 			// Scope + explicit selection determines project source; never scan unrelated folders.
 			if (!files.some(f => f.path === path)) path = files[0]?.path ?? '';
-			new Setting(picker).setName(type === 'project' ? '项目笔记' : '学习笔记 / 学习资源').addDropdown(select => {
-				for (const file of files) select.addOption(file.path, file.path);
-				select.setValue(path).onChange(value => path = value);
-			});
-			if (!files.length) picker.createEl('p', { text: `暂无${LABELS[type]}笔记，请先在${type === 'project' ? '03-项目与作品' : '01-学习与资料'}中新建笔记。` });
+			const label = type === 'project' ? '项目笔记' : '学习笔记 / 学习资源';
+			picker.createEl('label', { cls: 'ad-modal-label', text: label });
+			const select = picker.createEl('select', { cls: 'ad-modal-input', attr: { 'aria-label': label } });
+			for (const file of files) select.createEl('option', { value: file.path, text: file.path });
+			select.value = path;
+			select.onchange = () => { path = select.value; };
+			if (!files.length) picker.createEl('div', { cls: 'ad-modal-hint', text: `暂无${LABELS[type]}笔记，请先在${type === 'project' ? '03-项目与作品' : '01-学习与资料'}中新建笔记。` });
 		};
-		new Setting(sources).setName('归属').addDropdown(select => {
-			select.addOption('daily', '日常').addOption('project', '项目').addOption('learning', '学习').setValue(type).onChange(value => { type = value as EmbeddedSourceType; renderPicker(); });
-		});
+		sourceSelect.onchange = () => { type = sourceSelect.value as EmbeddedSourceType; renderPicker(); };
 		renderPicker();
-		new Setting(this.contentEl).setName('日期（可选）').setDesc('v1：计划执行 / 截止日期；不填则不进入今日执行').addText(input => { input.inputEl.type = 'date'; input.onChange(value => date = value); });
-		new Setting(this.contentEl).addButton(button => button.setButtonText('创建任务').setCta().onClick(async () => {
-			button.setDisabled(true);
-			try { if (!path) throw new Error('请先选择来源笔记'); await this.store.add(path, text, date || undefined); this.close(); new Notice('任务已写入来源笔记'); }
-			catch (e) { new Notice(String(e)); button.setDisabled(false); }
-		}));
+		contentEl.createEl('div', { cls: 'ad-modal-hint', text: 'v1：计划执行 / 截止日期；不填则不进入今日执行' });
+		const btns = contentEl.createDiv({ cls: 'ad-modal-btns' });
+		btns.createEl('button', { cls: 'ad-modal-btn', text: '取消' }).onclick = () => this.close();
+		const create = btns.createEl('button', { cls: 'ad-modal-btn ad-modal-btn--primary', text: '创建任务' });
+		create.onclick = async () => {
+			create.disabled = true;
+			try { if (!path) throw new Error('请先选择来源笔记'); await this.store.add(path, textInput.value, dateInput.value || undefined); this.close(); new Notice('任务已写入来源笔记'); }
+			catch (e) { new Notice(String(e)); create.disabled = false; }
+		};
+		textInput.focus();
 	}
-	onClose(): void { this.contentEl.empty(); }
+	onClose(): void { this.containerEl.closest('.modal-container')?.removeClass('dashboard-modal'); this.contentEl.empty(); }
 }
 export class EmbeddedTaskListModal extends Modal {
 	private unsubscribe?: () => void;

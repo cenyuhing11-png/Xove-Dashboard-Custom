@@ -19,27 +19,54 @@ export async function openProjects(app: App, project?: Pick<MengxuProject, 'id' 
 }
 export class NewProjectModal extends Modal {
 	onOpen(): void {
-		this.titleEl.setText('新建项目');
+		const { contentEl } = this;
+		// Reuse ProjectModal's original shell without restoring its legacy data model.
+		contentEl.addClass('ad-task-modal');
+		this.containerEl.closest('.modal-container')?.addClass('dashboard-modal');
+		contentEl.createEl('h3', { cls: 'ad-modal-title', text: '新建项目' });
 		const input: NewProject = { name: '', status: '计划中' };
-		new Setting(this.contentEl).setName('项目名称').addText(t => t.onChange(v => input.name = v));
-		new Setting(this.contentEl).setName('方向（可选）').addDropdown(d => { d.addOption('', '未关联'); for (const name of projectDirections()) d.addOption(name, name); d.onChange(v => input.direction = v); });
-		new Setting(this.contentEl).setName('状态').addDropdown(d => { for (const s of PROJECT_STATUSES) d.addOption(s, s); d.onChange(v => input.status = v as ProjectStatus); });
+		contentEl.createEl('label', { cls: 'ad-modal-label', text: '项目名称' });
+		const nameInput = contentEl.createEl('input', { cls: 'ad-modal-input ad-input-name', attr: { type: 'text', 'aria-label': '项目名称' } });
+		nameInput.oninput = () => { input.name = nameInput.value; };
+		contentEl.createEl('label', { cls: 'ad-modal-label', text: '方向（可选）' });
+		const directionRow = contentEl.createDiv({ cls: 'ad-modal-row' });
+		const direction = directionRow.createEl('select', { cls: 'ad-modal-input', attr: { 'aria-label': '方向（可选）' } });
+		direction.createEl('option', { value: '', text: '未关联' });
+		for (const name of projectDirections()) direction.createEl('option', { value: name, text: name });
+		direction.onchange = () => { input.direction = direction.value; };
+		const dates = contentEl.createDiv({ cls: 'ad-modal-row' });
 		for (const [key, label] of [['startDate', '开始日期（可选）'], ['dueDate', '截止日期（可选）']] as const) {
-			new Setting(this.contentEl).setName(label).addText(t => { t.inputEl.type = 'date'; t.onChange(v => input[key] = v); });
+			const col = dates.createDiv({ cls: 'ad-modal-col' });
+			col.createEl('label', { cls: 'ad-modal-label', text: label });
+			const date = col.createEl('input', { cls: 'ad-modal-input', attr: { type: 'date', 'aria-label': label } });
+			date.oninput = () => { input[key] = date.value; };
 		}
-		new Setting(this.contentEl).setName('项目目标（可选）').addTextArea(t => t.onChange(v => input.goal = v));
-		new Setting(this.contentEl).addButton(b => b.setButtonText('创建项目').setCta().onClick(async () => {
-			b.setDisabled(true);
+		contentEl.createEl('label', { cls: 'ad-modal-label', text: '项目目标（可选）' });
+		const goal = contentEl.createEl('textarea', { cls: 'ad-modal-input', attr: { rows: '3', 'aria-label': '项目目标（可选）' } });
+		goal.oninput = () => { input.goal = goal.value; };
+		const statusField = contentEl.createDiv({ cls: 'ad-modal-field' });
+		statusField.createEl('label', { cls: 'ad-modal-label', text: '状态' });
+		const statusRow = statusField.createDiv({ cls: 'ad-modal-row' });
+		const status = statusRow.createEl('select', { cls: 'ad-modal-input', attr: { 'aria-label': '状态' } });
+		for (const s of PROJECT_STATUSES) status.createEl('option', { value: s, text: s });
+		status.value = input.status;
+		status.onchange = () => { input.status = status.value as ProjectStatus; };
+		const btns = contentEl.createDiv({ cls: 'ad-modal-btns' });
+		btns.createEl('button', { cls: 'ad-modal-btn', text: '取消' }).onclick = () => this.close();
+		const create = btns.createEl('button', { cls: 'ad-modal-btn ad-modal-btn--primary', text: '创建项目' });
+		create.onclick = async () => {
+			create.disabled = true;
 			try {
 				const id = crypto.randomUUID();
 				const path = await createMengxuProject(learningFiles(this.app), input, id, todayStr());
 				this.close();
 				// MetadataCache catches up asynchronously; the registered view listens for it.
 				await openProjects(this.app, { id, path });
-			} catch (e) { new Notice(String(e)); b.setDisabled(false); }
-		}));
+			} catch (e) { new Notice(String(e)); create.disabled = false; }
+		};
+		nameInput.focus();
 	}
-	onClose(): void { this.contentEl.empty(); }
+	onClose(): void { this.containerEl.closest('.modal-container')?.removeClass('dashboard-modal'); this.contentEl.empty(); }
 }
 export class ProjectView extends ItemView {
 	private projectId = '';
