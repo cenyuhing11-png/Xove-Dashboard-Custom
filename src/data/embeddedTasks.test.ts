@@ -5,7 +5,7 @@ import { appendEmbeddedTask, DAILY_TASK_FILE, DAILY_TASK_TEMPLATE, embeddedSourc
 import { learningTemplate } from './learning.ts';
 
 const learning = '01-学习与资料/书籍/书.md';
-const project = '03-项目与作品/视觉/project-视觉.md';
+const project = '03-项目与成果/视觉/project-视觉.md';
 const content = '## 学习任务\n\n- [ ] 看书 📅 2026-09-07\n';
 function first(raw = content, path = learning) { return parseEmbeddedTasks(path, raw)[0]!; }
 for (const [path, heading, type] of [[learning, '学习任务', 'learning'], [project, '项目任务', 'project'], [DAILY_TASK_FILE, '日常待办', 'daily']]) {

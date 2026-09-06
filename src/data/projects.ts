@@ -3,8 +3,9 @@ import { readSection } from './planning.ts';
 import type { PlanFiles } from './planning';
 import { validTaskDate, parseEmbeddedTasks } from './embeddedTasks.ts';
 import { LIFE_COMPASS } from '../components/workbench/config.ts';
+import { PROJECT_ROOT } from './vaultPaths.ts';
+export { PROJECT_ROOT } from './vaultPaths.ts';
 
-export const PROJECT_ROOT = '03-项目与作品';
 export const PROJECT_STATUSES = ['计划中', '进行中', '暂停', '已完成', '归档'] as const;
 export type ProjectStatus = typeof PROJECT_STATUSES[number];
 export interface MengxuProject {

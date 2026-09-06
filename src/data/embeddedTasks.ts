@@ -1,4 +1,5 @@
 /** Markdown is the only source of truth. No Obsidian dependency in this module. */
+import { PROJECT_ROOT } from './vaultPaths.ts';
 export const DAILY_TASK_FILE = '05-计划/06-日常任务.md';
 export const EMBEDDED_HEADINGS = { learning: '学习任务', project: '项目任务', daily: '日常待办' } as const;
 export type EmbeddedSourceType = keyof typeof EMBEDDED_HEADINGS;
@@ -18,7 +19,7 @@ export function embeddedSource(path: string): EmbeddedSourceType | undefined {
 	if (!path.endsWith('.md') || path.split('/').some(p => p === '..' || p === '.' || p.startsWith('.'))) return undefined;
 	if (path === DAILY_TASK_FILE) return 'daily';
 	if (path.startsWith('01-学习与资料/')) return 'learning';
-	if (path.startsWith('03-项目与作品/')) return 'project';
+	if (path.startsWith(`${PROJECT_ROOT}/`)) return 'project';
 	return undefined;
 }
 export function validTaskDate(value: string): boolean {

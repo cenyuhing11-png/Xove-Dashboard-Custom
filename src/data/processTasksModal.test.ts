@@ -22,7 +22,7 @@ class Element {
 }
 const code=buildSync({entryPoints:[fileURLToPath(new URL('../views/ProcessTasksModal.ts',import.meta.url))],bundle:true,platform:'node',format:'cjs',write:false,external:['obsidian']}).outputFiles[0]!.text;
 async function fixture(type:'learning'|'project'='learning',empty=false){
-	const path=type==='learning'?'01-学习与资料/示例.md':'03-项目与作品/示例/示例.md';
+	const path=type==='learning'?'01-学习与资料/示例.md':'03-项目与成果/示例/示例.md';
 	const heading=type==='learning'?'学习任务':'项目任务';
 	let content=`---\n类型: ${type==='learning'?'学习主题':'项目'}\n---\n\n## ${heading}\n${empty?'':'- [ ] 待完成一\n- [ ] 待完成二\n- [x] 已完成一\n'}\n## 备注\n不得更改\n`;
 	let ids=0,full=0;const opened:string[]=[];const listeners=new Set<()=>void>();

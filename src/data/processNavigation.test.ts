@@ -46,7 +46,7 @@ test('Learning quick preview selects only the specified learning heading and fil
 	const group=processPreviewTasks([...tasks,...other],source);assert.equal(group.total,2);assert.equal(group.pending.length,1);assert.equal(group.completed.length,1);
 });
 test('Project quick preview selects only the project task heading',()=>{
-	const source={name:'项目',processType:'project' as const,sourceFile:'03-项目与作品/项目/项目.md'};
+	const source={name:'项目',processType:'project' as const,sourceFile:'03-项目与成果/项目/项目.md'};
 	const tasks=parseEmbeddedTasks(source.sourceFile,'## 项目任务\n- [x] 一\n- [ ] 二\n## 最终成果\n- [ ] 不计入');const result=processPreviewTasks(tasks,source);assert.equal(result.total,2);assert.equal(result.completed.length,1);
 });
 test('Empty quick preview is safe and does not mutate or create tasks',()=>{assert.deepEqual(processPreviewTasks([],{name:'空',processType:'learning',sourceFile:'01-学习与资料/空.md'}),{pending:[],completed:[],total:0});});

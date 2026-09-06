@@ -13,7 +13,7 @@ import { processes, processBoardItems } from './processes.ts';
 import type { ProcessBoardItem } from './processes';
 import { learningNote } from './learning.ts';
 
-const path = '03-项目与作品/设计项目/设计项目.md';
+const path = '03-项目与成果/设计项目/设计项目.md';
 const project: MengxuProject = { id: '32823a4a-645d-4eca-ad69-30bb445a7634', path, name: '设计项目', status: '进行中', direction: '设计', startDate: '2026-09-06', dueDate: '2026-10-01', createdDate: '2026-09-05', goal: '明确结果' };
 const tasks = parseEmbeddedTasks(path, '## 项目任务\n- [ ] 未完成 📅 2026-09-07\n- [x] 已完成\n## 项目资料\n- [ ] 不计入');
 
@@ -27,7 +27,7 @@ test('Board dates use project dates, not Embedded Task dates', () => {
 });
 test('Board counts include only matching project heading tasks', () => {
 	const unrelated = parseEmbeddedTasks('01-学习与资料/书籍/学习.md', '## 学习任务\n- [x] 学习');
-	const item = projectBoardItems([project], [...tasks, ...unrelated, ...tasks.map(t => ({ ...t, sourceFile: '03-项目与作品/其他/其他.md' }))])[0]!;
+	const item = projectBoardItems([project], [...tasks, ...unrelated, ...tasks.map(t => ({ ...t, sourceFile: '03-项目与成果/其他/其他.md' }))])[0]!;
 	assert.equal(item.taskCount, 2); assert.equal(item.doneCount, 1); assert.equal(item.activeCount, 1);
 });
 test('Board supports empty project task sections', () => {
@@ -58,14 +58,14 @@ test('Closed project shading does not turn archived projects into cancelled task
 	const time = projectTimelineItems(items); assert.equal(time.filter(t => t.status === '已完成').length, 1); assert.equal(time.some(t => t.status === '已取消'), false);
 });
 test('Filtering uses actual project status and exact path, not duplicate names', () => {
-	const items = projectBoardItems([project, { ...project, path: '03-项目与作品/其他/设计项目.md', status: '暂停' }], tasks);
+	const items = projectBoardItems([project, { ...project, path: '03-项目与成果/其他/设计项目.md', status: '暂停' }], tasks);
 	assert.equal(filterBoardItems(items, '暂停')[0]!.project.status, '暂停'); assert.equal(filterBoardItems(items, '全部', path).length, 1); assert.equal(filterBoardItems(items, '全部').length, 2);
 });
 test('Adapter does not mutate projects or tasks', () => {
 	const before = JSON.stringify([project, tasks]); projectTimelineItems(projectBoardItems([project], tasks)); assert.equal(JSON.stringify([project, tasks]), before);
 });
 test('Formal scanner excludes legacy project metadata and unrelated notes', () => {
-	const files = [{ path }, { path: '03-项目与作品/旧项目/project-旧项目.md' }, { path: 'Projects/旧项目/project-旧项目.md' }];
+	const files = [{ path }, { path: '03-项目与成果/旧项目/project-旧项目.md' }, { path: 'Projects/旧项目/project-旧项目.md' }];
 	const app = { vault: { getMarkdownFiles: () => files }, metadataCache: { getFileCache: (f: {path: string}) => ({ frontmatter: f.path === path ? { 类型: '项目', 项目ID: project.id } : { 项目名称: '旧项目', 阶段: 2 } }) } };
 	const items = projectBoardItems(scanProjects(app as any), []); assert.equal(items.length, 1); assert.equal(items[0]!.key, path);
 });
@@ -210,7 +210,7 @@ test('ProjectBoard card opens new project reference without a local creation act
 	const f=boardFixture();await f.board.show();f.root.querySelector('.po-kanban__card')!.onclick();assert.equal(f.opened[0],project);assert.equal(f.root.querySelector('.po-add-btn'),undefined);assert.equal(f.created(),0);
 });
 test('ProjectBoard status chips filter actual states without clearing direction',async()=>{
-	const paused={...project,path:'03-项目与作品/暂停/暂停.md',status:'暂停' as const};const f=boardFixture('kanban',[project,paused]);await f.board.show();
+	const paused={...project,path:'03-项目与成果/暂停/暂停.md',status:'暂停' as const};const f=boardFixture('kanban',[project,paused]);await f.board.show();
 	f.root.querySelectorAll('.po-sidebar__item')[1]!.onclick();f.root.querySelectorAll('.po-chip').find(e=>e.text==='暂停')!.onclick();
 	assert.equal(f.root.querySelectorAll('.po-kanban__card').length,1);assert.equal(f.board.directionFilter,'设计');assert.equal(f.root.querySelector('.po-kanban__col')!.dataset.status,'暂停');
 });
@@ -222,7 +222,7 @@ test('ProjectBoard list retains original table and opens new detail',async()=>{
 	const f=boardFixture('list');await f.board.show();assert.ok(f.root.querySelector('.po-table'));f.root.querySelector('.po-clickable')!.onclick();assert.equal(f.opened[0],project);
 });
 test('ProjectBoard table sorting retains the original sortable headers',async()=>{
-	const f=boardFixture('list',[project,{...project,name:'A 项目',path:'03-项目与作品/A/A.md'}]);await f.board.show();
+	const f=boardFixture('list',[project,{...project,name:'A 项目',path:'03-项目与成果/A/A.md'}]);await f.board.show();
 	f.root.querySelectorAll('.po-th--sortable').find(e=>e.dataset.sortKey==='name')!.onclick();
 	const asc=f.root.querySelectorAll('.po-name-cell').map(e=>e.text);
 	f.root.querySelectorAll('.po-th--sortable').find(e=>e.dataset.sortKey==='name')!.onclick();

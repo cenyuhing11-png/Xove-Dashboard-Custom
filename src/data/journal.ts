@@ -28,8 +28,8 @@ export function journalTemplate(kind: JournalKind, date = new Date()): string {
 	const titles = { day: `${year}年${month}月${date.getDate()}日`, week: info.name.replace('-', ' '), month: `${year}年${month}月复盘`, year: `${year}年度复盘` };
 	const sections: Record<JournalKind, string[]> = {
 		day: ['今天', '想法', '学习与收获', '明天'],
-		week: ['本周发生了什么', '本周完成', '学习与思考', '项目与作品', '本周感受', '下周'],
-		month: ['本月计划回顾', '本月完成', '学习与成长', '项目与作品', '内容与输出', '财务与生活', '做得好的', '需要调整', '下月重点'],
+		week: ['本周发生了什么', '本周完成', '学习与思考', '项目与成果', '本周感受', '下周'],
+		month: ['本月计划回顾', '本月完成', '学习与成长', '项目与成果', '内容与输出', '财务与生活', '做得好的', '需要调整', '下月重点'],
 		year: ['年度目标回顾', '这一年发生了什么', '事业与设计', '内容与影响力', '学习与认知', '财务', '生活', '今年最重要的收获', '需要调整的事情', '下一年'],
 	};
 	return `---\n${headers[kind]}\n---\n\n# ${titles[kind]}\n\n${sections[kind].map((title) => `## ${title}\n`).join('\n')}\n`;

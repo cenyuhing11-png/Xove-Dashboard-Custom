@@ -7,7 +7,7 @@ import { parseEmbeddedTasks } from './embeddedTasks.ts';
 import { projectTimelineItems } from './projectBoardAdapter.ts';
 
 const topic = learningNote('01-学习与资料/产品建模.md', '产品建模', { 类型: '学习主题', 状态: '学习中', 方向: '设计', 所属能力: ['建模'], 开始日期: '2026-09-01', 截止日期: '2026-09-30' })!;
-const project = projectNote('03-项目与作品/视觉/视觉.md', { 类型: '项目', 项目ID: 'abc', 状态: '进行中', 方向: '设计', 开始日期: '2026-09-10', 截止日期: '2026-10-05' })!;
+const project = projectNote('03-项目与成果/视觉/视觉.md', { 类型: '项目', 项目ID: 'abc', 状态: '进行中', 方向: '设计', 开始日期: '2026-09-10', 截止日期: '2026-10-05' })!;
 const tasks = [...parseEmbeddedTasks(topic.path, '## 学习任务\n- [x] 一\n- [ ] 二\n- [ ] 三\n## 实践\n- [x] 不计入'), ...parseEmbeddedTasks(project.path, '## 项目任务\n- [x] 一\n- [x] 二\n- [ ] 三\n- [ ] 四\n## 最终成果\n- [x] 不计入')];
 const all = () => processes([topic], [project], tasks);
 

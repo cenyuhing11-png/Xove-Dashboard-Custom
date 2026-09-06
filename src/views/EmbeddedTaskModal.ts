@@ -3,6 +3,7 @@ import { DAILY_TASK_FILE, embeddedSource, groupEmbedded } from '../data/embedded
 import type { EmbeddedTask, EmbeddedSourceType } from '../data/embeddedTasks';
 import type { EmbeddedTaskStore } from '../data/embeddedTaskVault';
 import { scanProjects } from '../data/projectVault';
+import { PROJECT_ROOT } from '../data/vaultPaths';
 import { beginListModal, closeListModal } from './viewPrimitives';
 
 const LABELS = { project: '项目', learning: '学习', daily: '日常' };
@@ -66,7 +67,7 @@ export class NewEmbeddedTaskModal extends Modal {
 			for (const file of files) select.createEl('option', { value: file.path, text: file.path });
 			select.value = path;
 			select.onchange = () => { path = select.value; };
-			if (!files.length) picker.createEl('div', { cls: 'ad-modal-hint', text: `暂无${LABELS[type]}笔记，请先在${type === 'project' ? '03-项目与作品' : '01-学习与资料'}中新建笔记。` });
+			if (!files.length) picker.createEl('div', { cls: 'ad-modal-hint', text: `暂无${LABELS[type]}笔记，请先在${type === 'project' ? PROJECT_ROOT : '01-学习与资料'}中新建笔记。` });
 		};
 		sourceSelect.onchange = () => { type = sourceSelect.value as EmbeddedSourceType; renderPicker(); };
 		renderPicker();

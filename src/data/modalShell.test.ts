@@ -44,12 +44,12 @@ const code = buildSync({
 
 function fixture() {
 	const files = new Map<string, string>(); const dirs = new Set<string>(); const notices: string[] = []; const opened: any[] = [];
-	const project = '03-项目与作品/已有项目/已有项目.md';
+	const project = '03-项目与成果/已有项目/已有项目.md';
 	const learning = '01-学习与资料/书籍/学习资料.md';
 	files.set(project, '---\n类型: 项目\n---\n## 项目任务\n');
 	files.set(learning, '---\n类型: 学习资源\n---\n## 学习任务\n');
 	files.set(DAILY_TASK_FILE, '## 日常待办\n');
-	dirs.add('03-项目与作品');
+	dirs.add('03-项目与成果');
 	const app = {
 		vault: {
 			getMarkdownFiles: () => [...files.keys()].map(path => new File(path)),
@@ -122,13 +122,13 @@ test('project original controls save all Mengxu fields and stable UUID to one pr
 	set(m, '项目名称', '新项目'); set(m, '方向（可选）', '设计'); set(m, '状态', '进行中');
 	set(m, '开始日期（可选）', '2026-09-06'); set(m, '截止日期（可选）', '2026-09-30'); set(m, '项目目标（可选）', '明确结果');
 	await button(m, '创建进程').onclick();
-	const path = '03-项目与作品/新项目/新项目.md'; const raw = f.files.get(path)!;
+	const path = '03-项目与成果/新项目/新项目.md'; const raw = f.files.get(path)!;
 	for (const text of ['类型: 项目', '方向: "设计"', '状态: 进行中', '开始日期: "2026-09-06"', '截止日期: "2026-09-30"', '明确结果', '## 项目任务']) assert.ok(raw.includes(text), text);
 	assert.match(raw, /项目ID: [0-9a-f-]{36}/); assert.equal(f.files.size, 4); assert.equal(m.closed, true); assert.equal(f.opened[0].state.path, path);
 });
 test('project optional fields stay optional and default status remains planned', async () => {
 	const f = fixture(); const m = new f.Project(f.app); m.onOpen(); set(m, '项目名称', '最小项目');
-	await button(m, '创建进程').onclick(); const raw = f.files.get('03-项目与作品/最小项目/最小项目.md')!;
+	await button(m, '创建进程').onclick(); const raw = f.files.get('03-项目与成果/最小项目/最小项目.md')!;
 	assert.ok(raw.includes('状态: 计划中')); assert.equal(m.closed, true);
 });
 test('project validation failure re-enables create without writing or closing', async () => {
@@ -161,7 +161,7 @@ test('Double submit cannot create duplicate process notes',async()=>{
 	const f=fixture(),m=new f.Unified(f.app);m.onOpen();set(m,'学习名称','单次创建');const create=button(m,'创建进程');await Promise.all([create.onclick(),create.onclick()]);assert.equal([...f.files.keys()].filter(p=>p.includes('单次创建')).length,1);assert.equal(f.notices.length,0);
 });
 test('Project save never leaks learning-only ability into project Markdown',async()=>{
-	const f=fixture(),m=new f.Unified(f.app);m.onOpen();set(m,'学习名称','切换项目');set(m,'所属能力（可选）','仅学习字段');button(m,'项目').onclick();await button(m,'创建进程').onclick();const raw=f.files.get('03-项目与作品/切换项目/切换项目.md')!;assert.ok(raw.includes('类型: 项目'));assert.equal(raw.includes('所属能力'),false);assert.equal(raw.includes('仅学习字段'),false);
+	const f=fixture(),m=new f.Unified(f.app);m.onOpen();set(m,'学习名称','切换项目');set(m,'所属能力（可选）','仅学习字段');button(m,'项目').onclick();await button(m,'创建进程').onclick();const raw=f.files.get('03-项目与成果/切换项目/切换项目.md')!;assert.ok(raw.includes('类型: 项目'));assert.equal(raw.includes('所属能力'),false);assert.equal(raw.includes('仅学习字段'),false);
 });
 test('Both global shell dispatch paths use UnifiedProcessModal directly',()=>{
 	for(const file of ['../main.ts','../views/DashboardView.ts']){const code=readFileSync(new URL(file,import.meta.url),'utf8');assert.ok(code.includes("action === 'project'"));assert.ok(code.includes('new UnifiedProcessModal(this.app).open()'));assert.equal(code.includes('new NewProjectModal'),false);}

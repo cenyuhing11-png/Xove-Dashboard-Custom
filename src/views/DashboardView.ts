@@ -33,7 +33,7 @@ import { ensureJournal, journalStates } from '../data/journal';
 import type { JournalKind } from '../data/journal';
 import { JournalHistoryModal } from './JournalHistoryModal';
 import { openDirection } from './DirectionView';
-import { DIARY_FOLDER } from '../data/vaultPaths';
+import { DIARY_FOLDER, PROJECT_ROOT } from '../data/vaultPaths';
 
 import type Dashboard from '../main';
 import { injectSvg } from '../icons';
@@ -1204,7 +1204,7 @@ export class DashboardView extends ItemView {
 	private async createProjectFolder(name: string, color: string, startDate: string, endDate: string, description: string, type: ProjectType = 'stage'): Promise<void> {
 		// Preserve existing configured project roots; a missing legacy default uses the formal root.
 		const configuredRoot = this.plugin.settings.projectsFolder;
-		const rootPath = this.app.vault.getAbstractFileByPath(configuredRoot) instanceof TFolder ? configuredRoot : '03-项目与作品';
+		const rootPath = this.app.vault.getAbstractFileByPath(configuredRoot) instanceof TFolder ? configuredRoot : PROJECT_ROOT;
 
 		// Ensure root folder exists
 		await this.ensureFolder(rootPath);
