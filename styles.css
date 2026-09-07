@@ -1559,6 +1559,11 @@ input[type="date"].ad-modal-input { cursor: pointer; }
 .ad-modal-btn--primary { background: var(--ad-accent); color: var(--ad-on-accent); border-color: var(--ad-accent); font-weight: 600; }
 .ad-modal-btn--primary:hover { filter: brightness(1.06); }
 .ad-modal-btn--ghost { background: transparent; color: var(--ad-accent); border-color: var(--ad-accent); align-self: flex-start; margin-top: 6px; }
+.mx-ability-row { align-items: center; min-width: 0; }
+.mx-ability-row > .ad-modal-input { flex: 1 1 auto; min-width: 0; }
+.mx-inline-action { flex: 0 0 auto; padding: 5px 7px; border: 0; border-radius: var(--ad-r1); background: transparent; color: var(--ad-text-mute); font: inherit; font-size: 11px; white-space: nowrap; cursor: pointer; box-shadow: none; }
+.mx-inline-action:hover { background: var(--ad-h1); color: var(--ad-text); }
+.mx-inline-action:disabled { cursor: default; opacity: 0.45; background: transparent; }
 .po-topbar { display: flex; align-items: center; padding: 6px 0; margin-bottom: 10px; }
 .po-back-btn {
     padding: 5px 12px; font-size: 12px; font-family: var(--ad-font);

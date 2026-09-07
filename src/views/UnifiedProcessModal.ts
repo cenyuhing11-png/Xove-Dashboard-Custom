@@ -4,18 +4,22 @@ import type { ProjectStatus } from '../data/projects';
 import { createLearningProcess } from '../data/processCreation';
 import type { NewLearningProcess } from '../data/processCreation';
 import type { ProcessType } from '../data/processes';
+import { directionAbilityOptions, readDirectionAbilities } from '../data/compass';
 import { learningFiles, openLearningFile } from '../data/learningVault';
 import { todayStr } from '../data/taskLogic';
 import { openProjects } from './ProjectView';
 import { beginListModal, closeListModal } from './viewPrimitives';
+import { DirectionAbilityModal } from './DirectionAbilityModal';
 
 /** One author-style form; each type keeps its existing Markdown creator. */
 export class UnifiedProcessModal extends Modal {
 	private input: NewLearningProcess = { name: '', status: '计划中' };
 	private saving = false;
+	private generation = 0;
 	constructor(app: App, private type: ProcessType = 'learning') { super(app); }
 	onOpen(): void { this.render(); }
 	private render(): void {
+		const generation = ++this.generation;
 		const el = beginListModal(this, '新建进程');
 		const controls: Array<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement> = [];
 		el.createEl('label', { cls: 'ad-modal-label', text: '类型' });
@@ -37,7 +41,7 @@ export class UnifiedProcessModal extends Modal {
 		const direction = el.createDiv({ cls: 'ad-modal-row' }).createEl('select', { cls: 'ad-modal-input', attr: { 'aria-label': '方向（可选）' } });
 		direction.createEl('option', { value: '', text: '未关联' });
 		for (const value of projectDirections()) direction.createEl('option', { value, text: value });
-		direction.value = this.input.direction || ''; direction.onchange = () => { this.input.direction = direction.value; }; controls.push(direction);
+		direction.value = this.input.direction || ''; controls.push(direction);
 		el.createEl('label', { cls: 'ad-modal-label', text: '状态' });
 		const status = el.createDiv({ cls: 'ad-modal-row' }).createEl('select', { cls: 'ad-modal-input', attr: { 'aria-label': '状态' } });
 		for (const value of PROJECT_STATUSES) status.createEl('option', { value, text: value });
@@ -45,7 +49,44 @@ export class UnifiedProcessModal extends Modal {
 		const dates = el.createDiv({ cls: 'ad-modal-row' });
 		textField(dates.createDiv({ cls: 'ad-modal-col' }), 'startDate', '开始日期（可选）', 'date');
 		textField(dates.createDiv({ cls: 'ad-modal-col' }), 'dueDate', '截止日期（可选）', 'date');
-		if (learning) textField(el, 'ability', '所属能力（可选）');
+		if (learning) {
+			el.createEl('label', { cls: 'ad-modal-label', text: '培养能力（可选）' });
+			const abilityRow = el.createDiv({ cls: 'ad-modal-row mx-ability-row' });
+			const ability = abilityRow.createEl('select', { cls: 'ad-modal-input', attr: { 'aria-label': '培养能力（可选）' } });
+			const addAbility = abilityRow.createEl('button', { cls: 'mx-inline-action mx-ability-add', text: '＋ 新建能力', attr: { type: 'button' } });
+			controls.push(ability, addAbility);
+			const refreshAbilities = async (selected = this.input.ability || '') => {
+				const selectedDirection = this.input.direction || '';
+				ability.empty();
+				if (!selectedDirection) {
+					ability.createEl('option', { value: '', text: '先选择人生方向' });
+					ability.value = ''; ability.disabled = true; addAbility.disabled = true; return;
+				}
+				ability.createEl('option', { value: '', text: '正在读取能力…' }); ability.disabled = true; addAbility.disabled = true;
+				try {
+					const values = await readDirectionAbilities(learningFiles(this.app), selectedDirection);
+					if (generation !== this.generation || selectedDirection !== this.input.direction) return;
+					ability.empty(); ability.createEl('option', { value: '', text: values.length ? '未选择' : '暂无能力，请新建' });
+					for (const option of directionAbilityOptions(values, selected)) ability.createEl('option', { value: option.value, text: option.label });
+					ability.value = selected; ability.disabled = false; addAbility.disabled = false;
+				} catch {
+					if (generation !== this.generation) return;
+					ability.empty(); ability.createEl('option', { value: '', text: '暂时无法读取方向能力' });
+					ability.disabled = true; addAbility.disabled = false;
+				}
+			};
+			ability.onchange = () => { this.input.ability = ability.value || undefined; };
+			addAbility.onclick = () => {
+				const selectedDirection = this.input.direction;
+				if (!selectedDirection || this.saving) return;
+				new DirectionAbilityModal(this.app, selectedDirection, async value => {
+					if (generation !== this.generation || this.input.direction !== selectedDirection) return;
+					this.input.ability = value; await refreshAbilities(value);
+				}).open();
+			};
+			direction.onchange = () => { this.input.direction = direction.value || undefined; this.input.ability = undefined; void refreshAbilities(''); };
+			void refreshAbilities();
+		} else direction.onchange = () => { this.input.direction = direction.value || undefined; };
 		textField(el, 'goal', learning ? '学习目标（可选）' : '项目目标（可选）', 'textarea');
 		const footer = el.createDiv({ cls: 'ad-modal-btns' });
 		footer.createEl('button', { cls: 'ad-modal-btn', text: '取消' }).onclick = () => this.close();
@@ -67,5 +108,5 @@ export class UnifiedProcessModal extends Modal {
 		};
 		name.focus();
 	}
-	onClose(): void { closeListModal(this); }
+	onClose(): void { this.generation++; closeListModal(this); }
 }
