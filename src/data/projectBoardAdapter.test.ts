@@ -145,7 +145,7 @@ const learning=learningNote(learningPath,'产品建模',{类型:'学习主题',�
 const learningBody='## 学习目标\n测试目标\n## 学习任务\n- [x] 一\n- [ ] 二\n- [ ] 三\n## 当前资源\n材料摘录\n## 下一步\n下一步内容\n## 实践\n实践内容';
 const mixed=processBoardItems(processes([learning],[project],[...tasks,...parseEmbeddedTasks(learningPath,learningBody)]));
 test('Direction sidebar shares compass order and counts whole processes',async()=>{
-	const f=boardFixture('list',[],mixed);await f.board.show();const links=f.root.querySelectorAll('.po-sidebar__item');assert.deepEqual(links.map(e=>e.dataset.direction),['','设计','AI','3D','英语','自媒体','阅读','绘画','摄影','理财','生活']);assert.equal(links[0]!.querySelector('.po-count')!.text,'2');assert.equal(links[1]!.querySelector('.po-count')!.text,'学1 · 项1');assert.equal(links[2]!.querySelector('.po-count')!.text,'学0 · 项0');assert.deepEqual(f.root.querySelectorAll('.po-direction-group').map(e=>e.text),['主攻','辅助推进','持续维护']);
+	const f=boardFixture('list',[],mixed);await f.board.show();const links=f.root.querySelectorAll('.po-sidebar__item');assert.deepEqual(links.map(e=>e.dataset.direction),['','设计','AI','3D','英语','自媒体','阅读','绘画','摄影','理财','生活']);assert.equal(links[0]!.querySelector('.po-count')!.text,'2');assert.equal(links[1]!.querySelector('.po-count')!.text,'学1 · 创1');assert.equal(links[2]!.querySelector('.po-count')!.text,'学0 · 创0');assert.deepEqual(f.root.querySelectorAll('.po-direction-group').map(e=>e.text),['主攻','辅助推进','持续维护']);
 });
 test('All processes clears direction only while preserving type and status',async()=>{
 	const f=boardFixture('list',[],mixed);await f.board.show();f.root.querySelectorAll('.po-sidebar__item')[1]!.onclick();f.root.querySelectorAll('.po-chip').find(e=>e.dataset.processType==='learning')!.onclick();f.root.querySelectorAll('.po-chip').find(e=>e.dataset.filter==='进行中')!.onclick();f.root.querySelectorAll('.po-sidebar__item')[0]!.onclick();assert.equal(f.board.directionFilter,null);assert.equal(f.board.processTypeFilter,'learning');assert.equal(f.board.projectFilter,'进行中');assert.equal(f.root.querySelectorAll('.po-data-row').length,1);
@@ -176,8 +176,8 @@ test('Mixed ProcessBoard keeps the original sidebar/cards/tabs without a second 
 test('Process type and status chips combine and preserve the chosen direction',async()=>{
 	const items=[...mixed,{...mixed[1]!,key:'paused',status:'暂停' as const,process:{...mixed[1]!.process,status:'暂停' as const}}];
 	const f=boardFixture('kanban',[],items);await f.board.show();f.root.querySelectorAll('.po-sidebar__item')[1]!.onclick();
-	f.root.querySelectorAll('.po-chip').find(e=>e.dataset.processType==='project')!.onclick();f.root.querySelectorAll('.po-chip').find(e=>e.dataset.filter==='暂停')!.onclick();
-	assert.equal(f.board.directionFilter,'设计');assert.equal(f.root.querySelectorAll('.po-kanban__card').length,1);assert.ok(f.root.querySelector('.po-kanban__card')!.all().some(e=>e.text==='项目 · 暂停 · 设计'));
+	f.root.querySelectorAll('.po-chip').find(e=>e.dataset.processType==='creation')!.onclick();f.root.querySelectorAll('.po-chip').find(e=>e.dataset.filter==='暂停')!.onclick();
+	assert.equal(f.board.directionFilter,'设计');assert.equal(f.root.querySelectorAll('.po-kanban__card').length,1);assert.ok(f.root.querySelector('.po-kanban__card')!.all().some(e=>e.text==='创作 · 项目 · 暂停 · 设计'));
 });
 test('Mixed cards show type and correct task progress and route to their own sources',async()=>{
 	const f=boardFixture('kanban',[],mixed);await f.board.show();const cards=f.root.querySelectorAll('.po-kanban__card');cards.forEach(c=>c.onclick());assert.deepEqual(f.opened.map(p=>p.processType),['learning','project']);assert.equal(cards[0]!.querySelector('.po-task-progress')!.text,'1 / 3');assert.equal(cards[1]!.querySelector('.po-task-progress')!.text,'1 / 2');
@@ -195,10 +195,10 @@ test('Same-title learning and project processes do not duplicate Gantt rows',asy
 	const f=boardFixture('gantt',[],mixed.map(p=>({...p,name:'同名'})));await f.board.show();assert.equal(f.root.querySelectorAll('.po-gantt__label-row').length,2);assert.equal(f.root.querySelectorAll('.po-gantt__bar').length,2);
 });
 test('Calendar preserves original geometry and labels both process types',async()=>{
-	const f=boardFixture('calendar',[],mixed);f.board.calYear=2026;f.board.calMonth=8;await f.board.show();assert.ok(f.root.querySelector('.po-cal'));const labels=f.root.querySelectorAll('.po-cal__mbar-seg').map(e=>e.text);assert.ok(labels.some(t=>t.startsWith('学习 · ')));assert.ok(labels.some(t=>t.startsWith('项目 · ')));assert.equal(f.root.querySelector('.po-cal__expand'),undefined);
+	const f=boardFixture('calendar',[],mixed);f.board.calYear=2026;f.board.calMonth=8;await f.board.show();assert.ok(f.root.querySelector('.po-cal'));const labels=f.root.querySelectorAll('.po-cal__mbar-seg').map(e=>e.text);assert.ok(labels.some(t=>t.startsWith('学习 · ')));assert.ok(labels.some(t=>t.startsWith('创作 · ')));assert.equal(f.root.querySelector('.po-cal__expand'),undefined);
 });
 test('Homepage timeline entry uses same Board and resets session-local filters only',async()=>{
-	const f=boardFixture('kanban',[],mixed);f.board.projectFilter='暂停';f.board.processTypeFilter='project';await f.board.openView('calendar');assert.equal(f.board.currentView,'calendar');assert.equal(f.board.projectFilter,'全部');assert.equal(f.board.processTypeFilter,'all');assert.ok(f.root.querySelector('.po-cal'));
+	const f=boardFixture('kanban',[],mixed);f.board.projectFilter='暂停';f.board.processTypeFilter='creation';await f.board.openView('calendar');assert.equal(f.board.currentView,'calendar');assert.equal(f.board.projectFilter,'全部');assert.equal(f.board.processTypeFilter,'all');assert.ok(f.root.querySelector('.po-cal'));
 });
 const viewCode=buildSync({entryPoints:[fileURLToPath(new URL('../views/ProjectView.ts',import.meta.url))],bundle:true,platform:'node',format:'cjs',write:false,external:['obsidian']}).outputFiles[0]!.text;
 for(const type of ['learning','project'] as const)test(`Click routing opens ${type} source in reused process view`,async()=>{

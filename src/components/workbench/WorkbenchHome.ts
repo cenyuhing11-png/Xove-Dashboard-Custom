@@ -1,6 +1,7 @@
 import type { TaskItem } from '../../data/taskParser';
 import type { MengxuProject } from '../../data/projects';
-import { currentProcesses, processTypeLabel } from '../../data/processes';
+import { currentProcesses } from '../../data/processes';
+import { processCategoryLabel, processContentTypeLabel } from '../../data/processContentTypes';
 import type { Process } from '../../data/processes';
 import { KNOWLEDGE_AREAS } from './config';
 import { renderLifeCompass } from './LifeCompass';
@@ -56,9 +57,9 @@ function renderProjects(parent: HTMLElement, data: WorkbenchHomeData): void {
 	const body = createSection(parent, '📅 进程与日程');
 	const active = currentProcesses(data.processes);
 	if (!active.length) addEmpty(body, '暂无当前进程');
-	for (const p of active) addEntry(body, p.name, `${processTypeLabel(p.processType)} · ${p.status}${p.dueDate ? ` · 截止 ${p.dueDate}` : ''}`, () => data.onOpenProcess(p));
-	addEntry(body, '月历', '学习 / 项目进程日程', () => data.onOpenProjectView('calendar'));
-	addEntry(body, '甘特图', '学习 / 项目进程时间条', () => data.onOpenProjectView('gantt'));
+	for (const p of active) addEntry(body, p.name, `${processCategoryLabel(p.category)} · ${processContentTypeLabel(p.contentType, true)} · ${p.status}${p.dueDate ? ` · 截止 ${p.dueDate}` : ''}`, () => data.onOpenProcess(p));
+	addEntry(body, '月历', '学习 / 创作进程日程', () => data.onOpenProjectView('calendar'));
+	addEntry(body, '甘特图', '学习 / 创作进程时间条', () => data.onOpenProjectView('gantt'));
 	const today = new Date();
 	const horizon = new Date(today); horizon.setDate(horizon.getDate() + 14);
 	const date = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;

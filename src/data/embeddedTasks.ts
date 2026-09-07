@@ -1,7 +1,7 @@
 /** Markdown is the only source of truth. No Obsidian dependency in this module. */
-import { PROJECT_ROOT } from './vaultPaths.ts';
+import { KNOWLEDGE_ROOT, PROJECT_ROOT } from './vaultPaths.ts';
 export const DAILY_TASK_FILE = '05-计划/06-日常任务.md';
-export const EMBEDDED_HEADINGS = { learning: '学习任务', project: '项目任务', daily: '日常待办' } as const;
+export const EMBEDDED_HEADINGS = { learning: '学习任务', creation: '创作任务', project: '项目任务', daily: '日常待办' } as const;
 export type EmbeddedSourceType = keyof typeof EMBEDDED_HEADINGS;
 export interface EmbeddedTask {
 	id: string;
@@ -19,6 +19,7 @@ export function embeddedSource(path: string): EmbeddedSourceType | undefined {
 	if (!path.endsWith('.md') || path.split('/').some(p => p === '..' || p === '.' || p.startsWith('.'))) return undefined;
 	if (path === DAILY_TASK_FILE) return 'daily';
 	if (path.startsWith('01-学习与资料/')) return 'learning';
+	if (path.startsWith(`${KNOWLEDGE_ROOT}/`)) return 'creation';
 	if (path.startsWith(`${PROJECT_ROOT}/`)) return 'project';
 	return undefined;
 }
@@ -127,7 +128,7 @@ export function todayEmbedded(tasks: EmbeddedTask[], date: string): EmbeddedTask
 }
 export function overdueEmbedded(tasks: EmbeddedTask[], date: string): EmbeddedTask[] { return todayEmbedded(tasks, date).filter(t => t.date! < date); }
 export function groupEmbedded(tasks: EmbeddedTask[]): Record<EmbeddedSourceType, EmbeddedTask[]> {
-	return { project: tasks.filter(t => t.sourceType === 'project'), learning: tasks.filter(t => t.sourceType === 'learning'), daily: tasks.filter(t => t.sourceType === 'daily') };
+	return { project: tasks.filter(t => t.sourceType === 'project'), creation: tasks.filter(t => t.sourceType === 'creation'), learning: tasks.filter(t => t.sourceType === 'learning'), daily: tasks.filter(t => t.sourceType === 'daily') };
 }
 
 export interface EmbeddedFiles {

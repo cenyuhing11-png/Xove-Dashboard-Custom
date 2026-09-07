@@ -3,14 +3,16 @@ import type { LearningNote } from './learning';
 import { PROJECT_ROOT, PROJECT_STATUSES } from './projects.ts';
 import type { MengxuProject, ProjectStatus } from './projects';
 import { EMBEDDED_HEADINGS, validTaskDate } from './embeddedTasks.ts';
-import type { EmbeddedTask } from './embeddedTasks';
+import type { EmbeddedSourceType, EmbeddedTask } from './embeddedTasks';
 import type { ProjectInfo } from './taskParseCore';
+import { KNOWLEDGE_ROOT, learningContentType, processCategoryLabel } from './processContentTypes.ts';
+import type { CompatibleProcessContentType, ProcessCategory } from './processContentTypes';
 
-export type ProcessType = 'learning' | 'project';
+export type ProcessType = Exclude<EmbeddedSourceType, 'daily'>;
 export type ProcessStatus = ProjectStatus;
 /** Read-only aggregation, never written to Markdown or plugin settings. */
 export interface Process {
-	id: string; name: string; processType: ProcessType; status: ProcessStatus; rawStatus: string;
+	id: string; name: string; processType: ProcessType; category: ProcessCategory; contentType: CompatibleProcessContentType; status: ProcessStatus; rawStatus: string;
 	direction: string; startDate?: string; dueDate?: string; sourceFile: string;
 	taskTotal: number; taskCompleted: number; taskPending: number;
 	/** Task completion ratio only. null means no tasks, not 0% mastery. */
@@ -35,21 +37,33 @@ function counts(type: ProcessType, path: string, tasks: readonly EmbeddedTask[])
 	const taskTotal = related.length, taskCompleted = related.filter(t => t.completed).length;
 	return { taskTotal, taskCompleted, taskPending: taskTotal - taskCompleted, progress: taskTotal ? taskCompleted / taskTotal : null };
 }
+const LEARNING_STATUS_ALIASES = new Set(['学习中', '待学习', '排队中', '已暂停', '已学完', '已归档']);
+export function hasManagedLearningStatus(status: string): boolean { return (PROJECT_STATUSES as readonly string[]).includes(status) || LEARNING_STATUS_ALIASES.has(status); }
+export function isLearningProcessNote(note: LearningNote): boolean {
+	return inRoot(note.path, LEARNING_ROOT) && (note.kind === '学习主题' || (note.kind === '学习资源' && (hasManagedLearningStatus(note.status) || note.hasLearningTasks)));
+}
+export function isKnowledgeProcessNote(note: LearningNote): boolean {
+	return inRoot(note.path, KNOWLEDGE_ROOT) && note.kind === '知识与思考' && (hasManagedLearningStatus(note.status) || note.hasCreationTasks);
+}
 export function processes(notes: readonly LearningNote[], projects: readonly MengxuProject[], tasks: readonly EmbeddedTask[]): Process[] {
-	const learning: Process[] = notes.filter(n => n.kind === '学习主题' && inRoot(n.path, LEARNING_ROOT)).map(n => ({
-		id: `learning:${n.path}`, name: n.name, processType: 'learning', status: learningProcessStatus(n.status), rawStatus: n.status,
+	const learning: Process[] = notes.filter(isLearningProcessNote).map(n => ({
+		id: `learning:${n.path}`, name: n.name, processType: 'learning', category: 'learning', contentType: n.kind === '学习主题' ? 'legacy-topic' : learningContentType(n.resourceType) ?? 'legacy-resource', status: learningProcessStatus(n.status), rawStatus: n.status,
 		direction: n.direction, sourceFile: n.path, ...dates(n.startDate, n.dueDate), ...counts('learning', n.path, tasks),
 	}));
+	const knowledge: Process[] = notes.filter(isKnowledgeProcessNote).map(n => ({
+		id: `creation:${n.path}`, name: n.name, processType: 'creation', category: 'creation', contentType: 'knowledge', status: learningProcessStatus(n.status), rawStatus: n.status,
+		direction: n.direction, sourceFile: n.path, ...dates(n.startDate, n.dueDate), ...counts('creation', n.path, tasks),
+	}));
 	const formal: Process[] = projects.filter(p => inRoot(p.path, PROJECT_ROOT)).map(p => ({
-		id: p.id || `project:${p.path}`, name: p.name, processType: 'project', status: p.status, rawStatus: p.status,
+		id: p.id || `project:${p.path}`, name: p.name, processType: 'project', category: 'creation', contentType: 'project', status: p.status, rawStatus: p.status,
 		direction: p.direction, sourceFile: p.path, ...dates(p.startDate, p.dueDate), ...counts('project', p.path, tasks),
 	}));
-	return [...learning, ...formal];
+	return [...learning, ...knowledge, ...formal];
 }
-export function processTypeLabel(type: ProcessType): string { return type === 'learning' ? '学习' : '项目'; }
+export function processTypeLabel(type: ProcessType): string { return processCategoryLabel(type === 'learning' ? 'learning' : 'creation'); }
 export function taskProgressLabel(total: number, completed: number): string { return total ? `${completed} / ${total}` : '暂无任务'; }
-export function filterProcesses(items: readonly Process[], type: ProcessType | 'all' = 'all', status: ProcessStatus | '全部' = '全部'): Process[] {
-	return items.filter(p => (type === 'all' || p.processType === type) && (status === '全部' || p.status === status));
+export function filterProcesses(items: readonly Process[], type: ProcessCategory | 'all' = 'all', status: ProcessStatus | '全部' = '全部'): Process[] {
+	return items.filter(p => (type === 'all' || p.category === type) && (status === '全部' || p.status === status));
 }
 export function currentProcesses(items: readonly Process[]): Process[] {
 	return items.filter(p => p.status === '进行中' || p.status === '计划中')

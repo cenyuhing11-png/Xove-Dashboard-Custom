@@ -43,7 +43,7 @@ test('Embedded project tasks retain stable IDs, dates and only checkbox changes 
 test('Project and Process adapters retain directions, counts and timeline dates at the new root', () => {
 	assert.equal(directionProjects([project], '设计').length, 1);
 	const all = processes([], [project], tasks), board = processBoardItems(all);
-	assert.equal(filterProcesses(all, 'project').length, 1); assert.equal(currentProcesses(all)[0]!.sourceFile, path);
+	assert.equal(filterProcesses(all, 'creation').length, 1); assert.equal(currentProcesses(all)[0]!.sourceFile, path);
 	assert.equal(board[0]!.taskCount, 1); assert.equal(board[0]!.activeCount, 1); assert.equal(board[0]!.direction, '设计');
 	for (const items of [board, projectBoardItems([project], tasks)]) {
 		const timeline = projectTimelineItems(items)[0]!;

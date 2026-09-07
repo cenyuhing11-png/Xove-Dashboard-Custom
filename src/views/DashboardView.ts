@@ -923,7 +923,7 @@ export class DashboardView extends ItemView {
 			renderEmbeddedToday: (parent) => {
 				const tasks = this.plugin.embeddedTasks.today(today);
 				if (!tasks.length) parent.createEl('p', { text: '今日暂无任务', cls: 'wb-empty' });
-				for (const [type, label] of [['learning', '学习'], ['project', '项目'], ['daily', '日常']] as const) {
+				for (const [type, label] of [['learning', '学习'], ['creation', '创作'], ['project', '项目'], ['daily', '日常']] as const) {
 					const group = tasks.filter(task => task.sourceType === type);
 					if (!group.length) continue;
 					parent.createEl('h4', { text: label });

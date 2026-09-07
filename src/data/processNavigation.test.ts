@@ -3,28 +3,29 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { compactProcessDate, processDateTitle, directionProcessCounts, matchesProcessFilters, processPreviewTasks } from './processNavigation.ts';
 import { parseEmbeddedTasks } from './embeddedTasks.ts';
-import type { ProcessStatus, ProcessType } from './processes';
+import type { ProcessStatus } from './processes';
+import type { ProcessCategory } from './processContentTypes';
 import { renderLifeCompass } from '../components/workbench/LifeCompass.ts';
 import { LIFE_COMPASS } from '../components/workbench/config.ts';
 import { readFileSync } from 'node:fs';
 
 const items = [
-	{direction:'设计',processType:'learning',status:'进行中'},
-	{direction:'设计',processType:'learning',status:'暂停'},
-	...Array.from({length:4},()=>({direction:'设计',processType:'project',status:'计划中'})),
-	{direction:'英语',processType:'learning',status:'进行中'},
-	{direction:'',processType:'project',status:'进行中'},
-] as {direction:string;processType:ProcessType;status:ProcessStatus}[];
-const filtered=(direction:string|null=null,type:ProcessType|'all'='all',status:ProcessStatus|'全部'='全部')=>items.filter(p=>matchesProcessFilters(p,{direction,type,status}));
+	{direction:'设计',category:'learning',status:'进行中'},
+	{direction:'设计',category:'learning',status:'暂停'},
+	...Array.from({length:4},()=>({direction:'设计',category:'creation',status:'计划中'})),
+	{direction:'英语',category:'learning',status:'进行中'},
+	{direction:'',category:'creation',status:'进行中'},
+] as {direction:string;category:ProcessCategory;status:ProcessStatus}[];
+const filtered=(direction:string|null=null,type:ProcessCategory|'all'='all',status:ProcessStatus|'全部'='全部')=>items.filter(p=>matchesProcessFilters(p,{direction,type,status}));
 test('Direction filter selects exact direction, not a title or task source',()=>{assert.equal(filtered('设计').length,6);assert.equal(filtered('英语').length,1);});
 test('Direction count includes learning processes, not resources or tasks',()=>{assert.equal(directionProcessCounts(items,'设计').learning,2);});
-test('Direction count includes project processes, not completed checkboxes',()=>{assert.equal(directionProcessCounts(items,'设计').project,4);});
-test('Direction count label is exactly 学2 · 项4',()=>{assert.equal(directionProcessCounts(items,'设计').label,'学2 · 项4');});
-test('Empty direction retains 学0 · 项0 format',()=>{assert.equal(directionProcessCounts(items,'摄影').label,'学0 · 项0');assert.equal(filtered('摄影').length,0);});
-test('Direction and type form an intersection',()=>{assert.equal(filtered('设计','learning').length,2);assert.equal(filtered('设计','project').length,4);});
+test('Direction count includes creation processes, not completed checkboxes',()=>{assert.equal(directionProcessCounts(items,'设计').creation,4);});
+test('Direction count label is exactly 学2 · 创4',()=>{assert.equal(directionProcessCounts(items,'设计').label,'学2 · 创4');});
+test('Empty direction retains 学0 · 创0 format',()=>{assert.equal(directionProcessCounts(items,'摄影').label,'学0 · 创0');assert.equal(filtered('摄影').length,0);});
+test('Direction and category form an intersection',()=>{assert.equal(filtered('设计','learning').length,2);assert.equal(filtered('设计','creation').length,4);});
 test('Direction and status form an intersection',()=>{assert.equal(filtered('设计','all','进行中').length,1);});
-test('All three filters combine',()=>{assert.equal(filtered('设计','learning','进行中').length,1);assert.equal(filtered('设计','project','进行中').length,0);});
-test('Clearing direction retains type and status and includes unassigned processes',()=>{assert.equal(filtered(null,'learning','进行中').length,2);assert.equal(filtered(null,'project','进行中').length,1);});
+test('All three filters combine',()=>{assert.equal(filtered('设计','learning','进行中').length,1);assert.equal(filtered('设计','creation','进行中').length,0);});
+test('Clearing direction retains category and status and includes unassigned processes',()=>{assert.equal(filtered(null,'learning','进行中').length,2);assert.equal(filtered(null,'creation','进行中').length,1);});
 test('Sidebar facet counts are stable while main-view filters change',()=>{const before=directionProcessCounts(items,'设计');filtered('设计','learning','暂停');assert.deepEqual(directionProcessCounts(items,'设计'),before);});
 test('Current local year displays zero-padded MM.DD',()=>{assert.equal(compactProcessDate('2026-09-01',new Date(2026,0,1)),'09.01');assert.equal(compactProcessDate('2026-09-30',new Date(2026,11,31)),'09.30');});
 test('Non-current year displays YYYY.MM.DD',()=>{assert.equal(compactProcessDate('2027-01-15',new Date(2026,8,1)),'2027.01.15');assert.equal(compactProcessDate('2025-12-31',new Date(2026,0,1)),'2025.12.31');});

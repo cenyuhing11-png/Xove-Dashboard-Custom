@@ -5,12 +5,14 @@ import type { MengxuProject } from '../data/projects';
 import { scanProjects } from '../data/projectVault';
 import { learningFiles, openLearningFile, scanLearning } from '../data/learningVault';
 import { LEARNING_ROOT } from '../data/learning';
+import { KNOWLEDGE_ROOT } from '../data/processContentTypes';
 import type { EmbeddedTaskStore } from '../data/embeddedTaskVault';
 import { NewEmbeddedTaskModal, renderEmbeddedRows } from './EmbeddedTaskModal';
 import { parseEmbeddedTasks } from '../data/embeddedTasks';
 import { processes, processBoardItems } from '../data/processes';
 import type { Process } from '../data/processes';
 import { renderLearningProcessDetail } from './LearningProcessDetail';
+import { renderCreationProcessDetail } from './CreationProcessDetail';
 import { detailTaskHeader } from './viewPrimitives';
 import { ProjectBoard } from './ProjectBoard';
 import { requestProcessStatusChange } from './ProcessStatusAction';
@@ -97,14 +99,17 @@ export class ProjectView extends ItemView {
 		if (this.shell) { this.removeChild(this.shell); this.shell = undefined; }
 		el.addClass('mx-project-view');
 		el.addClass('ad-modal');
-		if (!this.projectId && this.path.startsWith(`${LEARNING_ROOT}/`)) {
+		if (!this.projectId && (this.path.startsWith(`${LEARNING_ROOT}/`) || this.path.startsWith(`${KNOWLEDGE_ROOT}/`))) {
 			const notes = scanLearning(this.app);
-			const note = notes.find(n => n.kind === '学习主题' && n.path === this.path);
+			const note = notes.find(n => n.path === this.path);
 			try {
-				if (!note) throw new Error('学习主题不存在、正在索引或 Properties 无效');
+				if (!note || !processes(notes, [], this.tasks.all()).some(process => process.sourceFile === note.path)) throw new Error('内容不存在、未纳入进程或 Properties 无效');
 				const content = await learningFiles(this.app).read(note.path);
-				if (token === this.generation) renderLearningProcessDetail(el, this.app, this.tasks, note, notes, content, () => { void openProjects(this.app); });
-			} catch { if (token === this.generation) { el.empty(); el.createEl('p', { cls: 'po-empty', text: '学习主题无法读取，请检查是否已移动或删除。' }); el.createEl('button', { cls: 'ad-modal-btn', text: '全部进程 →' }).onclick = () => { void openProjects(this.app); }; } }
+				if (token === this.generation) {
+					if (note.kind === '知识与思考') renderCreationProcessDetail(el, this.app, this.tasks, note, content, () => { void openProjects(this.app); });
+					else renderLearningProcessDetail(el, this.app, this.tasks, note, notes, content, () => { void openProjects(this.app); });
+				}
+			} catch { if (token === this.generation) { el.empty(); el.createEl('p', { cls: 'po-empty', text: '进程内容无法读取，请检查是否已移动、删除或取消纳入进程。' }); el.createEl('button', { cls: 'ad-modal-btn', text: '全部进程 →' }).onclick = () => { void openProjects(this.app); }; } }
 			return;
 		}
 		const matches = projects.filter(p => this.projectId ? p.id === this.projectId : p.path === this.path);

@@ -3,6 +3,7 @@ import type { EmbeddedTaskStore } from '../data/embeddedTaskVault';
 import type { ProcessTaskSource } from '../data/processNavigation';
 import { processPreviewTasks } from '../data/processNavigation';
 import { processTypeLabel, taskProgressLabel } from '../data/processes';
+import { processCategoryLabel, processContentTypeLabel } from '../data/processContentTypes';
 import { renderEmbeddedRows } from './EmbeddedTaskModal';
 import { beginListModal, closeListModal } from './viewPrimitives';
 
@@ -31,7 +32,8 @@ export class ProcessTasksModal extends Modal {
 	private render(): void {
 		if (!this.live) return;
 		const groups = processPreviewTasks(this.store.bySource(this.source.sourceFile), this.source);
-		this.summary.setText(`${processTypeLabel(this.source.processType)} · 任务进度：${taskProgressLabel(groups.total, groups.completed.length)}`);
+		const type = this.source.category && this.source.contentType ? `${processCategoryLabel(this.source.category)} · ${processContentTypeLabel(this.source.contentType, true)}` : processTypeLabel(this.source.processType);
+		this.summary.setText(`${type} · 任务进度：${taskProgressLabel(groups.total, groups.completed.length)}`);
 		const scroll = this.body.scrollTop;
 		this.body.empty();
 		const pending = this.body.createEl('section');

@@ -17,14 +17,14 @@ test('Learning theme becomes a learning Process without changing its Markdown id
 test('Formal project becomes a project Process preserving UUID and dates', () => {
 	const p = all()[1]!; assert.equal(p.processType, 'project'); assert.equal(p.id, project.id); assert.equal(p.startDate, project.startDate); assert.equal(p.dueDate, project.dueDate);
 });
-test('Only the two approved process types exist', () => { assert.deepEqual(all().map(p => p.processType), ['learning', 'project']); });
+test('Legacy learning and project retain their underlying source identities', () => { assert.deepEqual(all().map(p => p.processType), ['learning', 'project']); });
 test('Only the learning task heading contributes 1 of 3', () => { const p=all()[0]!;assert.equal(p.taskTotal,3);assert.equal(p.taskCompleted,1);assert.equal(p.taskPending,2); });
 test('Only the project task heading contributes 2 of 4', () => { const p=all()[1]!;assert.equal(p.taskTotal,4);assert.equal(p.taskCompleted,2);assert.equal(p.taskPending,2); });
 test('Zero tasks means null progress and 暂无任务', () => { for(const p of processes([topic],[project],[])){assert.equal(p.progress,null);assert.equal(taskProgressLabel(p.taskTotal,p.taskCompleted),'暂无任务');} });
 test('Progress is the task ratio only, never ability or project quality', () => { assert.equal(all()[0]!.progress,1/3);assert.equal(all()[1]!.progress,.5);assert.equal(taskProgressLabel(3,1),'1 / 3'); });
 test('Learning status filter maps 学习中 without rewriting it', () => {assert.equal(filterProcesses(all(),'learning','进行中').length,1);assert.equal(topic.status,'学习中');});
-test('Project status filter uses real status', () => {assert.equal(filterProcesses(all(),'project','进行中').length,1);assert.equal(filterProcesses(all(),'project','暂停').length,0);});
-test('Type and status filters combine, not replace each other', () => {const items=[...all(),{...all()[0]!,status:'暂停' as const}];assert.equal(filterProcesses(items,'learning','暂停').length,1);assert.equal(filterProcesses(items,'project','暂停').length,0);assert.equal(filterProcesses(items).length,3);});
+test('Creation status filter uses real project status', () => {assert.equal(filterProcesses(all(),'creation','进行中').length,1);assert.equal(filterProcesses(all(),'creation','暂停').length,0);});
+test('Category and status filters combine, not replace each other', () => {const items=[...all(),{...all()[0]!,status:'暂停' as const}];assert.equal(filterProcesses(items,'learning','暂停').length,1);assert.equal(filterProcesses(items,'creation','暂停').length,0);assert.equal(filterProcesses(items).length,3);});
 test('Home prefers in-progress mixed processes and keeps its three-row cap', () => {
 	const items=[{...all()[0]!,status:'计划中' as const},...all(),{...all()[1]!,status:'暂停' as const}];const current=currentProcesses(items);assert.equal(current.length,3);assert.deepEqual(current.slice(0,2).map(p=>p.status),['进行中','进行中']);assert.deepEqual(new Set(current.slice(0,2).map(p=>p.processType)),new Set(['learning','project']));
 });
@@ -34,8 +34,8 @@ for (const type of ['learning','project'] as const) {
 	test(`Gantt ${type} has a flat, read-only schedule, not checkbox children`,()=>{const schedule=projectTimelineItems(processBoardItems(all().filter(p=>p.processType===type)));assert.equal(schedule.length,1);assert.equal(schedule[0]!.parent,'');assert.equal(schedule[0]!.sourceFile,'');assert.deepEqual(schedule[0]!.dailyNodes,{});});
 }
 test('Empty vault produces no synthetic process or task',()=>{assert.deepEqual(processes([],[],[]),[]);});
-test('Resources, abilities and legacy Projects do not become processes',()=>{
-	const resource=learningNote('01-学习与资料/书籍/书.md','书',{类型:'学习资源',状态:'学习中'})!;
+test('Ordinary resources, abilities and legacy Projects do not become processes',()=>{
+	const resource=learningNote('01-学习与资料/书籍/书.md','书',{类型:'学习资源'})!;
 	const ability=learningNote('01-学习与资料/能力.md','能力',{类型:'能力'})!;
 	assert.equal(processes([resource,ability,{...topic,path:'旧知识库/主题.md'}],[{...project,path:'Projects/旧项目.md'}],tasks).length,0);
 });

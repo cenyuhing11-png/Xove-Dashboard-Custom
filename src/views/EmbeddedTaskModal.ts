@@ -4,10 +4,11 @@ import type { EmbeddedTask } from '../data/embeddedTasks';
 import type { EmbeddedTaskStore } from '../data/embeddedTaskVault';
 import { scanProjects } from '../data/projectVault';
 import { scanLearning } from '../data/learningVault';
-import { processes, processTypeLabel } from '../data/processes';
+import { processes } from '../data/processes';
+import { processCategoryLabel, processContentTypeLabel } from '../data/processContentTypes';
 import { beginListModal, closeListModal } from './viewPrimitives';
 
-const LABELS = { project: '项目', learning: '学习', daily: '日常' };
+const LABELS = { project: '项目', creation: '创作', learning: '学习', daily: '日常' };
 export function openEmbeddedSource(app: App, task: EmbeddedTask): void {
 	const file = app.vault.getAbstractFileByPath(task.sourceFile);
 	if (!(file instanceof TFile)) { new Notice('来源笔记不存在或已移动'); return; }
@@ -67,10 +68,10 @@ export class NewEmbeddedTaskModal extends Modal {
 			picker.createEl('label', { cls: 'ad-modal-label', text: '所属进程' });
 			const select = picker.createEl('select', { cls: 'ad-modal-input', attr: { 'aria-label': '所属进程' } });
 			select.createEl('option', { value: '', text: '选择进程…' });
-			for (const process of items) select.createEl('option', { value: process.sourceFile, text: `[${processTypeLabel(process.processType)}] ${process.name}${process.direction ? ` · ${process.direction}` : ''}`, attr: { title: process.sourceFile } });
+			for (const process of items) select.createEl('option', { value: process.sourceFile, text: `[${processCategoryLabel(process.category)}·${processContentTypeLabel(process.contentType, true)}] ${process.name}${process.direction ? ` · ${process.direction}` : ''}`, attr: { title: process.sourceFile } });
 			select.value = path;
 			select.onchange = () => { path = select.value; updateCreate(); };
-			if (!items.length) picker.createEl('div', { cls: 'ad-modal-hint', text: '暂无可选进程，请先通过顶部“新建进程”创建学习或项目。' });
+			if (!items.length) picker.createEl('div', { cls: 'ad-modal-hint', text: '暂无可选进程，请先通过顶部“新建进程”创建学习或创作。' });
 			updateCreate();
 		};
 		sourceSelect.onchange = () => { assignment = sourceSelect.value === 'process' ? 'process' : 'daily'; renderPicker(); };
@@ -111,7 +112,7 @@ export class EmbeddedTaskListModal extends Modal {
 		this.contentEl.createEl('p', { cls: 'ad-modal-hint', text: `总数 ${tasks.length} · 已完成 ${tasks.filter(t => t.completed).length} · 未完成 ${tasks.filter(t => !t.completed).length}` });
 		this.contentEl.createDiv({ cls: 'po-toolbar' }).createEl('button', { cls: 'ad-modal-btn', text: '新建任务' }).onclick = () => new NewEmbeddedTaskModal(this.app, this.store, this.path).open();
 		const groups = groupEmbedded(tasks);
-		for (const type of ['project', 'learning', 'daily'] as const) {
+		for (const type of ['project', 'creation', 'learning', 'daily'] as const) {
 			if (this.path && type !== 'project') continue;
 			const group = this.contentEl.createDiv({ cls: 'ad-update-block' });
 			group.createEl('h3', { cls: 'ad-modal-title', text: `${LABELS[type]}任务` });

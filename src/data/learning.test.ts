@@ -14,9 +14,9 @@ test('recognizes all three MetadataCache types', () => {
 test('malformed or absent frontmatter is ignored safely', () => {
 	for (const fm of [undefined, null, 'broken YAML', [], 42, { 类型: ['学习主题'] }]) assert.equal(learningNote('x.md', 'x', fm), null);
 });
-test('only active learning topics enter homepage', () => {
+test('active learning topics and managed learning resources enter homepage', () => {
 	const notes = [note('学习主题', { 状态: '学习中' }), note('学习主题', { 状态: '暂停' }), note('学习资源', { 状态: '学习中' })];
-	assert.equal(currentTopics(notes).length, 1);
+	assert.equal(currentTopics(notes).length, 2);
 });
 test('priority order and maximum three topics', () => {
 	const notes = ['未知', '维护', '辅助', '主攻'].map((p) => note('学习主题', { 状态: '学习中', 优先级: p }, p));

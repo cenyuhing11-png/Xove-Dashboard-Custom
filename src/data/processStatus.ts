@@ -17,11 +17,12 @@ function inspect(content: string, source: ProcessStatusSource, parseYaml: YamlRe
 	const parsed = parseYaml(block[2]!);
 	if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('来源 Properties 无效');
 	const fm = parsed as Record<string, unknown>;
-	if (fm['类型'] !== (source.processType === 'learning' ? '学习主题' : '项目')) throw new Error('来源笔记类型已改变，未修改状态');
+	const expected = source.processType === 'learning' ? ['学习主题', '学习资源'] : source.processType === 'creation' ? ['知识与思考'] : ['项目'];
+	if (!expected.includes(String(fm['类型'] ?? ''))) throw new Error('来源笔记类型已改变，未修改状态');
 	if (source.projectId && fm['项目ID'] !== source.projectId) throw new Error('项目身份已改变，未修改状态');
 	const rawStatus = fm['状态'];
 	if (rawStatus != null && typeof rawStatus !== 'string') throw new Error('状态属性不是文本，请先检查原笔记');
-	const status = source.processType === 'learning' ? learningProcessStatus(String(rawStatus ?? '')) : PROJECT_STATUSES.includes(rawStatus as ProjectStatus) ? rawStatus as ProjectStatus : '计划中';
+	const status = source.processType !== 'project' ? learningProcessStatus(String(rawStatus ?? '')) : PROJECT_STATUSES.includes(rawStatus as ProjectStatus) ? rawStatus as ProjectStatus : '计划中';
 	return { block, fm, rawStatus, status, pending: parseEmbeddedTasks(source.sourceFile, content).filter(t => !t.completed).length };
 }
 /** Patch only the top-level status scalar; all other Properties/body bytes stay intact.

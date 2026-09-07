@@ -10,7 +10,8 @@ export interface LearningFiles extends PlanFiles {
 export function scanLearning(app: App): LearningNote[] {
 	const notes: LearningNote[] = [];
 	for (const file of app.vault.getMarkdownFiles()) {
-		const note = learningNote(file.path, file.basename, app.metadataCache.getFileCache(file)?.frontmatter);
+		const cache = app.metadataCache.getFileCache(file);
+		const note = learningNote(file.path, file.basename, cache?.frontmatter, cache?.headings?.map(heading => heading.heading) ?? []);
 		if (note) notes.push(note);
 	}
 	return notes;
