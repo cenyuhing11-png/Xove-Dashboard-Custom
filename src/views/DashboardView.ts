@@ -5,6 +5,7 @@ import { CountdownModal, defaultEventName } from './CountdownModal';
 import { TaskEditModal } from './TaskEditModal';
 import { NewEmbeddedTaskModal, EmbeddedTaskListModal, renderEmbeddedRows } from './EmbeddedTaskModal';
 import { openProjects } from './ProjectView';
+import { openPlanWorkspace } from './PlanView';
 import { UnifiedProcessModal } from './UnifiedProcessModal';
 import { groupEmbeddedForDisplay, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS } from '../data/embeddedTasks';
 import { scanProjects } from '../data/projectVault';
@@ -253,6 +254,7 @@ export class DashboardView extends ItemView {
 		else if (action === 'diary') await this.createDiary();
 		else if (action === 'task') new NewEmbeddedTaskModal(this.app, this.plugin.embeddedTasks).open();
 		else if (action === 'project') new UnifiedProcessModal(this.app).open();
+		else if (action === 'plan') await openPlanWorkspace(this.app);
 		else if (action === 'all') await openProjects(this.app);
 	}
 	getViewType(): string { return VIEW_TYPE; }

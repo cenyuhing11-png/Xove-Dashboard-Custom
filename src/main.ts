@@ -10,6 +10,7 @@ import { WelcomeModal } from './views/WelcomeModal';
 import { DirectionView, DIRECTION_VIEW } from './views/DirectionView';
 import { EmbeddedTaskStore } from './data/embeddedTaskVault';
 import { ProjectView, PROJECT_VIEW, openProjects } from './views/ProjectView';
+import { PlanView, PLAN_VIEW, openPlanWorkspace } from './views/PlanView';
 import { UnifiedProcessModal } from './views/UnifiedProcessModal';
 import { NewEmbeddedTaskModal } from './views/EmbeddedTaskModal';
 import { TaskStore } from './data/taskStore';
@@ -54,6 +55,7 @@ export default class Dashboard extends Plugin {
 		this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
 		this.registerView(DIRECTION_VIEW, (leaf) => new DirectionView(leaf));
 		this.registerView(PROJECT_VIEW, (leaf) => new ProjectView(leaf, this.embeddedTasks, () => this.settings.theme, this));
+		this.registerView(PLAN_VIEW, (leaf) => new PlanView(leaf, this));
 
 		this.addRibbonIcon('layout-dashboard', '打开梦序', () => {
 			void this.activateView();
@@ -379,6 +381,7 @@ export default class Dashboard extends Plugin {
 
 	/** Reuse the existing home tab only for home/inbox/tools; project remains its own View. */
 	async navigateWorkbench(action: WorkbenchAction): Promise<void> {
+		if (action === 'plan') { await openPlanWorkspace(this.app); return; }
 		if (action === 'all') { await openProjects(this.app); return; }
 		if (action === 'project') { new UnifiedProcessModal(this.app).open(); return; }
 		if (action === 'task') { new NewEmbeddedTaskModal(this.app, this.embeddedTasks).open(); return; }

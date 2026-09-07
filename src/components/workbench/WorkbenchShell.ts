@@ -8,8 +8,8 @@ import { calcHeatmapStats, getVaultNoteCounts } from '../../utils/vaultOverview'
 import { naturalTimeSummary } from '../../utils/timeProgress';
 import { todayStr } from '../../data/taskLogic';
 import { t, isEnglish } from '../../i18n';
-import { ICON_home, ICON_newDiary, ICON_newTask, ICON_newProject, ICON_allProjects, ICON_opportunity, ICON_gear, ICON_moon, ICON_sun, injectSvg } from '../../icons';
-export type WorkbenchAction = 'home' | 'all' | 'opportunity' | 'classic' | 'diary' | 'task' | 'project';
+import { ICON_home, ICON_calendar, ICON_newDiary, ICON_newTask, ICON_newProject, ICON_allProjects, ICON_opportunity, ICON_gear, ICON_moon, ICON_sun, injectSvg } from '../../icons';
+export type WorkbenchAction = 'home' | 'plan' | 'all' | 'opportunity' | 'classic' | 'diary' | 'task' | 'project';
 /** Format lunar date as "五月廿二" style */
 function getLunarDate(d: Date): string {
 	try {
@@ -373,6 +373,7 @@ export class WorkbenchShell extends Component {
 		// 仅调整工作台导航标签，保留原有页面与数据行为。
 		const navItems: Array<{ glyph: string; label: string; action: string; svg?: string }> = [
 			{ glyph: '\u2302', label: '首页', action: 'home', svg: ICON_home },
+			{ glyph: '\u25A4', label: '计划', action: 'plan', svg: ICON_calendar },
 			{ glyph: '\u203A', label: '进程', action: 'all', svg: ICON_allProjects },
 		];
 		if (this.plugin.settings.boardEnabled) {

@@ -1899,6 +1899,44 @@ input[type="date"].ad-modal-input { cursor: pointer; }
 /* Empty state for views */
 .po-empty { display: flex; align-items: center; justify-content: center; padding: 40px; color: var(--ad-text-dim); font-size: 13px; }
 
+/* Plan workspace: reuse ProjectBoard primitives; only the month picker and stacked
+   board geometry are specific to this top-level view. */
+.mx-plan-container { height: auto; min-height: 660px; max-height: none; }
+.mx-plan-side-label { padding: 12px 10px 4px; color: var(--ad-text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.mx-plan-year { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 14px 2px 8px; color: var(--ad-text); font-size: 12px; font-weight: 600; }
+.mx-plan-months { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.mx-plan-months .po-chip { position: relative; min-width: 0; padding: 5px 4px; }
+.mx-plan-month-dot { position: absolute; right: 4px; top: 4px; width: 4px; height: 4px; border-radius: 50%; background: var(--ad-accent); }
+.mx-plan-context { margin-left: auto; color: var(--ad-text-dim); font-size: 11px; }
+.mx-plan-title { color: var(--ad-text); font-size: 12px; font-weight: 600; }
+.mx-plan-summary { flex: 1 1 0; min-height: 220px; padding-bottom: 5px; }
+.mx-plan-weeks { flex: 2 1 0; min-height: 300px; padding-top: 5px; border-top: 1px solid var(--ad-line); }
+.mx-plan-weeks .po-kanban__col { flex: 0 0 210px; }
+.mx-plan-empty { min-height: 74px; padding: 18px 8px; text-align: center; }
+.mx-plan-calendar-days { grid-auto-rows: minmax(72px, 1fr); }
+.mx-plan-task-learning { border-left-color: var(--ad-accent); }
+.mx-plan-task-creation { border-left-color: var(--ad-warn); }
+.mx-plan-task-daily { border-left-color: var(--ad-success); }
+
+@container (max-width: 1100px) {
+  .mx-plan-container { flex-direction: column; min-height: 0; }
+  .mx-plan-container .po-sidebar { width: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--ad-line); }
+  .mx-plan-summary .po-kanban__col { min-width: 220px; }
+  .mx-plan-calendar-days { min-width: 620px; }
+  .mx-plan-workspace .po-cal { overflow-x: auto; }
+}
+
+/* Obsidian desktop reports the host window width rather than the leaf width in
+   older WebViews, so keep the original media-query path as a narrow-window
+   fallback while the container query handles split leaves. */
+@media (max-width: 1400px) {
+  .mx-plan-container { flex-direction: column; min-height: 0; }
+  .mx-plan-container .po-sidebar { width: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--ad-line); }
+  .mx-plan-summary .po-kanban__col { min-width: 220px; }
+  .mx-plan-calendar-days { min-width: 620px; }
+  .mx-plan-workspace .po-cal { overflow-x: auto; }
+}
+
 /* Gantt resized (after drag) */
 .po-gantt--resized.po-gantt--resized { flex: none; }
 
