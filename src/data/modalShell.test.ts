@@ -29,6 +29,8 @@ class Element {
 	empty(): void { this.children = []; }
 	remove(): void { if (this.parent) this.parent.children = this.parent.children.filter(e => e !== this); }
 	focus(): void { this.focused = true; }
+	setSelectionRange(): void {}
+	addEventListener(type: string, callback: (...args: any[]) => unknown): void { if (type === 'click') this.onclick = callback; }
 	click(): unknown { return this.onclick(); }
 	all(): Element[] { return [this, ...this.children.flatMap(el => el.all())]; }
 }
@@ -42,6 +44,20 @@ class Modal {
 	close(): void { this.closed = true; (this as any).onClose(); }
 }
 let openedModals: Modal[] = [];
+function parseYaml(source: string): Record<string, unknown> {
+	const result: Record<string, unknown> = {}, lines = source.split(/\r?\n/);
+	for (let index = 0; index < lines.length; index++) {
+		const match = /^([^\s:#][^:]*):\s*(.*)$/.exec(lines[index] ?? ''); if (!match) continue;
+		const key = match[1]!.replace(/^['"]|['"]$/g, ''), raw = match[2] ?? '';
+		if (!raw) {
+			const values: string[] = []; let next = index + 1;
+			while (next < lines.length) { const item = /^\s+-\s+(.+)$/.exec(lines[next] ?? ''); if (!item) break; values.push(item[1]!.replace(/^['"]|['"]$/g, '')); next++; }
+			result[key] = values; index = next - 1; continue;
+		}
+		try { result[key] = JSON.parse(raw); } catch { result[key] = raw.replace(/^['"]|['"]$/g, ''); }
+	}
+	return result;
+}
 const code = buildSync({
 	stdin: { contents: "export { NewEmbeddedTaskModal } from './src/views/EmbeddedTaskModal'; export { UnifiedProcessModal } from './src/views/UnifiedProcessModal'; export { DirectionAbilityModal } from './src/views/DirectionAbilityModal';", resolveDir: fileURLToPath(new URL('../../', import.meta.url)) },
 	bundle: true, platform: 'node', format: 'cjs', write: false, external: ['obsidian'],
@@ -67,14 +83,15 @@ function fixture() {
 		},
 		metadataCache: { getFileCache: (file: File) => {
 			const raw = files.get(file.path) ?? '';
-			const value = (key: string) => new RegExp(`^${key}: (.+)$`, 'm').exec(raw)?.[1]?.replace(/^"|"$/g, '');
-			return { frontmatter: { 类型: value('类型'), 资源类型: value('资源类型'), 状态: value('状态'), 方向: value('方向') || '设计' }, headings: [...raw.matchAll(/^##\s+(.+)$/gm)].map(match => ({ heading: match[1] })) };
+			const block = /^---\r?\n([\s\S]*?)\r?\n---/.exec(raw), frontmatter = block ? parseYaml(block[1]!) : {};
+			if (!frontmatter['方向']) frontmatter['方向'] = '设计';
+			return { frontmatter, headings: [...raw.matchAll(/^##\s+(.+)$/gm)].map(match => ({ heading: match[1] })) };
 		} },
 		workspace: { getLeavesOfType: () => [], getLeaf: () => ({ setViewState: async (state: any) => opened.push(state), openFile: async (file:File) => opened.push({file:file.path}) }), revealLeaf: async () => {}, setActiveLeaf(){} },
 	};
 	const module: { exports: any } = { exports: {} };
 	runInNewContext(code, { module, exports: module.exports, crypto: { randomUUID }, require: (id: string) => {
-		assert.equal(id, 'obsidian'); return { Modal, ItemView: class {}, TFile: File, TFolder: Folder, Notice: class { constructor(text: string) { notices.push(text); } } };
+		assert.equal(id, 'obsidian'); return { Modal, ItemView: class {}, TFile: File, TFolder: Folder, parseYaml, Notice: class { constructor(text: string) { notices.push(text); } } };
 	} });
 	const store = new EmbeddedTaskIndex({ paths: () => [...files.keys()], read: async p => files.get(p)!, process: async (p, update) => { files.set(p, update(files.get(p)!)); }, ensureDaily: async () => {} }, randomUUID);
 	return { files, dirs, app, store, notices, opened, project, learning, Task: module.exports.NewEmbeddedTaskModal, Project: (class extends module.exports.UnifiedProcessModal { constructor(app:any) { super(app, 'creation'); } onOpen(){ super.onOpen(); button(this as any, '项目与成果').onclick(); } }) as any, Unified: module.exports.UnifiedProcessModal, Ability: module.exports.DirectionAbilityModal, openedModal: () => openedModals.at(-1) };
@@ -222,7 +239,7 @@ test('Global process creation opens one author-style UnifiedProcessModal, withou
 	const f=fixture(),m=new f.Unified(f.app);m.onOpen();assert.equal(m.contentEl.all().find((e:Element)=>e.tag==='h3').text,'新建进程');assert.ok(m.contentEl.classes.has('ad-task-modal'));assert.deepEqual(m.contentEl.all().filter((e:Element)=>e.classes.has('ad-prio-btn')).map((e:Element)=>e.text),['学习','创作','课程','电影','书籍','视频','文章']);
 });
 test('Unified learning type exposes a disabled direction-bound ability selector',()=>{
-	const f=fixture(),m=new f.Unified(f.app);m.onOpen();for(const label of ['课程名称','方向（可选）','状态','开始日期（可选）','截止日期（可选）','培养能力（可选）','学习目标（可选）'])control(m,label);const ability=control(m,'培养能力（可选）');assert.equal(ability.disabled,true);assert.equal(ability.children[0]!.text,'先选择人生方向');assert.equal(button(m,'＋ 新建能力').disabled,true);assert.equal(m.contentEl.all().some((e:Element)=>e.text==='学习进程'),false);
+	const f=fixture(),m=new f.Unified(f.app);m.onOpen();for(const label of ['课程名称','方向（可选）','状态','开始日期（可选）','截止日期（可选）','培养能力（可选）','学习目标（可选）'])control(m,label);const ability=control(m,'培养能力（可选）');assert.equal(ability.disabled,true);assert.equal(ability.children[0]!.text,'先选择人生方向');assert.equal(button(m,'＋ 新建能力').disabled,true);assert.equal(button(m,'编辑').disabled,true);assert.equal(m.contentEl.all().some((e:Element)=>e.text==='学习进程'),false);
 });
 test('Unified project type hides ability and uses project labels',()=>{
 	const f=fixture(),m=new f.Unified(f.app);m.onOpen();button(m,'创作').onclick();button(m,'项目与成果').onclick();control(m,'项目与成果名称');control(m,'项目目标（可选）');assert.equal(m.contentEl.all().some((e:Element)=>e.attr['aria-label']==='培养能力（可选）'),false);assert.equal(m.contentEl.all().some((e:Element)=>e.text==='＋ 新建能力'),false);
@@ -244,6 +261,18 @@ test('New ability writes the selected direction, refreshes selector and selects 
 });
 test('Duplicate ability reports and auto-selects the existing item',async()=>{
 	const f=fixture();direction(f,'设计',['Blender']);const m=new f.Unified(f.app);m.onOpen();set(m,'方向（可选）','设计');await flush();button(m,'＋ 新建能力').onclick();const child=f.openedModal()!;set(child,'能力名称',' blender ');await button(child,'添加').onclick();await flush();assert.equal(control(m,'培养能力（可选）').value,'Blender');assert.ok(f.notices.includes('该能力已存在'));assert.equal((f.files.get('05-计划/01-人生方向/设计.md')!.match(/^- Blender$/gm)||[]).length,1);
+});
+test('Ability edit stays disabled without a selection and opens the original small modal when selected',async()=>{
+	const f=fixture();direction(f,'英语',['英文信息获取']);const m=new f.Unified(f.app);m.onOpen();set(m,'方向（可选）','英语');await flush();assert.equal(button(m,'编辑').disabled,true);set(m,'培养能力（可选）','英文信息获取');assert.equal(button(m,'编辑').disabled,false);button(m,'编辑').onclick();const edit=f.openedModal()!;assert.equal(edit.contentEl.all().find((e:Element)=>e.tag==='h3')!.text,'编辑能力');assert.ok(edit.contentEl.all().some((e:Element)=>e.text==='当前方向：英语'));assert.equal(control(edit,'能力名称').value,'英文信息获取');
+});
+test('Cancelling learning-reference sync keeps the renamed direction ability and refreshes the current selection',async()=>{
+	const f=fixture(),path='01-学习与资料/课程/英语新闻.md';direction(f,'英语',['英文信息获取']);f.files.set(path,'---\n类型: 学习资源\n资源类型: 课程\n方向: 英语\n所属能力: ["英文信息获取"]\n---\n\n正文');
+	const m=new f.Unified(f.app);m.onOpen();set(m,'方向（可选）','英语');await flush();set(m,'培养能力（可选）','英文信息获取');button(m,'编辑').onclick();const edit=f.openedModal()!;set(edit,'能力名称','英文信息检索');await button(edit,'保存').onclick();await flush();
+	const confirm=f.openedModal()!;assert.ok(confirm.contentEl.all().some((e:Element)=>e.text==='有 1 篇学习内容正在使用此能力，是否同步更新？'));assert.equal(control(m,'培养能力（可选）').value,'英文信息检索');assert.ok(f.files.get('05-计划/01-人生方向/英语.md')!.includes('- 英文信息检索'));button(confirm,'取消').onclick();await flush();assert.ok(f.files.get(path)!.includes('所属能力: ["英文信息获取"]'));
+});
+test('Confirming ability sync updates every matching learning note immediately',async()=>{
+	const f=fixture(),paths=['01-学习与资料/课程/英语新闻.md','01-学习与资料/书籍/英文阅读.md'];direction(f,'英语',['英文信息获取']);for(const path of paths)f.files.set(path,'---\n类型: 学习资源\n资源类型: 课程\n方向: 英语\n所属能力: ["英文信息获取"]\n---\n\n正文');
+	const m=new f.Unified(f.app);m.onOpen();set(m,'方向（可选）','英语');await flush();set(m,'培养能力（可选）','英文信息获取');button(m,'编辑').onclick();const edit=f.openedModal()!;set(edit,'能力名称','英文信息检索');await button(edit,'保存').onclick();await flush();const confirm=f.openedModal()!;assert.ok(confirm.contentEl.all().some((e:Element)=>e.text==='有 2 篇学习内容正在使用此能力，是否同步更新？'));button(confirm,'同步更新').onclick();await flush();await flush();for(const path of paths)assert.ok(f.files.get(path)!.includes('所属能力: ["英文信息检索"]'));assert.ok(f.notices.includes('已同步更新 2 篇学习内容'));
 });
 test('Learning duplicate creation leaves existing note untouched and modal open',async()=>{
 	const f=fixture(),m=new f.Unified(f.app);const path='01-学习与资料/课程/已有学习.md';f.files.set(path,'真实内容');m.onOpen();set(m,'课程名称','已有学习');await button(m,'创建进程').onclick();assert.equal(f.files.get(path),'真实内容');assert.equal(m.closed,false);assert.equal(button(m,'创建进程').disabled,false);assert.ok(f.notices.some(n=>n.includes('不会覆盖')));

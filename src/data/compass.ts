@@ -78,6 +78,105 @@ export function appendDirectionAbility(markdown: string, input: string): { markd
 	}
 	return { markdown: lines.join(eol), ability, added: true };
 }
+export function renameDirectionAbilityInMarkdown(markdown: string, currentInput: string, nextInput: string): { markdown: string; ability: string; changed: boolean } {
+	const current = abilityName(currentInput), next = abilityName(nextInput);
+	const abilities = directionAbilities(markdown);
+	const existing = abilities.find(value => abilityKey(value) === abilityKey(current));
+	if (!existing) throw new Error('该能力已不存在，请刷新后重试');
+	if (abilities.some(value => abilityKey(value) === abilityKey(next) && abilityKey(value) !== abilityKey(existing))) throw new Error('该能力已存在');
+	if (existing === next) return { markdown, ability: existing, changed: false };
+	const eol = markdown.includes('\r\n') ? '\r\n' : '\n', lines = markdown.split(/\r?\n/);
+	let frontmatter = false, fence = '', fenceLength = 0, section = false;
+	const matches: Array<{ index: number; prefix: string }> = [];
+	for (let index = 0; index < lines.length; index++) {
+		const line = lines[index] ?? '';
+		if (index === 0 && line.replace(/^\uFEFF/, '').trim() === '---') { frontmatter = true; continue; }
+		if (frontmatter) { if (/^(---|\.\.\.)\s*$/.test(line)) frontmatter = false; continue; }
+		const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+		if (fence) { if (marker && marker[1]?.[0] === fence && marker[1].length >= fenceLength && !marker[2]?.trim()) fence = ''; continue; }
+		if (marker) { fence = marker[1]?.[0] ?? ''; fenceLength = marker[1]?.length ?? 3; continue; }
+		const heading = /^ {0,3}(#{1,6})(?:\s+|$)(.*?)\s*#*\s*$/.exec(line);
+		if (heading) {
+			const level = heading[1]?.length ?? 6, title = heading[2]?.trim() ?? '';
+			if (section && level <= 2) break;
+			if (level === 2 && title === '长期能力') section = true;
+			continue;
+		}
+		if (!section) continue;
+		const item = /^(\s*[-*+](?:\s+|$)(?:\[[ xX]\](?:\s+|$))?)(.*)$/.exec(line);
+		if (item && abilityKey(item[2] ?? '') === abilityKey(existing)) matches.push({ index, prefix: item[1] ?? '- ' });
+	}
+	if (matches.length !== 1) throw new Error('长期能力条目格式不明确，请先手动整理方向笔记');
+	lines[matches[0]!.index] = matches[0]!.prefix + next;
+	return { markdown: lines.join(eol), ability: next, changed: true };
+}
+type YamlReader = (yaml: string) => unknown;
+function frontmatterBlock(markdown: string): RegExpExecArray {
+	const block = /^(\uFEFF?---[ \t]*\r?\n)([\s\S]*?)(\r?\n(?:---|\.\.\.)[ \t]*(?=\r?\n|$))/.exec(markdown);
+	if (!block) throw new Error('学习笔记缺少有效 Properties');
+	return block;
+}
+function parsedFrontmatter(markdown: string, parseYaml: YamlReader): { block: RegExpExecArray; fm: Record<string, unknown> } {
+	const block = frontmatterBlock(markdown), parsed = parseYaml(block[2]!);
+	if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('学习笔记 Properties 无效');
+	return { block, fm: parsed as Record<string, unknown> };
+}
+function abilityValues(value: unknown): string[] {
+	const values = Array.isArray(value) ? value : value == null ? [] : [value];
+	if (values.some(item => typeof item !== 'string')) throw new Error('所属能力 Properties 格式不明确');
+	return values as string[];
+}
+export function learningAbilityReferences(notes: LearningNote[], direction: string, ability: string): string[] {
+	const key = abilityKey(ability);
+	return notes.filter(note => ['学习主题', '学习资源'].includes(note.kind) && note.direction === direction && note.abilities.some(value => abilityKey(value) === key)).map(note => note.path);
+}
+/** Replace only the top-level 所属能力 field and verify all other parsed Properties remain unchanged. */
+export function replaceLearningAbilityProperty(markdown: string, direction: string, currentInput: string, nextInput: string, parseYaml: YamlReader): { markdown: string; changed: boolean } {
+	const current = abilityName(currentInput), next = abilityName(nextInput);
+	const before = parsedFrontmatter(markdown, parseYaml), kind = String(before.fm['类型'] ?? '');
+	if (!['学习主题', '学习资源'].includes(kind) || String(before.fm['方向'] ?? '') !== direction) throw new Error('学习笔记的方向或类型已变化，未同步能力');
+	const values = abilityValues(before.fm['所属能力']);
+	const indexes = values.map((value, index) => abilityKey(learningNameFromRelation(value)) === abilityKey(current) ? index : -1).filter(index => index >= 0);
+	if (!indexes.length) return { markdown, changed: false };
+	const updated = values.map((value, index) => indexes.includes(index) ? next : value);
+	const yaml = before.block[2]!, eol = markdown.includes('\r\n') ? '\r\n' : '\n', lines = yaml.split(/\r?\n/);
+	const fields = lines.map((line, index) => /^(?:所属能力|"所属能力"|'所属能力')[ \t]*:/.test(line) ? index : -1).filter(index => index >= 0);
+	if (fields.length !== 1) throw new Error('所属能力 Properties 格式不明确');
+	const start = fields[0]!;
+	let end = start + 1;
+	if (!lines[start]!.slice(lines[start]!.indexOf(':') + 1).trim()) {
+		while (end < lines.length && (/^\s+-\s+/.test(lines[end] ?? '') || /^\s+\S/.test(lines[end] ?? ''))) end++;
+	}
+	lines.splice(start, end - start, `所属能力: ${JSON.stringify(updated)}`);
+	const updatedYaml = lines.join(eol), result = before.block[1] + updatedYaml + before.block[3] + markdown.slice(before.block[0].length);
+	const after = parsedFrontmatter(result, parseYaml);
+	const other = (fm: Record<string, unknown>) => JSON.stringify(Object.keys(fm).filter(key => key !== '所属能力').sort().map(key => [key, fm[key]]));
+	if (other(before.fm) !== other(after.fm) || !after.fm['所属能力']) throw new Error('能力同步会影响其他 Properties，已取消写入');
+	return { markdown: result, changed: true };
+}
+function learningNameFromRelation(value: string): string {
+	const link = /^\[\[(.*)\]\]$/.exec(value.trim())?.[1];
+	return link ? (link.split('|')[1] || (link.split('#')[0] ?? link).split('/').pop() || value) : value;
+}
+export async function renameDirectionAbility(files: LearningFiles, direction: string, current: string, next: string): Promise<{ path: string; ability: string; changed: boolean }> {
+	const path = directionInfo(direction).path;
+	if (files.kind(path) !== 'file') throw new Error('方向笔记不存在');
+	let result = { markdown: '', ability: abilityName(next), changed: false };
+	await files.process(path, markdown => { result = renameDirectionAbilityInMarkdown(markdown, current, next); return result.markdown; });
+	return { path, ability: result.ability, changed: result.changed };
+}
+export async function syncLearningAbilityReferences(files: LearningFiles, paths: string[], direction: string, current: string, next: string, parseYaml: YamlReader): Promise<number> {
+	const prepared: Array<{ path: string; before: string; after: string }> = [];
+	for (const path of [...new Set(paths)]) {
+		const before = await files.read(path), update = replaceLearningAbilityProperty(before, direction, current, next, parseYaml);
+		if (update.changed) prepared.push({ path, before, after: update.markdown });
+	}
+	for (const item of prepared) await files.process(item.path, markdown => {
+		if (markdown !== item.before) throw new Error('学习笔记已变化，请重新同步');
+		return item.after;
+	});
+	return prepared.length;
+}
 export async function readDirectionAbilities(files: Pick<PlanFiles, 'kind' | 'read'>, direction: string): Promise<string[]> {
 	const path = directionInfo(direction).path;
 	if (files.kind(path) !== 'file') return [];

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { addDirectionAbility, appendDirectionAbility, directionAbilityOptions, directionInfo, directionTemplate, ensureDirection, directionAbilities, directionTopics, directionResources, allLearningTopics, readDirectionAbilities } from './compass.ts';
+import { addDirectionAbility, appendDirectionAbility, directionAbilityOptions, directionInfo, directionTemplate, ensureDirection, directionAbilities, directionTopics, directionResources, allLearningTopics, learningAbilityReferences, readDirectionAbilities, renameDirectionAbility, renameDirectionAbilityInMarkdown, replaceLearningAbilityProperty, syncLearningAbilityReferences } from './compass.ts';
 import { learningNote, learningTemplate } from './learning.ts';
 import { renderLifeCompass } from '../components/workbench/LifeCompass.ts';
 import type { PlanFiles } from './planning';
@@ -45,6 +45,28 @@ test('concurrent duplicate addition remains one ability',async()=>{const f=edita
 test('legacy free-text ability remains selectable but is visibly marked',()=>assert.deepEqual(directionAbilityOptions(['商业视觉'],'旧能力'),[{value:'商业视觉',label:'商业视觉',legacy:false},{value:'旧能力',label:'旧能力（未加入方向能力）',legacy:true}]));
 test('ability options de-duplicate direction values safely',()=>assert.deepEqual(directionAbilityOptions([' Blender ','blender','商业视觉']),[{value:'Blender',label:'Blender',legacy:false},{value:'商业视觉',label:'商业视觉',legacy:false}]));
 test('existing free-text learning ability remains readable without changing direction abilities',()=>{const n=learningNote('旧主题.md','旧主题',{类型:'学习主题',方向:'设计',所属能力:['旧能力']})!;assert.deepEqual(n.abilities,['旧能力']);assert.deepEqual(directionAbilities('## 长期能力\n- 商业视觉'),['商业视觉']);});
+test('ability rename updates exactly one direction Markdown entry and preserves surrounding content',async()=>{
+	const f=editableFiles(),path=directionInfo('英语').path,raw='# 英语\r\n\r\n## 长期能力\r\n\r\n- 英文信息获取\r\n- 口语\r\n\r\n## 备注\r\n用户正文';f.store.set(path,raw);
+	const result=await renameDirectionAbility(f,'英语','英文信息获取','英文信息检索');
+	assert.deepEqual(result,{path,ability:'英文信息检索',changed:true});assert.deepEqual(directionAbilities(f.store.get(path)!),['英文信息检索','口语']);assert.ok(f.store.get(path)!.endsWith('## 备注\r\n用户正文'));
+});
+test('ability rename rejects a same-direction duplicate without changing Markdown',()=>{
+	const raw='## 长期能力\n- 阅读\n- 写作';assert.throws(()=>renameDirectionAbilityInMarkdown(raw,'阅读','写作'),/该能力已存在/);assert.deepEqual(directionAbilities(raw),['阅读','写作']);
+});
+const yaml=(source:string):Record<string,unknown>=>{const out:Record<string,unknown>={},lines=source.split(/\r?\n/);for(let i=0;i<lines.length;i++){const match=/^([^\s:#][^:]*):\s*(.*)$/.exec(lines[i]??'');if(!match)continue;const key=match[1]!.trim(),raw=match[2]??'';if(!raw){const values:string[]=[];while(/^\s+-\s+(.+)$/.test(lines[i+1]??'')){i++;values.push(/^\s+-\s+(.+)$/.exec(lines[i]!)![1]!);}out[key]=values;continue;}try{out[key]=JSON.parse(raw);}catch{out[key]=raw;}}return out;};
+test('learning ability reference scan is direction-scoped and excludes non-learning content',()=>{
+	const notes=[learningNote('a.md','a',{类型:'学习资源',方向:'英语',所属能力:['英文信息获取']})!,learningNote('b.md','b',{类型:'学习主题',方向:'设计',所属能力:['英文信息获取']})!,learningNote('c.md','c',{类型:'知识与思考',方向:'英语',所属能力:['英文信息获取']})!];
+	assert.deepEqual(learningAbilityReferences(notes,'英语','英文信息获取'),['a.md']);
+});
+test('learning ability property replacement changes only the matching Property',()=>{
+	const raw='---\n类型: 学习资源\n方向: 英语\n所属能力:\n  - 英文信息获取\n  - 口语\n状态: 进行中\n---\n\n## 学习任务\n\n正文';
+	const result=replaceLearningAbilityProperty(raw,'英语','英文信息获取','英文信息检索',yaml);assert.equal(result.changed,true);assert.ok(result.markdown.includes('所属能力: ["英文信息检索","口语"]'));assert.ok(result.markdown.endsWith('## 学习任务\n\n正文'));assert.ok(result.markdown.includes('状态: 进行中'));
+});
+test('multiple learning references sync while the same ability in another direction is untouched',async()=>{
+	const f=editableFiles(),a='01-学习与资料/课程/a.md',b='01-学习与资料/书籍/b.md',other='01-学习与资料/课程/c.md';
+	for(const [path,type,direction] of [[a,'学习资源','英语'],[b,'学习主题','英语'],[other,'学习资源','设计']] as const)f.store.set(path,`---\n类型: ${type}\n方向: ${direction}\n所属能力: ["英文信息获取"]\n---\n\n正文`);
+	assert.equal(await syncLearningAbilityReferences(f,[a,b],'英语','英文信息获取','英文信息检索',yaml),2);assert.ok(f.store.get(a)!.includes('英文信息检索'));assert.ok(f.store.get(b)!.includes('英文信息检索'));assert.ok(f.store.get(other)!.includes('英文信息获取'));
+});
 const topic=(name:string,direction='',status='学习中')=>learningNote(`${name}.md`,name,{类型:'学习主题',方向:direction,状态:status,所属能力:['能力一'],优先级:'主攻'})!;
 test('topics filter by direction and active first', () => { const a=topic('暂停','设计','暂停'),b=topic('当前','设计'),c=topic('别的','英语'); assert.deepEqual(directionTopics([a,c,b],'设计'),[b,a]); });
 test('old topics with no direction compatible', () => { const n=topic('旧主题'); assert.equal(n.direction,''); assert.deepEqual(directionTopics([n],'设计'),[]); assert.deepEqual(n.abilities,['能力一']); });

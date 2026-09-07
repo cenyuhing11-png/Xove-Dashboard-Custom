@@ -10,7 +10,7 @@ import { learningFiles, openLearningFile } from '../data/learningVault';
 import { todayStr } from '../data/taskLogic';
 import { openProjects } from './ProjectView';
 import { beginListModal, closeListModal } from './viewPrimitives';
-import { DirectionAbilityModal } from './DirectionAbilityModal';
+import { DirectionAbilityModal, EditDirectionAbilityModal } from './DirectionAbilityModal';
 
 /** One author-style form; each type keeps its existing Markdown creator. */
 export class UnifiedProcessModal extends Modal {
@@ -63,32 +63,41 @@ export class UnifiedProcessModal extends Modal {
 			const abilityRow = el.createDiv({ cls: 'ad-modal-row mx-ability-row' });
 			const ability = abilityRow.createEl('select', { cls: 'ad-modal-input', attr: { 'aria-label': '培养能力（可选）' } });
 			const addAbility = abilityRow.createEl('button', { cls: 'mx-inline-action mx-ability-add', text: '＋ 新建能力', attr: { type: 'button' } });
-			controls.push(ability, addAbility);
+			const editAbility = abilityRow.createEl('button', { cls: 'mx-inline-action mx-ability-edit', text: '编辑', attr: { type: 'button' } });
+			controls.push(ability, addAbility, editAbility);
 			const refreshAbilities = async (selected = this.input.ability || '') => {
 				const selectedDirection = this.input.direction || '';
 				ability.empty();
 				if (!selectedDirection) {
 					ability.createEl('option', { value: '', text: '先选择人生方向' });
-					ability.value = ''; ability.disabled = true; addAbility.disabled = true; return;
+					ability.value = ''; ability.disabled = true; addAbility.disabled = true; editAbility.disabled = true; return;
 				}
-				ability.createEl('option', { value: '', text: '正在读取能力…' }); ability.disabled = true; addAbility.disabled = true;
+				ability.createEl('option', { value: '', text: '正在读取能力…' }); ability.disabled = true; addAbility.disabled = true; editAbility.disabled = true;
 				try {
 					const values = await readDirectionAbilities(learningFiles(this.app), selectedDirection);
 					if (generation !== this.generation || selectedDirection !== this.input.direction) return;
 					ability.empty(); ability.createEl('option', { value: '', text: values.length ? '未选择' : '暂无能力，请新建' });
 					for (const option of directionAbilityOptions(values, selected)) ability.createEl('option', { value: option.value, text: option.label });
-					ability.value = selected; ability.disabled = false; addAbility.disabled = false;
+					ability.value = selected; ability.disabled = false; addAbility.disabled = false; editAbility.disabled = !ability.value;
 				} catch {
 					if (generation !== this.generation) return;
 					ability.empty(); ability.createEl('option', { value: '', text: '暂时无法读取方向能力' });
-					ability.disabled = true; addAbility.disabled = false;
+					ability.disabled = true; addAbility.disabled = false; editAbility.disabled = true;
 				}
 			};
-			ability.onchange = () => { this.input.ability = ability.value || undefined; };
+			ability.onchange = () => { this.input.ability = ability.value || undefined; editAbility.disabled = !ability.value; };
 			addAbility.onclick = () => {
 				const selectedDirection = this.input.direction;
 				if (!selectedDirection || this.saving) return;
 				new DirectionAbilityModal(this.app, selectedDirection, async value => {
+					if (generation !== this.generation || this.input.direction !== selectedDirection) return;
+					this.input.ability = value; await refreshAbilities(value);
+				}).open();
+			};
+			editAbility.onclick = () => {
+				const selectedDirection = this.input.direction, selectedAbility = ability.value;
+				if (!selectedDirection || !selectedAbility || this.saving) return;
+				new EditDirectionAbilityModal(this.app, selectedDirection, selectedAbility, async value => {
 					if (generation !== this.generation || this.input.direction !== selectedDirection) return;
 					this.input.ability = value; await refreshAbilities(value);
 				}).open();
