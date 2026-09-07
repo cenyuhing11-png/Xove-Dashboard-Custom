@@ -1,4 +1,5 @@
 import type { PlanFiles } from './planning';
+import { readSection } from './planning.ts';
 import { parseEmbeddedTasks, validTaskDate } from './embeddedTasks.ts';
 import { INBOX_ROOT, KNOWLEDGE_ROOT, LEARNING_FOLDERS, LEARNING_ROOT } from './vaultPaths.ts';
 
@@ -26,7 +27,7 @@ export interface LearningNote {
 	startDate?: string; dueDate?: string;
 	hasLearningTasks: boolean; hasCreationTasks: boolean;
 }
-export interface CurrentLearning extends LearningNote { next: string }
+export interface CurrentLearning extends LearningNote { goal: string; next: string }
 
 function text(value: unknown): string { return typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : ''; }
 function optionalDate(value: unknown): string | undefined {
@@ -79,8 +80,11 @@ export function learningNextStep(path: string, markdown: string): string {
 }
 export async function currentLearning(notes: LearningNote[], read: (path: string) => Promise<string>): Promise<CurrentLearning[]> {
 	return Promise.all(currentTopics(notes).map(async (note) => {
-		try { return { ...note, next: learningNextStep(note.path, await read(note.path)) }; }
-		catch { return { ...note, next: '' }; }
+		try {
+			const markdown = await read(note.path);
+			return { ...note, goal: readSection(markdown, '学习目标').content.join(' '), next: learningNextStep(note.path, markdown) };
+		}
+		catch { return { ...note, goal: '', next: '' }; }
 	}));
 }
 

@@ -69,6 +69,27 @@ export function currentProcesses(items: readonly Process[]): Process[] {
 	return items.filter(p => p.status === '进行中' || p.status === '计划中')
 		.sort((a,b) => Number(a.status !== '进行中') - Number(b.status !== '进行中') || (a.dueDate || '9999').localeCompare(b.dueDate || '9999') || a.sourceFile.localeCompare(b.sourceFile, 'zh-CN')).slice(0, 3);
 }
+export function runningProcessCounts(items: readonly Process[]): { total: number; learning: number; creation: number } {
+	const running = items.filter(process => process.status === '进行中');
+	return {
+		total: running.length,
+		learning: running.filter(process => process.category === 'learning').length,
+		creation: running.filter(process => process.category === 'creation').length,
+	};
+}
+function localDateKey(date: Date): string {
+	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+/** Preserve the homepage's established inclusive 14-day horizon; return only the nearest items. */
+export function upcomingProcesses(items: readonly Process[], today = new Date(), days = 14, limit = 3): Process[] {
+	const horizon = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+	horizon.setDate(horizon.getDate() + days);
+	const start = localDateKey(today), end = localDateKey(horizon);
+	return items.filter(process => !['已完成', '归档'].includes(process.status)
+		&& !!process.dueDate && validTaskDate(process.dueDate) && process.dueDate >= start && process.dueDate <= end)
+		.sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '') || a.sourceFile.localeCompare(b.sourceFile, 'zh-CN'))
+		.slice(0, Math.max(0, limit));
+}
 export function processBoardItems(items: readonly Process[]): ProcessBoardItem[] {
 	return items.map(process => ({ process, key: process.sourceFile, path: process.sourceFile, name: process.name,
 		status: process.status, direction: process.direction, description: '', color: '#7BA7FF',

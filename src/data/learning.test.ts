@@ -51,8 +51,9 @@ test('resource relations and type are data driven', () => {
 });
 const learningProcess = (kind: '学习主题' | '学习资源' = '学习资源') => learningNote('01-学习与资料/课程/示例.md', '示例', { 类型: kind, 状态: '学习中', 资源类型: '课程' })!;
 test('next step is the first unfinished learning task as plain text', async () => {
-	const result = await currentLearning([learningProcess()], async () => '## 学习任务\n- [x] 已完成\n- [ ] **完成实践** 📅 2026-09-08\n- [ ] 第二项\n## 下一步\n旧手工内容');
+	const result = await currentLearning([learningProcess()], async () => '## 学习目标\n看懂英文新闻\n## 学习任务\n- [x] 已完成\n- [ ] **完成实践** 📅 2026-09-08\n- [ ] 第二项\n## 下一步\n旧手工内容');
 	assert.equal(result[0]?.next, '完成实践');
+	assert.equal(result[0]?.goal, '看懂英文新闻');
 });
 test('no learning tasks has an explicit homepage message', () => {
 	for (const md of ['', '## 学习任务\n\n- [ ]\n', '## 下一步\n旧手工内容']) assert.equal(learningNextStep(learningProcess().path, md), '尚未添加学习任务');
@@ -67,6 +68,7 @@ test('legacy next-step body is preserved but never selected for the homepage', a
 test('read failures do not crash homepage', async () => {
 	const result = await currentLearning([note('学习主题', { 状态: '学习中' })], async () => { throw new Error('iCloud unavailable'); });
 	assert.equal(result[0]?.next, '');
+	assert.equal(result[0]?.goal, '');
 });
 test('empty vault returns empty lists without reading', async () => {
 	assert.deepEqual(await currentLearning([], async () => { throw new Error('must not read'); }), []);

@@ -30,8 +30,7 @@ import type { WorkbenchAction } from '../components/workbench/WorkbenchShell';
 import { PLAN_PERIODS, PLAN_ROOT, ensurePlan, readPlan } from '../data/planning';
 import type { PlanFiles, PlanPeriod } from '../data/planning';
 import { currentLearning } from '../data/learning';
-import { learningFiles, openLearningFile, scanLearning } from '../data/learningVault';
-import { LearningListModal } from './LearningModals';
+import { learningFiles, scanLearning } from '../data/learningVault';
 import { ensureJournal, journalStates } from '../data/journal';
 import type { JournalKind } from '../data/journal';
 import { JournalHistoryModal } from './JournalHistoryModal';
@@ -952,15 +951,12 @@ export class DashboardView extends ItemView {
 				history: (mode) => new JournalHistoryModal(this.app, mode, (path) => this.openJournalPath(path), (kind) => this.openJournal(kind)).open(),
 			},
 			learningActions: {
-				open: (path) => { void openLearningFile(this.app, path).catch(() => this.showToast('笔记不存在或已移动')); },
-				list: (mode) => new LearningListModal(this.app, mode).open(),
+				open: (process) => { void openProcess(this.app, process); },
 			},
 			onOpenPlan: (period) => void this.openPlan(period),
 			onOpenTask: (task) => this.openTaskEditModal(task),
-			onOpenProjects: () => void openProjects(this.app),
 			onOpenProject: (project) => void openProjects(this.app, project),
 			onOpenProcess: (process) => void openProcess(this.app, process),
-			onOpenProjectView: (view) => void openProjects(this.app, undefined, view),
 			onOpenPath: (path) => void this.revealFolder(path),
 		});
 	}

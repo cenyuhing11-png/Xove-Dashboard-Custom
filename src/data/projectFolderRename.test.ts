@@ -64,8 +64,8 @@ test('Default setting, legacy fallback and task picker all reuse PROJECT_ROOT', 
 	assert.ok(read('./processes.ts').includes('projects.filter(p => inRoot(p.path, PROJECT_ROOT))'));
 	assert.ok(read('./embeddedTasks.ts').includes('path.startsWith(`${PROJECT_ROOT}/`)'));
 });
-test('Only project category captions change; works/content and final outcome retain their meaning', () => {
+test('Only project category captions change; creation/outcomes and final outcome retain their meaning', () => {
 	for (const kind of ['week', 'month'] as const) assert.ok(journalTemplate(kind).includes('## 项目与成果'));
 	assert.ok(projectTemplate(input, id, '2026-09-06').includes('## 最终成果'));
-	assert.ok(readFileSync(new URL('../components/workbench/WorkbenchHome.ts', import.meta.url), 'utf8').includes('✨ 作品与内容'));
+	assert.ok(readFileSync(new URL('../components/workbench/WorkbenchHome.ts', import.meta.url), 'utf8').includes('✨ 创作与成果'));
 });

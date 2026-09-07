@@ -1,22 +1,19 @@
 import type { CurrentLearning } from '../../data/learning';
-import { addEmpty, addEntry, createSection } from './shared';
+import type { Process } from '../../data/processes';
+import { processCategoryLabel, processContentTypeLabel } from '../../data/processContentTypes';
+import { addEmpty, addEntry, createGroup, createSection } from './shared';
 
 export interface LearningActions {
-	open(path: string): void;
-	list(mode: 'queue' | 'topics'): void;
+	open(process: Process): void;
 }
-export function renderLearningCard(parent: HTMLElement, notes: CurrentLearning[], actions: LearningActions): void {
+export function renderLearningCard(parent: HTMLElement, notes: CurrentLearning[], processes: readonly Process[], actions: LearningActions): void {
 	const body = createSection(parent, '📚 当前学习');
-	if (!notes.length) {
-		addEmpty(body, '暂无当前学习内容');
-	}
-	for (const note of notes) {
-		const group = body.createDiv({ cls: 'wb-group' });
-		addEntry(group, note.name, undefined, () => actions.open(note.path));
-		if (note.abilities.length) addEmpty(group, note.abilities.join(' · '));
-		addEmpty(group, `下一步：${note.next || '暂时无法读取学习任务'}`);
-	}
-	const links = body.createDiv({ cls: 'wb-inline-links' });
-	addEntry(links, '学习队列', undefined, () => actions.list('queue'));
-	addEntry(links, '查看学习主题', undefined, () => actions.list('topics'));
+	const note = notes.find(candidate => processes.some(process => process.category === 'learning' && process.sourceFile === candidate.path));
+	if (!note) return addEmpty(body, '暂无当前学习内容');
+	const process = processes.find(item => item.category === 'learning' && item.sourceFile === note.path)!;
+	const detail = `${processCategoryLabel(process.category)} · ${processContentTypeLabel(process.contentType, true)} · ${process.status}`;
+	addEntry(body, note.name, detail, () => actions.open(process));
+	addEmpty(createGroup(body, '培养能力'), note.abilities.join(' · ') || '暂未设置能力');
+	addEmpty(createGroup(body, '学习目标'), note.goal || '暂未填写学习目标');
+	addEmpty(createGroup(body, '下一步'), note.next || '暂无待完成学习任务');
 }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { processes, processBoardItems, filterProcesses, currentProcesses, hasProcessSchedule, taskProgressLabel, learningProcessStatus, learningProcessResources } from './processes.ts';
+import { processes, processBoardItems, filterProcesses, currentProcesses, hasProcessSchedule, taskProgressLabel, learningProcessStatus, learningProcessResources, runningProcessCounts, upcomingProcesses } from './processes.ts';
 import { learningNote, learningTemplate, currentTopics } from './learning.ts';
 import { projectNote, PROJECT_STATUSES } from './projects.ts';
 import { parseEmbeddedTasks } from './embeddedTasks.ts';
@@ -27,6 +27,18 @@ test('Creation status filter uses real project status', () => {assert.equal(filt
 test('Category and status filters combine, not replace each other', () => {const items=[...all(),{...all()[0]!,status:'暂停' as const}];assert.equal(filterProcesses(items,'learning','暂停').length,1);assert.equal(filterProcesses(items,'creation','暂停').length,0);assert.equal(filterProcesses(items).length,3);});
 test('Home prefers in-progress mixed processes and keeps its three-row cap', () => {
 	const items=[{...all()[0]!,status:'计划中' as const},...all(),{...all()[1]!,status:'暂停' as const}];const current=currentProcesses(items);assert.equal(current.length,3);assert.deepEqual(current.slice(0,2).map(p=>p.status),['进行中','进行中']);assert.deepEqual(new Set(current.slice(0,2).map(p=>p.processType)),new Set(['learning','project']));
+});
+test('Homepage running counts exclude planned, paused, completed and archived processes', () => {
+	const base=all()[0]!;const items=[...all(),...(['计划中','暂停','已完成','归档'] as const).map(status=>({...base,id:status,status}))];
+	assert.deepEqual(runningProcessCounts(items),{total:2,learning:1,creation:1});
+});
+test('Homepage upcoming deadlines are inclusive, sorted, capped and exclude completed or archived', () => {
+	const base=all()[0]!;const make=(id:string,dueDate:string,status=base.status)=>({...base,id,sourceFile:`${id}.md`,name:id,dueDate,status});
+	const result=upcomingProcesses([
+		make('later','2026-09-15'),make('nearest','2026-09-07'),make('middle','2026-09-10'),make('fourth','2026-09-12'),
+		make('past','2026-09-06'),make('far','2026-09-22'),make('done','2026-09-08','已完成'),make('archive','2026-09-09','归档'),
+	],new Date(2026,8,7));
+	assert.deepEqual(result.map(process=>process.name),['nearest','middle','fourth']);
 });
 for (const type of ['learning','project'] as const) {
 	test(`Undated ${type} does not enter calendar`,()=>{const p={...all().find(p=>p.processType===type)!,startDate:undefined,dueDate:undefined};assert.equal(processBoardItems([p]).filter(hasProcessSchedule).length,0);});
