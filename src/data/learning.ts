@@ -1,6 +1,5 @@
-import { readSection } from './planning.ts';
 import type { PlanFiles } from './planning';
-import { validTaskDate } from './embeddedTasks.ts';
+import { parseEmbeddedTasks, validTaskDate } from './embeddedTasks.ts';
 import { INBOX_ROOT, KNOWLEDGE_ROOT, LEARNING_FOLDERS, LEARNING_ROOT } from './vaultPaths.ts';
 
 export { LEARNING_ROOT } from './vaultPaths.ts';
@@ -67,9 +66,20 @@ export function queuedResources(notes: LearningNote[]): LearningNote[] {
 export function abilityNotes(notes: LearningNote[]): LearningNote[] {
 	return notes.filter((note) => note.kind === '能力').sort((a, b) => a.path.localeCompare(b.path, 'zh-CN'));
 }
+function plainTaskText(value: string): string {
+	return value.replace(/!?\[\[([^\]]+)\]\]/g, (_, link: string) => link.split('|').pop() ?? link.split('#')[0] ?? link)
+		.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/<[^>]*>/g, '')
+		.replace(/[*_~`]/g, '').replace(/\\([\[\]*_`])/g, '$1').trim();
+}
+export function learningNextStep(path: string, markdown: string): string {
+	const tasks = parseEmbeddedTasks(path, markdown);
+	if (!tasks.length) return '尚未添加学习任务';
+	const pending = tasks.find(task => !task.completed);
+	return pending ? plainTaskText(pending.text) : '学习任务已完成';
+}
 export async function currentLearning(notes: LearningNote[], read: (path: string) => Promise<string>): Promise<CurrentLearning[]> {
 	return Promise.all(currentTopics(notes).map(async (note) => {
-		try { return { ...note, next: readSection(await read(note.path), '下一步').content[0] ?? '' }; }
+		try { return { ...note, next: learningNextStep(note.path, await read(note.path)) }; }
 		catch { return { ...note, next: '' }; }
 	}));
 }

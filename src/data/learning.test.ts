@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { abilityNotes, currentLearning, currentTopics, ensureLearningNote, learningName, learningNote, learningTemplate, queuedResources, relationNames } from './learning.ts';
+import { abilityNotes, currentLearning, currentTopics, ensureLearningNote, learningName, learningNextStep, learningNote, learningTemplate, queuedResources, relationNames } from './learning.ts';
 import type { LearningKind, LearningNote } from './learning.ts';
 import type { PlanFiles } from './planning.ts';
 
@@ -49,18 +49,20 @@ test('resource relations and type are data driven', () => {
 	assert.equal(n.resourceType, '书籍');
 	assert.deepEqual(n.topics, ['阅读', '研究']);
 });
-test('next step uses shared section reader and first nonempty item', async () => {
-	const result = await currentLearning([note('学习主题', { 状态: '学习中' })], async () => '## 下一步\n-\n- [ ] **完成实践**\n- 第二项\n## 实践\n- 其它');
+const learningProcess = (kind: '学习主题' | '学习资源' = '学习资源') => learningNote('01-学习与资料/课程/示例.md', '示例', { 类型: kind, 状态: '学习中', 资源类型: '课程' })!;
+test('next step is the first unfinished learning task as plain text', async () => {
+	const result = await currentLearning([learningProcess()], async () => '## 学习任务\n- [x] 已完成\n- [ ] **完成实践** 📅 2026-09-08\n- [ ] 第二项\n## 下一步\n旧手工内容');
 	assert.equal(result[0]?.next, '完成实践');
 });
-test('next step supports plain paragraphs', async () => {
-	const result = await currentLearning([note('学习主题', { 状态: '学习中' })], async () => '## 下一步\n尝试一次输出\n');
-	assert.equal(result[0]?.next, '尝试一次输出');
+test('no learning tasks has an explicit homepage message', () => {
+	for (const md of ['', '## 学习任务\n\n- [ ]\n', '## 下一步\n旧手工内容']) assert.equal(learningNextStep(learningProcess().path, md), '尚未添加学习任务');
 });
-test('missing, empty and malformed next-step section are safe', async () => {
-	for (const md of ['', '## 其它\n- 任务', '## 下一步\n- [ ]', '---\n未闭合\n## 下一步\n- 任务']) {
-		assert.equal((await currentLearning([note('学习主题', { 状态: '学习中' })], async () => md))[0]?.next, '');
-	}
+test('completed learning tasks have an explicit homepage message', () => {
+	assert.equal(learningNextStep(learningProcess().path, '## 学习任务\n- [x] 一\n- [X] 二\n## 下一步\n旧手工内容'), '学习任务已完成');
+});
+test('legacy next-step body is preserved but never selected for the homepage', async () => {
+	const markdown = '## 学习任务\n- [ ] 新版实际行动\n## 下一步\n不要删除的旧正文';
+	assert.equal((await currentLearning([learningProcess('学习主题')], async () => markdown))[0]?.next, '新版实际行动');assert.ok(markdown.includes('不要删除的旧正文'));
 });
 test('read failures do not crash homepage', async () => {
 	const result = await currentLearning([note('学习主题', { 状态: '学习中' })], async () => { throw new Error('iCloud unavailable'); });

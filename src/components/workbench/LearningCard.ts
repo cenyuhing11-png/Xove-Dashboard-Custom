@@ -14,7 +14,7 @@ export function renderLearningCard(parent: HTMLElement, notes: CurrentLearning[]
 		const group = body.createDiv({ cls: 'wb-group' });
 		addEntry(group, note.name, undefined, () => actions.open(note.path));
 		if (note.abilities.length) addEmpty(group, note.abilities.join(' · '));
-		addEmpty(group, `下一步：${note.next || '尚未填写'}`);
+		addEmpty(group, `下一步：${note.next || '暂时无法读取学习任务'}`);
 	}
 	const links = body.createDiv({ cls: 'wb-inline-links' });
 	addEntry(links, '学习队列', undefined, () => actions.list('queue'));
