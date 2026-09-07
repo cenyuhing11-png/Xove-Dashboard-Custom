@@ -98,9 +98,10 @@ test('same-name note is opened without overwrite', async () => {
 for (const kind of ['能力', '学习主题', '学习资源'] as const) test(`${kind} creation uses blank independent Markdown template`, async () => {
 	const s = store();
 	const path = await ensureLearningNote(s.files, kind, '【测试】示例');
-	assert.equal(path, `01-学习与资料/${kind === '学习资源' ? '文档资料/' : ''}【测试】示例.md`);
+	assert.equal(path, `${kind === '学习资源' ? '00-收件箱' : '01-学习与资料'}/【测试】示例.md`);
 	assert.equal(s.contents.get(path), learningTemplate(kind, '【测试】示例'));
-	assert.ok(s.folders.has(kind === '学习资源' ? '01-学习与资料/文档资料' : '01-学习与资料'));
+	assert.ok(s.folders.has(kind === '学习资源' ? '00-收件箱' : '01-学习与资料'));
+	if (kind === '学习资源') assert.ok(!s.folders.has('01-学习与资料'));
 });
 test('concurrent creation never overwrites', async () => {
 	const s = store();

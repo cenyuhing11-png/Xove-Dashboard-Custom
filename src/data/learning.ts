@@ -1,13 +1,21 @@
 import { readSection } from './planning.ts';
 import type { PlanFiles } from './planning';
 import { validTaskDate } from './embeddedTasks.ts';
+import { INBOX_ROOT, LEARNING_FOLDERS, LEARNING_ROOT } from './vaultPaths.ts';
 
-export const LEARNING_ROOT = '01-学习与资料';
+export { LEARNING_ROOT } from './vaultPaths.ts';
 export type LearningKind = '能力' | '学习主题' | '学习资源';
-export const RESOURCE_TYPES = ['书籍', '课程', '视频', '文章', '网页', '文档', 'PDF', '其他资料'] as const;
+export const RESOURCE_TYPES = ['课程', '电影', '书籍', '视频', '文章'] as const;
 export function resourceFolder(type: string): string {
-	const folders: Record<string, string> = { 书籍: '书籍', 课程: '课程', 视频: '视频', 文章: '文章与网页', 网页: '文章与网页', 文档: '文档资料', PDF: '文档资料' };
-	return `${LEARNING_ROOT}/${Object.prototype.hasOwnProperty.call(folders, type) ? folders[type] : '文档资料'}`;
+	const folders: Record<string, string> = {
+		课程: LEARNING_FOLDERS.course,
+		电影: LEARNING_FOLDERS.film,
+		书籍: LEARNING_FOLDERS.book,
+		视频: LEARNING_FOLDERS.video,
+		文章: LEARNING_FOLDERS.article,
+		网页: LEARNING_FOLDERS.article,
+	};
+	return Object.prototype.hasOwnProperty.call(folders, type) ? `${LEARNING_ROOT}/${folders[type]}` : INBOX_ROOT;
 }
 export function learningFolder(kind: LearningKind, resourceType = '其他资料'): string {
 	return kind === '学习资源' ? resourceFolder(resourceType) : LEARNING_ROOT;
@@ -99,7 +107,8 @@ export async function ensureLearningNote(files: PlanFiles, kind: LearningKind, i
 	const content = learningTemplate(kind, name, resourceType, topic);
 	if (files.kind(path) === 'file') return existing();
 	if (files.kind(path)) throw new Error('同名路径是文件夹，无法创建笔记');
-	for (const dir of [LEARNING_ROOT, folder]) {
+	const directories = folder === LEARNING_ROOT || folder.startsWith(`${LEARNING_ROOT}/`) ? [LEARNING_ROOT, folder] : [folder];
+	for (const dir of [...new Set(directories)]) {
 		if (files.kind(dir) === 'file') throw new Error('学习目录被文件占用');
 		if (!files.kind(dir)) {
 			try { await files.createFolder(dir); }

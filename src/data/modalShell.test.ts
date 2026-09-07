@@ -133,8 +133,8 @@ test('Process selection starts with an explicit placeholder and cannot guess the
 	assert.equal(button(m, '创建任务').disabled, true); const before = [...f.files]; set(m, '任务内容', '不能猜归属');
 	await button(m, '创建任务').onclick(); assert.deepEqual([...f.files], before); assert.equal(m.closed, false);
 });
-for (const kind of ['书籍', '课程', '视频', '文章', '网页', '文档', 'PDF']) test(`Ordinary ${kind} learning resource is excluded from process task candidates`, () => {
-	const f = fixture(), path = `01-学习与资料/文档资料/${kind}.md`;
+for (const kind of ['书籍', '课程', '电影', '视频', '文章', '网页', '文档', 'PDF']) test(`Ordinary ${kind} learning resource is excluded from process task candidates`, () => {
+	const f = fixture(), path = `01-学习与资料/文章/${kind}.md`;
 	f.files.set(path, `---\n类型: 学习资源\n资源类型: ${kind}\n---\n## 学习任务\n`);
 	const m = new f.Task(f.app, f.store); m.onOpen(); set(m, '归属', 'process');
 	assert.deepEqual(new Set(control(m, '所属进程').children.filter(e => e.value).map(e => e.value)), new Set([f.learning, f.project]));
