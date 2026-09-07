@@ -6,6 +6,7 @@ import { TaskEditModal } from './TaskEditModal';
 import { NewEmbeddedTaskModal, EmbeddedTaskListModal, renderEmbeddedRows } from './EmbeddedTaskModal';
 import { openProjects } from './ProjectView';
 import { UnifiedProcessModal } from './UnifiedProcessModal';
+import { groupEmbeddedForDisplay, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS } from '../data/embeddedTasks';
 import { scanProjects } from '../data/projectVault';
 import { TaskItem, ProjectInfo, TaskStatus, ProjectType, priorityWeight, NodeState, RepeatRule, serializeDailyNodesBlock, parseDailyNodesFromBody } from '../data/taskParser';
 import { TaskStore } from '../data/taskStore';
@@ -20,6 +21,7 @@ import { UI_TEXT } from '../constants';
 import { renderWorkbenchHome } from '../components/workbench/WorkbenchHome';
 import { renderLifeCompass } from '../components/workbench/LifeCompass';
 import { processes } from '../data/processes';
+import { taskSourceTypeLabel } from '../data/processContentTypes';
 import { openProcess } from './ProjectView';
 import { calcHeatmapStats, getVaultNoteCounts } from '../utils/vaultOverview';
 import { WorkbenchShell } from '../components/workbench/WorkbenchShell';
@@ -918,23 +920,26 @@ export class DashboardView extends ItemView {
 			['00-收件箱', '01-学习与资料', '02-知识与思考']
 				.filter((path) => this.app.vault.getAbstractFileByPath(path) instanceof TFolder),
 		);
+		const processItems = processes(scanLearning(this.app), projects, this.plugin.embeddedTasks.all());
+		const taskSourceTypes = new Map(processItems.map(process => [process.sourceFile, taskSourceTypeLabel(process.contentType)]));
 
 		renderWorkbenchHome(board, {
 			renderEmbeddedToday: (parent) => {
 				const tasks = this.plugin.embeddedTasks.today(today);
 				if (!tasks.length) parent.createEl('p', { text: '今日暂无任务', cls: 'wb-empty' });
-				for (const [type, label] of [['learning', '学习'], ['creation', '创作'], ['project', '项目'], ['daily', '日常']] as const) {
-					const group = tasks.filter(task => task.sourceType === type);
+				const groups = groupEmbeddedForDisplay(tasks);
+				for (const type of TASK_DISPLAY_CATEGORIES) {
+					const group = groups[type];
 					if (!group.length) continue;
-					parent.createEl('h4', { text: label });
-					renderEmbeddedRows(parent, group, this.app, this.plugin.embeddedTasks);
+					parent.createEl('h4', { text: TASK_DISPLAY_LABELS[type] });
+					renderEmbeddedRows(parent, group, this.app, this.plugin.embeddedTasks, undefined, task => taskSourceTypes.get(task.sourceFile) ?? '');
 				}
 			},
 			onAllEmbeddedTasks: () => new EmbeddedTaskListModal(this.app, this.plugin.embeddedTasks).open(),
 			todayTasks: getTodayTasks(allTasks, today, this.plugin.settings.todoShowCompleted),
 			upcomingTasks,
 			projects,
-			processes: processes(scanLearning(this.app), projects, this.plugin.embeddedTasks.all()),
+			processes: processItems,
 			existingPaths,
 			plans,
 			learning,

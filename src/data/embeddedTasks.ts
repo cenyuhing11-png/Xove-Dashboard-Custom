@@ -3,6 +3,9 @@ import { KNOWLEDGE_ROOT, PROJECT_ROOT } from './vaultPaths.ts';
 export const DAILY_TASK_FILE = '05-计划/06-日常任务.md';
 export const EMBEDDED_HEADINGS = { learning: '学习任务', creation: '创作任务', project: '项目任务', daily: '日常待办' } as const;
 export type EmbeddedSourceType = keyof typeof EMBEDDED_HEADINGS;
+export const TASK_DISPLAY_CATEGORIES = ['learning', 'creation', 'daily'] as const;
+export type TaskDisplayCategory = typeof TASK_DISPLAY_CATEGORIES[number];
+export const TASK_DISPLAY_LABELS: Record<TaskDisplayCategory, string> = { learning: '学习任务', creation: '创作任务', daily: '日常任务' };
 export interface EmbeddedTask {
 	id: string;
 	text: string;
@@ -129,6 +132,15 @@ export function todayEmbedded(tasks: EmbeddedTask[], date: string): EmbeddedTask
 export function overdueEmbedded(tasks: EmbeddedTask[], date: string): EmbeddedTask[] { return todayEmbedded(tasks, date).filter(t => t.date! < date); }
 export function groupEmbedded(tasks: EmbeddedTask[]): Record<EmbeddedSourceType, EmbeddedTask[]> {
 	return { project: tasks.filter(t => t.sourceType === 'project'), creation: tasks.filter(t => t.sourceType === 'creation'), learning: tasks.filter(t => t.sourceType === 'learning'), daily: tasks.filter(t => t.sourceType === 'daily') };
+}
+/** Cross-source summaries expose three stable user categories; storage headings remain unchanged. */
+export function taskDisplayCategory(source: EmbeddedSourceType): TaskDisplayCategory {
+	return source === 'project' ? 'creation' : source;
+}
+export function groupEmbeddedForDisplay(tasks: EmbeddedTask[]): Record<TaskDisplayCategory, EmbeddedTask[]> {
+	const groups: Record<TaskDisplayCategory, EmbeddedTask[]> = { learning: [], creation: [], daily: [] };
+	for (const task of tasks) groups[taskDisplayCategory(task.sourceType)].push(task);
+	return groups;
 }
 
 export interface EmbeddedFiles {

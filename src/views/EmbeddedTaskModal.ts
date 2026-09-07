@@ -1,20 +1,19 @@
 import { App, Modal, Notice, TFile } from 'obsidian';
-import { DAILY_TASK_FILE, groupEmbedded } from '../data/embeddedTasks';
+import { DAILY_TASK_FILE, groupEmbeddedForDisplay, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS } from '../data/embeddedTasks';
 import type { EmbeddedTask } from '../data/embeddedTasks';
 import type { EmbeddedTaskStore } from '../data/embeddedTaskVault';
 import { scanProjects } from '../data/projectVault';
 import { scanLearning } from '../data/learningVault';
 import { processes } from '../data/processes';
-import { processCategoryLabel, processContentTypeLabel } from '../data/processContentTypes';
+import { processCategoryLabel, processContentTypeLabel, taskSourceTypeLabel } from '../data/processContentTypes';
 import { beginListModal, closeListModal } from './viewPrimitives';
 
-const LABELS = { project: '项目', creation: '创作', learning: '学习', daily: '日常' };
 export function openEmbeddedSource(app: App, task: EmbeddedTask): void {
 	const file = app.vault.getAbstractFileByPath(task.sourceFile);
 	if (!(file instanceof TFile)) { new Notice('来源笔记不存在或已移动'); return; }
 	void app.workspace.getLeaf('tab').openFile(file).catch(e => new Notice(String(e)));
 }
-export function renderEmbeddedRows(parent: HTMLElement, tasks: EmbeddedTask[], app: App, store: EmbeddedTaskStore, onOpen?: () => void): void {
+export function renderEmbeddedRows(parent: HTMLElement, tasks: EmbeddedTask[], app: App, store: EmbeddedTaskStore, onOpen?: () => void, sourceDetail?: (task: EmbeddedTask) => string): void {
 	if (!tasks.length) parent.createEl('p', { text: '暂无任务', cls: 'wb-empty' });
 	for (const task of tasks) {
 		const row = parent.createDiv({ cls: 'mx-task-row' });
@@ -31,7 +30,8 @@ export function renderEmbeddedRows(parent: HTMLElement, tasks: EmbeddedTask[], a
 		title.onclick = open;
 		const meta = body.createDiv({ cls: 'mx-task-meta' });
 		if (task.date) meta.createSpan({ text: `📅 ${task.date} · ` });
-		meta.createEl('button', { text: `↳ ${task.sourceDisplayName}`, cls: 'mx-task-link', attr: { title: task.sourceFile } }).onclick = open;
+		const detail = sourceDetail?.(task);
+		meta.createEl('button', { text: `↳ ${task.sourceDisplayName}${detail ? ` · ${detail}` : ''}`, cls: 'mx-task-link', attr: { title: task.sourceFile } }).onclick = open;
 	}
 }
 export class NewEmbeddedTaskModal extends Modal {
@@ -111,12 +111,20 @@ export class EmbeddedTaskListModal extends Modal {
 		const tasks = this.path ? this.store.bySource(this.path) : this.store.all();
 		this.contentEl.createEl('p', { cls: 'ad-modal-hint', text: `总数 ${tasks.length} · 已完成 ${tasks.filter(t => t.completed).length} · 未完成 ${tasks.filter(t => !t.completed).length}` });
 		this.contentEl.createDiv({ cls: 'po-toolbar' }).createEl('button', { cls: 'ad-modal-btn', text: '新建任务' }).onclick = () => new NewEmbeddedTaskModal(this.app, this.store, this.path).open();
-		const groups = groupEmbedded(tasks);
-		for (const type of ['project', 'creation', 'learning', 'daily'] as const) {
-			if (this.path && type !== 'project') continue;
+		if (this.path) {
 			const group = this.contentEl.createDiv({ cls: 'ad-update-block' });
-			group.createEl('h3', { cls: 'ad-modal-title', text: `${LABELS[type]}任务` });
-			renderEmbeddedRows(group, groups[type], this.app, this.store, () => this.close());
+			group.createEl('h3', { cls: 'ad-modal-title', text: '项目任务' });
+			renderEmbeddedRows(group, tasks, this.app, this.store, () => this.close());
+			return;
+		}
+		if (!tasks.length) { this.contentEl.createEl('p', { text: '暂无任务', cls: 'wb-empty' }); return; }
+		const sourceTypes = new Map(processes(scanLearning(this.app), scanProjects(this.app), tasks).map(process => [process.sourceFile, taskSourceTypeLabel(process.contentType)]));
+		const groups = groupEmbeddedForDisplay(tasks);
+		for (const type of TASK_DISPLAY_CATEGORIES) {
+			if (!groups[type].length) continue;
+			const group = this.contentEl.createDiv({ cls: 'ad-update-block' });
+			group.createEl('h3', { cls: 'ad-modal-title', text: TASK_DISPLAY_LABELS[type] });
+			renderEmbeddedRows(group, groups[type], this.app, this.store, () => this.close(), task => sourceTypes.get(task.sourceFile) ?? '');
 		}
 	}
 	onClose(): void { this.unsubscribe?.(); this.unsubscribe = undefined; closeListModal(this); }

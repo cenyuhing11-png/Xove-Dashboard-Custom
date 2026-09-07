@@ -42,6 +42,10 @@ export function processContentTypeLabel(type: CompatibleProcessContentType, comp
 	const definition = contentDefinition(type);
 	return compact ? definition.compactLabel : definition.label;
 }
+/** Source suffix used by cross-source task summaries: distinguish knowledge from projects without verbose project-folder wording. */
+export function taskSourceTypeLabel(type: CompatibleProcessContentType): string {
+	return type === 'knowledge' ? '知识与思考' : processContentTypeLabel(type, true);
+}
 export function processContentTypes(category: ProcessCategory): readonly ProcessContentType[] {
 	return category === 'learning' ? LEARNING_CONTENT_TYPES : CREATION_CONTENT_TYPES;
 }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { appendEmbeddedTask, parseEmbeddedTasks } from './embeddedTasks.ts';
 import { currentTopics, learningNote } from './learning.ts';
 import { createKnowledgeProcess, createLearningContentProcess } from './processCreation.ts';
-import { contentDefinition, processCategoryLabel, processContentTypeLabel, processContentTypes } from './processContentTypes.ts';
+import { contentDefinition, processCategoryLabel, processContentTypeLabel, processContentTypes, taskSourceTypeLabel } from './processContentTypes.ts';
 import type { LearningContentType } from './processContentTypes.ts';
 import { directionProcessCounts } from './processNavigation.ts';
 import { processes } from './processes.ts';
@@ -61,6 +61,11 @@ test('Knowledge mapping keeps 02 root and its real Markdown identity', () => {
 test('Project mapping keeps outcomes root and its real Markdown identity', () => {
 	const definition = contentDefinition('project');
 	assert.equal(definition.folder, '03-项目与成果'); assert.equal(definition.markdownType, '项目'); assert.equal(processContentTypeLabel('project'), '项目与成果');
+});
+test('Task summary source suffix distinguishes knowledge from projects', () => {
+	assert.equal(taskSourceTypeLabel('knowledge'), '知识与思考');
+	assert.equal(taskSourceTypeLabel('project'), '项目');
+	assert.equal(taskSourceTypeLabel('video'), '视频');
 });
 test('New knowledge process creates its own type and creation task section without ability', async () => {
 	const m = memory(); const path = await createKnowledgeProcess(m.adapter, { name: '测试思考', status: '计划中', direction: 'AI', ability: '不得写入', goal: '形成观点' });

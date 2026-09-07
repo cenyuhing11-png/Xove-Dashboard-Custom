@@ -47,8 +47,7 @@ function renderTaskEntries(parent: HTMLElement, tasks: TaskItem[], emptyText: st
 
 function renderToday(parent: HTMLElement, data: WorkbenchHomeData): void {
 	const body = createSection(parent, '🎯 今日执行');
-	addEmpty(createGroup(body, '今日最重要的 3 件事'), '尚未建立独立的重点事项模型');
-	data.renderEmbeddedToday(createGroup(body, '今日任务'));
+	data.renderEmbeddedToday(body);
 	addEntry(body, '查看全部任务', '', data.onAllEmbeddedTasks);
 	renderTaskEntries(createGroup(body, '即将截止'), data.upcomingTasks, '近期暂无截止任务', data);
 }

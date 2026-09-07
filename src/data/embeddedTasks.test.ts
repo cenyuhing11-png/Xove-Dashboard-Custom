@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { appendEmbeddedTask, DAILY_TASK_FILE, DAILY_TASK_TEMPLATE, embeddedSource, EmbeddedTaskIndex, groupEmbedded, overdueEmbedded, parseEmbeddedTasks, setEmbeddedCompletion, todayEmbedded, validTaskDate } from './embeddedTasks.ts';
+import { appendEmbeddedTask, DAILY_TASK_FILE, DAILY_TASK_TEMPLATE, embeddedSource, EmbeddedTaskIndex, groupEmbedded, groupEmbeddedForDisplay, overdueEmbedded, parseEmbeddedTasks, setEmbeddedCompletion, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, taskDisplayCategory, todayEmbedded, validTaskDate } from './embeddedTasks.ts';
 import { learningTemplate } from './learning.ts';
 
 const learning = '01-学习与资料/书籍/书.md';
@@ -51,6 +51,31 @@ test('unclosed fenced code prevents hidden append', () => { assert.throws(() => 
 test('invalid task creation cannot inject lines or markers', () => { for (const text of ['', 'a\nb', 'a <!-- mx-task:fake -->', 'a 📅 2026-09-06']) assert.throws(() => appendEmbeddedTask('', learning, text, undefined, 'id')); });
 test('today includes matching and overdue only, excludes completed/undated/future', () => { const raw = '## 学习任务\n- [ ] 今天 📅 2026-09-06\n- [ ] 过去 📅 2026-09-05\n- [x] 完成 📅 2026-09-06\n- [ ] 未来 📅 2026-09-07\n- [ ] 无日期'; const tasks = parseEmbeddedTasks(learning, raw); assert.deepEqual(todayEmbedded(tasks, '2026-09-06').map(t => t.text), ['过去', '今天']); assert.deepEqual(overdueEmbedded(tasks, '2026-09-06').map(t => t.text), ['过去']); });
 test('all tasks grouped without loss', () => { const tasks = [first(), first('## 项目任务\n- [x] 完成', project), first('## 日常待办\n- [ ] 日常', DAILY_TASK_FILE)]; const groups = groupEmbedded(tasks); assert.deepEqual(Object.keys(groups), ['project', 'creation', 'learning', 'daily']); assert.equal(Object.values(groups).flat().length, 3); });
+test('summary display categories are exactly learning, creation and daily', () => {
+	assert.deepEqual(TASK_DISPLAY_CATEGORIES, ['learning', 'creation', 'daily']);
+	assert.deepEqual(TASK_DISPLAY_LABELS, { learning: '学习任务', creation: '创作任务', daily: '日常任务' });
+});
+test('summary mapping keeps learning and daily while merging knowledge and projects into creation', () => {
+	assert.equal(taskDisplayCategory('learning'), 'learning');
+	assert.equal(taskDisplayCategory('creation'), 'creation');
+	assert.equal(taskDisplayCategory('project'), 'creation');
+	assert.equal(taskDisplayCategory('daily'), 'daily');
+});
+test('summary grouping merges knowledge and project tasks without changing total count', () => {
+	const knowledge = '02-知识与思考/AI 与设计.md';
+	const tasks = [
+		first('## 学习任务\n- [ ] 学习', learning),
+		first('## 创作任务\n- [ ] 思考', knowledge),
+		first('## 项目任务\n- [ ] 项目', project),
+		first('## 日常待办\n- [ ] 日常', DAILY_TASK_FILE),
+	];
+	const groups = groupEmbeddedForDisplay(tasks);
+	assert.deepEqual(Object.keys(groups), ['learning', 'creation', 'daily']);
+	assert.equal(groups.learning.length, 1);
+	assert.deepEqual(groups.creation.map(task => task.sourceType), ['creation', 'project']);
+	assert.equal(groups.daily.length, 1);
+	assert.equal(Object.values(groups).flat().length, tasks.length);
+});
 function memory() {
 	const files = new Map<string, string>(); let id = 0;
 	const index = new EmbeddedTaskIndex({ paths: () => [...files.keys()], read: async p => { if (!files.has(p)) throw new Error('missing'); return files.get(p)!; }, process: async (p, fn) => { if (!files.has(p)) throw new Error('missing'); files.set(p, fn(files.get(p)!)); }, ensureDaily: async () => { if (!files.has(DAILY_TASK_FILE)) files.set(DAILY_TASK_FILE, DAILY_TASK_TEMPLATE); } }, () => `test-${++id}`);
