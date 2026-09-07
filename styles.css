@@ -1902,11 +1902,11 @@ input[type="date"].ad-modal-input { cursor: pointer; }
 /* Plan workspace: reuse ProjectBoard primitives; only the month picker and stacked
    board geometry are specific to this top-level view. */
 .mx-plan-container { height: auto; min-height: 660px; max-height: none; }
-.mx-plan-side-label { padding: 12px 10px 4px; color: var(--ad-text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
-.mx-plan-year { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 14px 2px 8px; color: var(--ad-text); font-size: 12px; font-weight: 600; }
+.mx-plan-current-dot { width: 6px; height: 6px; background: var(--ad-accent); color: var(--ad-accent); box-shadow: none; }
+.mx-plan-year { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 2px 6px; color: var(--ad-text); font-size: 12px; font-weight: 600; }
 .mx-plan-months { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
-.mx-plan-months .po-chip { position: relative; min-width: 0; padding: 5px 4px; }
-.mx-plan-month-dot { position: absolute; right: 4px; top: 4px; width: 4px; height: 4px; border-radius: 50%; background: var(--ad-accent); }
+.mx-plan-months .po-chip { position: relative; min-width: 0; min-height: 28px; padding: 4px; }
+.mx-plan-month-dot { position: absolute; right: 5px; top: 5px; width: 3px; height: 3px; border-radius: 50%; background: var(--ad-accent); box-shadow: none; }
 .mx-plan-context { margin-left: auto; color: var(--ad-text-dim); font-size: 11px; }
 .mx-plan-title { color: var(--ad-text); font-size: 12px; font-weight: 600; }
 .mx-plan-summary { flex: 1 1 0; min-height: 220px; padding-bottom: 5px; }

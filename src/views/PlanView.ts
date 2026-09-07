@@ -124,17 +124,25 @@ export class PlanView extends ItemView {
 		const side = container.createDiv({ cls: 'po-sidebar' });
 		const list = side.createDiv({ cls: 'po-sidebar__list' });
 		const now = localPlanSelection();
-		const current = list.createDiv({ cls: 'po-sidebar__item', text: '当前计划' });
-		current.prepend(Object.assign(document.createElement('span'), { className: 'po-dot' }));
-		current.addEventListener('click', () => this.setSelection(now.year, now.month, new Date().getDate()));
+		const currentSelected = this.selectedYear === now.year && this.selectedMonth === now.month;
+		const current = list.createDiv({ cls: `po-sidebar__item${currentSelected ? ' is-active' : ''}`, attr: { role: 'button', tabindex: '0' } });
+		current.createSpan({ cls: 'po-dot mx-plan-current-dot' });
+		current.createSpan({ text: '当前计划' });
+		const selectCurrent = () => this.setSelection(now.year, now.month, new Date().getDate());
+		current.addEventListener('click', selectCurrent);
+		current.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectCurrent(); } });
 
-		const modeTitle = list.createDiv({ cls: 'mx-plan-side-label', text: '视图' });
+		const modeTitle = list.createDiv({ cls: 'po-toolbar__label po-direction-group', text: '视图' });
 		modeTitle.setAttribute('aria-hidden', 'true');
 		for (const [mode, label] of [['board', '计划表'], ['calendar', '日历']] as const) {
-			const item = list.createDiv({ cls: `po-sidebar__item${this.mode === mode ? ' is-active' : ''}`, text: label });
-			item.addEventListener('click', () => { this.mode = mode; void this.renderPlanContent(); });
+			const item = list.createDiv({ cls: `po-sidebar__item${this.mode === mode ? ' is-active' : ''}`, text: label, attr: { role: 'button', tabindex: '0' } });
+			const selectMode = () => { this.mode = mode; void this.renderPlanContent(); };
+			item.addEventListener('click', selectMode);
+			item.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectMode(); } });
 		}
 
+		const timeTitle = list.createDiv({ cls: 'po-toolbar__label po-direction-group', text: '时间' });
+		timeTitle.setAttribute('aria-hidden', 'true');
 		const yearBar = list.createDiv({ cls: 'mx-plan-year' });
 		const prev = yearBar.createEl('button', { cls: 'po-cal__btn', text: '‹', attr: { 'aria-label': '上一年' } });
 		yearBar.createSpan({ text: `${this.selectedYear}` });

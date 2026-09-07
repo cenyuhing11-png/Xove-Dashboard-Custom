@@ -43,3 +43,17 @@ test('calendar task refresh subscription does not rebuild the outer view', () =>
 	assert.match(view, /embeddedTasks\.subscribe\(\(\) => \{ if \(this\.mode === 'calendar'\) void this\.renderPlanContent\(\); \}\)/);
 	assert.equal(view.includes("embeddedTasks.subscribe(() => { if (this.mode === 'calendar') void this.mountView()"), false);
 });
+test('plan sidebar reuses original navigation rows and group labels', () => {
+	assert.match(view, /po-sidebar__item\$\{currentSelected \? ' is-active' : ''\}/);
+	assert.match(view, /po-dot mx-plan-current-dot/);
+	assert.match(view, /po-toolbar__label po-direction-group', text: '视图'/);
+	assert.match(view, /po-toolbar__label po-direction-group', text: '时间'/);
+	assert.match(view, /po-sidebar__item\$\{this\.mode === mode \? ' is-active' : ''\}/);
+});
+test('plan sidebar dots are restrained and month controls keep author primitives', () => {
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	assert.match(css, /\.mx-plan-current-dot\s*\{[^}]*box-shadow:\s*none/);
+	assert.match(css, /\.mx-plan-month-dot\s*\{[^}]*width:\s*3px;[^}]*box-shadow:\s*none/);
+	assert.match(view, /cls: `po-chip\$\{month === this\.selectedMonth \? ' is-active' : ''\}`/);
+	assert.match(view, /cls: 'po-cal__btn'/);
+});
