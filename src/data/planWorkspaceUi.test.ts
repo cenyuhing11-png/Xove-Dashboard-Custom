@@ -6,6 +6,7 @@ const view = readFileSync(new URL('../views/PlanView.ts', import.meta.url), 'utf
 const shell = readFileSync(new URL('../components/workbench/WorkbenchShell.ts', import.meta.url), 'utf8');
 const main = readFileSync(new URL('../main.ts', import.meta.url), 'utf8');
 const journalSummary = readFileSync(new URL('../components/journal/JournalTaskSummary.ts', import.meta.url), 'utf8');
+const journalLivePreview = readFileSync(new URL('../components/journal/JournalTitleLivePreview.ts', import.meta.url), 'utf8');
 
 test('global navigation names time trace directly after home', () => assert.match(shell, /label: '首页'[\s\S]*label: '时迹'[\s\S]*label: '进程'/));
 test('plan has a dedicated top-level view', () => assert.match(view, /PLAN_VIEW = 'xove-dashboard-custom-plan-workspace'/));
@@ -174,6 +175,29 @@ test('journal title editor persists one frontmatter field without creating an H1
 	assert.match(journalSummary, /writeJournalTitle\(this\.app, file, title\)/);
 	assert.equal(journalSummary.includes("createEl('h1'"), false);
 	assert.equal(journalSummary.includes('vault.rename'), false);
+});
+test('live preview journal title uses a block-capable CodeMirror state extension and shared title helpers', () => {
+	assert.match(main, /registerEditorExtension\(journalTitleLivePreviewExtension\(this\.app\)\)/);
+	assert.match(journalLivePreview, /StateField\.define<JournalTitleEditorState>/);
+	assert.match(journalLivePreview, /EditorView\.decorations\.from\(field, value => value\.decorations\)/);
+	assert.match(journalLivePreview, /Decoration\.widget\(\{ widget, side: 1, block: true \}\)/);
+	assert.match(journalLivePreview, /readJournalTitle\(app, file\)/);
+	assert.match(journalLivePreview, /writeJournalTitle\(this\.app, file, title\)/);
+	assert.match(journalSummary, /readJournalTitle\(this\.app, file\)/);
+});
+test('live preview title is mode and file scoped with one mapped widget', () => {
+	assert.match(journalLivePreview, /editorLivePreviewField/);
+	assert.match(journalLivePreview, /isCanonicalDailyJournalPath\(file\.path\)/);
+	assert.match(journalLivePreview, /journalTitleWidgetOffset\(state\.doc\.toString\(\)\)/);
+	assert.match(journalLivePreview, /value\.decorations\.map\(transaction\.changes\)/);
+	assert.doesNotMatch(journalLivePreview, /MutationObserver|setInterval|querySelector/);
+});
+test('live preview title debounce and composition guards protect Chinese input', () => {
+	assert.match(journalLivePreview, /SAVE_DELAY_MS = 400/);
+	assert.match(journalLivePreview, /compositionstart/);
+	assert.match(journalLivePreview, /compositionend/);
+	assert.match(journalLivePreview, /if \(!this\.composing\) this\.scheduleSave\(\)/);
+	assert.match(journalLivePreview, /ignoreEvent\(\): boolean \{ return true; \}/);
 });
 test('journal metadata changes refresh the mounted calendar without rebuilding the shell', () => {
 	const onOpen = view.match(/async onOpen\(\): Promise<void> \{[\s\S]*?\n\t\}/)?.[0] ?? '';

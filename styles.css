@@ -1945,6 +1945,7 @@ input[type="date"].ad-modal-input { cursor: pointer; }
 .mx-journal-task-row { min-width: 0; cursor: pointer; }
 .mx-journal-title-editor { margin: 7px 0 14px; }
 .mx-journal-title-field .ad-modal-label { display: block; margin: 0 0 5px; }
+.mx-journal-title-editor--live { width: 100%; box-sizing: border-box; }
 
 @container (max-width: 720px) {
   .mx-day-detail-layout.is-split { grid-template-columns: minmax(0, 1fr); gap: 9px; }

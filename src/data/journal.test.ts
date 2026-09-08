@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ensureJournal, journalCalendarEntry, journalDateFromPath, journalEntry, journalHistory, journalInfo, journalStates, journalTasks, journalTemplate, updateJournalTitleContent } from './journal.ts';
+import { ensureJournal, isCanonicalDailyJournalPath, journalCalendarEntry, journalDateFromPath, journalEntry, journalHistory, journalInfo, journalStates, journalTasks, journalTemplate, journalTitleWidgetOffset, updateJournalTitleContent } from './journal.ts';
 import type { JournalEntry, JournalKind } from './journal.ts';
 import type { PlanFiles } from './planning.ts';
 import { DAILY_TASK_FILE, parseEmbeddedTasks } from './embeddedTasks.ts';
@@ -27,6 +27,23 @@ test('daily journal date parser accepts current and clean names without touching
 	assert.equal(journalDateFromPath('04-日记与复盘/01-日记/2026-09-08.md'), '2026-09-08');
 	assert.equal(journalDateFromPath('04-日记与复盘/01-日记/快捷指令测试.md'), null);
 	assert.equal(journalDateFromPath('Daily/2026-09-08.md'), null);
+});
+test('live preview title targets only canonical daily journal filenames', () => {
+	assert.equal(isCanonicalDailyJournalPath('04-日记与复盘/01-日记/2026-09-08.md'), true);
+	assert.equal(isCanonicalDailyJournalPath('04-日记与复盘/01-日记/2026-09-08 日记.md'), false);
+	assert.equal(isCanonicalDailyJournalPath('04-日记与复盘/02-周记/2026-09-08.md'), false);
+	assert.equal(isCanonicalDailyJournalPath('01-学习与资料/课程/2026-09-08.md'), false);
+});
+test('live preview title widget is anchored immediately after the exact daily heading', () => {
+	const content = '---\n标题: 一天\n---\n\n## 今日日记\n\n正文\n## 今日回看\n';
+	const offset = journalTitleWidgetOffset(content);
+	assert.equal(offset, content.indexOf('## 今日日记') + '## 今日日记'.length);
+	assert.equal(content.slice(offset ?? 0), '\n\n正文\n## 今日回看\n');
+});
+test('live preview title widget does not appear without an exact heading', () => {
+	assert.equal(journalTitleWidgetOffset('---\n标题:\n---\n\n## 今日日记内容\n'), null);
+	assert.equal(journalTitleWidgetOffset('---\n说明: "## 今日日记"\n---\n\n正文'), null);
+	assert.equal(journalTitleWidgetOffset('```md\n## 今日日记\n```'), null);
 });
 test('journal summary queries only the journal date and shares three display categories', () => {
 	const tasks = [

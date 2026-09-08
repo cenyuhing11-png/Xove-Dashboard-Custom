@@ -57,6 +57,35 @@ export function journalDateFromPath(path: string): string | null {
 	return Number.isNaN(date.getTime()) || `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` !== match[1] ? null : match[1];
 }
 
+/** Live Preview only targets the current canonical daily filename, not legacy names. */
+export function isCanonicalDailyJournalPath(path: string): boolean {
+	const date = journalDateFromPath(path);
+	return !!date && path === `${JOURNAL_ROOT}/${JOURNAL_FOLDERS.day}/${date}.md`;
+}
+
+/** Find the end of the real `## 今日日记` heading without matching YAML or fenced examples. */
+export function journalTitleWidgetOffset(content: string): number | null {
+	const lines = content.split('\n');
+	let yaml = lines[0]?.replace(/^\uFEFF/, '').trim() === '---';
+	let fence = '';
+	let offset = 0;
+	for (let index = 0; index < lines.length; index++) {
+		const raw = lines[index] ?? '';
+		const line = raw.endsWith('\r') ? raw.slice(0, -1) : raw;
+		if (yaml) {
+			if (index > 0 && /^(---|\.\.\.)\s*$/.test(line)) yaml = false;
+		} else if (fence) {
+			if (new RegExp(`^ {0,3}${fence[0]}{${fence.length},}\\s*$`).test(line)) fence = '';
+		} else {
+			const openingFence = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+			if (openingFence) fence = openingFence[1] ?? '';
+			else if (/^ {0,3}##[ \t]+今日日记[ \t]*#*[ \t]*$/.test(line)) return offset + line.length;
+		}
+		offset += raw.length + 1;
+	}
+	return null;
+}
+
 export function journalTasks(tasks: EmbeddedTask[], path: string) {
 	const date = journalDateFromPath(path);
 	return { date, groups: groupEmbeddedForDisplay(date ? tasks.filter(task => task.date === date) : []) };
@@ -137,6 +166,11 @@ export function journalFrontmatterTitle(properties: unknown): string {
 	return properties && typeof properties === 'object' && !Array.isArray(properties)
 		&& typeof (properties as Record<string, unknown>)['标题'] === 'string'
 		? ((properties as Record<string, string>)['标题'] ?? '').trim() : '';
+}
+
+/** Shared frontmatter title reader for Reading View and Live Preview. */
+export function readJournalTitle(app: App, file: TFile): string {
+	return journalFrontmatterTitle(app.metadataCache.getFileCache(file)?.frontmatter);
 }
 
 /** Preserve frontmatter order and every unrelated byte-level line choice while changing only the title field. */

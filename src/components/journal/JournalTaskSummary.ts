@@ -2,7 +2,7 @@ import { App, MarkdownPostProcessorContext, MarkdownRenderChild, Notice, TFile }
 import type { EmbeddedTask } from '../../data/embeddedTasks';
 import { TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS } from '../../data/embeddedTasks';
 import type { EmbeddedTaskStore } from '../../data/embeddedTaskVault';
-import { journalDateFromPath, journalFrontmatterTitle, journalTasks, writeJournalTitle } from '../../data/journal';
+import { journalDateFromPath, journalTasks, readJournalTitle, writeJournalTitle } from '../../data/journal';
 import { taskCalendarSourceLabel } from '../../data/planWorkspace';
 import { scanLearning } from '../../data/learningVault';
 import { scanProjects } from '../../data/projectVault';
@@ -85,7 +85,7 @@ class JournalTitleEditor extends MarkdownRenderChild {
 
 	private readTitle(): string {
 		const file = this.app.vault.getAbstractFileByPath(this.path);
-		return file instanceof TFile ? journalFrontmatterTitle(this.app.metadataCache.getFileCache(file)?.frontmatter) : '';
+		return file instanceof TFile ? readJournalTitle(this.app, file) : '';
 	}
 
 	private render(): void {
