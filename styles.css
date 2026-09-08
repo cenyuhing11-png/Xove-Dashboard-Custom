@@ -1940,6 +1940,8 @@ input[type="date"].ad-modal-input { cursor: pointer; }
 .mx-journal-task-group__header .wb-group__label { margin: 0; }
 .mx-journal-task-count { color: var(--ad-text-dim); font-size: 10px; white-space: nowrap; }
 .mx-journal-task-row { min-width: 0; cursor: pointer; }
+.mx-journal-title-editor { margin: 7px 0 14px; }
+.mx-journal-title-field .ad-modal-label { display: block; margin: 0 0 5px; }
 
 @container (max-width: 720px) {
   .mx-day-detail-layout.is-split { grid-template-columns: minmax(0, 1fr); gap: 9px; }

@@ -1,5 +1,4 @@
-import { TFile } from 'obsidian';
-import type { App } from 'obsidian';
+import type { App, TFile } from 'obsidian';
 
 /* ============================================================
    统一的 frontmatter 写入器 —— 全插件唯一实现。

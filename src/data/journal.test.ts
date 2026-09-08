@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ensureJournal, journalCalendarEntry, journalDateFromPath, journalEntry, journalHistory, journalInfo, journalStates, journalTasks, journalTemplate } from './journal.ts';
+import { ensureJournal, journalCalendarEntry, journalDateFromPath, journalEntry, journalHistory, journalInfo, journalStates, journalTasks, journalTemplate, updateJournalTitleContent } from './journal.ts';
 import type { JournalEntry, JournalKind } from './journal.ts';
 import type { PlanFiles } from './planning.ts';
 import { DAILY_TASK_FILE, parseEmbeddedTasks } from './embeddedTasks.ts';
 
 const date = new Date(2026, 8, 6, 0, 1);
-for (const [kind, suffix] of Object.entries({ day: '01-日记/2026-09-06 日记', week: '02-周记/2026-W36 周记', month: '03-月度复盘/2026-09 月度复盘', year: '04-年度复盘/2026 年度复盘' })) {
+for (const [kind, suffix] of Object.entries({ day: '01-日记/2026-09-06', week: '02-周记/2026-W36 周记', month: '03-月度复盘/2026-09 月度复盘', year: '04-年度复盘/2026 年度复盘' })) {
 	test(`${kind} local path`, () => assert.equal(journalInfo(kind as JournalKind, date).path, `04-日记与复盘/${suffix}.md`));
 }
 test('week journal shares ISO week-year boundaries with planning', () => {
@@ -19,7 +19,8 @@ test('local late night and midnight do not shift date', () => {
 	assert.equal(journalInfo('day', new Date(2026, 11, 31, 23, 59)).period, '2026-12-31');
 });
 test('daily template is lightweight with exact sections', () => {
-	assert.equal(journalTemplate('day', date), '---\n类型: 日记\n日期: 2026-09-06\n---\n\n# 2026年9月6日\n\n## 今日任务\n\n## 随时记\n\n## 今日日记\n\n## 今日回看\n\n');
+	assert.equal(journalTemplate('day', date), '---\n类型: 日记\n日期: 2026-09-06\n标题:\n---\n\n## 今日任务\n\n## 随时记\n\n## 今日日记\n\n## 今日回看\n\n');
+	assert.doesNotMatch(journalTemplate('day', date), /^# /m);
 });
 test('daily journal date parser accepts current and clean names without touching unrelated notes', () => {
 	assert.equal(journalDateFromPath('04-日记与复盘/01-日记/2026-09-08 日记.md'), '2026-09-08');
@@ -43,10 +44,34 @@ test('journal summary queries only the journal date and shares three display cat
 
 test('calendar journal title follows frontmatter, H1 and quick-note fallbacks', () => {
 	const path = '04-日记与复盘/01-日记/2026-09-08.md';
-	assert.equal(journalCalendarEntry(path, '# 正文标题\n\n## 随时记\n\n- 一条', { 标题: '属性标题' })?.title, '属性标题');
-	assert.equal(journalCalendarEntry(path, '# 正文标题\n', {})?.title, '正文标题');
-	assert.equal(journalCalendarEntry(path, '## 随时记\n\n- 一条\n- 两条', {})?.title, '随时记 · 2条');
-	assert.equal(journalCalendarEntry(path, '## 今日日记\n', {})?.title, '未命名日记');
+	const property = journalCalendarEntry(path, '# 正文标题\n\n## 随时记\n\n- 一条', { 标题: '属性标题' });
+	assert.equal(property?.title, '属性标题'); assert.equal(property?.titleSource, 'frontmatter');
+	const legacy = journalCalendarEntry(path, '# 正文标题\n', {});
+	assert.equal(legacy?.title, '正文标题'); assert.equal(legacy?.titleSource, 'legacy-h1');
+	const quick = journalCalendarEntry(path, '## 随时记\n\n- 一条\n- 两条', {});
+	assert.equal(quick?.title, '随时记 · 2条'); assert.equal(quick?.titleSource, 'quick-note');
+});
+
+test('calendar omits files without an intentional title or quick note', () => {
+	const path = '04-日记与复盘/01-日记/2026-09-08.md';
+	assert.equal(journalCalendarEntry(path, '## 今日任务\n\n- [ ] 任务 \ud83d\udcc5 2026-09-08\n\n## 随时记\n\n## 今日日记\n\n正文但忘记标题', { 标题: '' }), null);
+	assert.equal(journalCalendarEntry(path, '# 2026年9月8日\n\n## 今日任务\n\n- [ ] 任务', {}), null);
+});
+
+test('journal title update changes only frontmatter and never creates an H1 copy', () => {
+	const content = '---\n类型: 日记\n日期: 2026-09-08\n标题:\n其他: 保留\n---\n\n## 今日日记\n\n正文\n';
+	const next = updateJournalTitleContent(content, '今天终于把梦序理顺了一点！');
+	assert.match(next, /日期: 2026-09-08\n标题: 今天终于把梦序理顺了一点！\n其他: 保留/);
+	assert.equal((next.match(/今天终于把梦序理顺了一点！/g) ?? []).length, 1);
+	assert.doesNotMatch(next, /^# /m);
+	assert.match(next, /## 今日日记\n\n正文/);
+});
+
+test('clearing a journal title keeps the template-compatible empty property', () => {
+	const content = '---\r\n类型: 日记\r\n标题: 旧标题\r\n日期: 2026-09-08\r\n---\r\n\r\n## 今日日记\r\n';
+	const next = updateJournalTitleContent(content, '   ');
+	assert.match(next, /类型: 日记\r\n标题:\r\n日期: 2026-09-08/);
+	assert.equal(next.replace(/\r\n/g, '').includes('\n'), false);
 });
 
 test('calendar journal reads quick-note count and first daily paragraph without rewriting source', () => {
@@ -100,6 +125,13 @@ test('existing diary is never overwritten', async () => {
 	s.contents.set(path, '用户真实记录');
 	assert.equal(await ensureJournal(s.files, 'day', date), path);
 	assert.equal(s.contents.get(path), '用户真实记录');
+});
+test('existing legacy suffixed diary is reused without creating a clean-name duplicate', async () => {
+	const s = store(); const legacy = '04-日记与复盘/01-日记/2026-09-06 日记.md';
+	s.contents.set(legacy, '用户旧日记');
+	assert.equal(await ensureJournal(s.files, 'day', date), legacy);
+	assert.equal(s.contents.size, 1);
+	assert.equal(journalStates(s.files, date)[0]?.exists, true);
 });
 for (const kind of ['day', 'week', 'month', 'year'] as const) test(`${kind} missing note creates template and no other note`, async () => {
 	const s = store(); const path = await ensureJournal(s.files, kind, date);

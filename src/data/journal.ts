@@ -4,6 +4,8 @@ import { ensureSafeNote } from './safeNote.ts';
 import { JOURNAL_ROOT, JOURNAL_FOLDERS } from './vaultPaths.ts';
 import type { EmbeddedTask } from './embeddedTasks.ts';
 import { groupEmbeddedForDisplay } from './embeddedTasks.ts';
+import { applyFrontmatterUpdates } from './frontmatterWriter.ts';
+import type { App, TFile } from 'obsidian';
 export { JOURNAL_ROOT } from './vaultPaths.ts';
 
 export type JournalKind = 'day' | 'week' | 'month' | 'year';
@@ -15,14 +17,20 @@ export function journalInfo(kind: JournalKind, date = new Date()) {
 	const day = `${month}-${String(date.getDate()).padStart(2, '0')}`;
 	const period = kind === 'day' ? day : planInfo(kind, date).key;
 	const folder = `${JOURNAL_ROOT}/${JOURNAL_FOLDERS[kind]}`;
-	return { kind, period, folder, path: `${folder}/${period} ${folders[kind]}.md`, name: `${period} ${folders[kind]}` };
+	const name = kind === 'day' ? period : `${period} ${folders[kind]}`;
+	return { kind, period, folder, path: `${folder}/${name}.md`, name };
+}
+
+function legacyDailyPath(date = new Date()): string {
+	const info = journalInfo('day', date);
+	return `${info.folder}/${info.period} 日记.md`;
 }
 export function journalTemplate(kind: JournalKind, date = new Date()): string {
 	const info = journalInfo(kind, date);
 	const year = date.getFullYear();
 	const month = date.getMonth() + 1;
 	const headers: Record<JournalKind, string> = {
-		day: `类型: 日记\n日期: ${info.period}`,
+		day: `类型: 日记\n日期: ${info.period}\n标题:`,
 		week: `类型: 周记\n期间: ${info.period}\n关联计划: "[[${planInfo('week', date).name}]]"`,
 		month: `类型: 复盘\n周期: 月度\n期间: ${info.period}\n关联计划: "[[${planInfo('month', date).name}]]"`,
 		year: `类型: 复盘\n周期: 年度\n期间: ${info.period}\n关联计划: "[[${planInfo('year', date).name}]]"`,
@@ -34,7 +42,8 @@ export function journalTemplate(kind: JournalKind, date = new Date()): string {
 		month: ['本月计划回顾', '本月完成', '学习与成长', '项目与成果', '内容与输出', '财务与生活', '做得好的', '需要调整', '下月重点'],
 		year: ['年度目标回顾', '这一年发生了什么', '事业与设计', '内容与影响力', '学习与认知', '财务', '生活', '今年最重要的收获', '需要调整的事情', '下一年'],
 	};
-	return `---\n${headers[kind]}\n---\n\n# ${titles[kind]}\n\n${sections[kind].map((title) => `## ${title}\n`).join('\n')}\n`;
+	const heading = kind === 'day' ? '' : `# ${titles[kind]}\n\n`;
+	return `---\n${headers[kind]}\n---\n\n${heading}${sections[kind].map((title) => `## ${title}\n`).join('\n')}\n`;
 }
 
 /** Daily journal names stay backwards compatible; no source file is rewritten. */
@@ -57,6 +66,7 @@ export interface JournalCalendarEntry {
 	date: string;
 	path: string;
 	title: string;
+	titleSource: 'frontmatter' | 'legacy-h1' | 'quick-note';
 	quickNoteCount: number;
 	summary?: string;
 }
@@ -118,28 +128,71 @@ function firstJournalParagraph(lines: string[]): string | undefined {
 	return text ? text.slice(0, 360) : undefined;
 }
 
+function defaultDailyHeading(date: string): string {
+	const [year, month, day] = date.split('-').map(Number);
+	return `${year}年${month}月${day}日`;
+}
+
+export function journalFrontmatterTitle(properties: unknown): string {
+	return properties && typeof properties === 'object' && !Array.isArray(properties)
+		&& typeof (properties as Record<string, unknown>)['标题'] === 'string'
+		? ((properties as Record<string, string>)['标题'] ?? '').trim() : '';
+}
+
+/** Preserve frontmatter order and every unrelated byte-level line choice while changing only the title field. */
+export function updateJournalTitleContent(content: string, title: string): string {
+	const eol = content.includes('\r\n') ? '\r\n' : '\n';
+	const lines = content.split(/\r?\n/);
+	const value = title.trim();
+	applyFrontmatterUpdates(lines, { '标题': value });
+	if (!value) {
+		let inFrontmatter = false;
+		for (let index = 0; index < lines.length; index++) {
+			const line = lines[index] ?? '';
+			if (/^(---|\.\.\.)\s*$/.test(line)) {
+				if (!inFrontmatter && index === 0) { inFrontmatter = true; continue; }
+				if (inFrontmatter) break;
+			}
+			if (inFrontmatter && /^\s*标题\s*:/.test(line)) lines[index] = '标题:';
+		}
+	}
+	return lines.join(eol);
+}
+
+export async function writeJournalTitle(app: App, file: TFile, title: string): Promise<void> {
+	const content = await app.vault.read(file);
+	const next = updateJournalTitleContent(content, title);
+	if (next !== content) await app.vault.modify(file, next);
+}
+
 /** Calendar projection only; the journal source remains untouched. */
 export function journalCalendarEntry(path: string, content: string, properties: unknown): JournalCalendarEntry | null {
 	const date = journalDateFromPath(path);
 	if (!date) return null;
 	const document = markdownHeadings(content);
 	const quickNoteCount = countJournalEntries(sectionLines(document, '随时记'));
-	const propertyTitle = properties && typeof properties === 'object' && !Array.isArray(properties)
-		&& typeof (properties as Record<string, unknown>)['标题'] === 'string'
-		? ((properties as Record<string, string>)['标题'] ?? '').trim() : '';
-	const h1 = document.headings.find(item => item.level === 1)?.text.trim() ?? '';
-	const title = propertyTitle || h1 || (quickNoteCount ? `随时记 · ${quickNoteCount}条` : '未命名日记');
-	return { date, path, title, quickNoteCount, summary: firstJournalParagraph(sectionLines(document, '今日日记')) };
+	const propertyTitle = journalFrontmatterTitle(properties);
+	const rawH1 = document.headings.find(item => item.level === 1)?.text.trim() ?? '';
+	const legacyTitle = rawH1 && rawH1 !== defaultDailyHeading(date) ? rawH1 : '';
+	const title = propertyTitle || legacyTitle || (quickNoteCount ? `随时记 · ${quickNoteCount}条` : '');
+	if (!title) return null;
+	const titleSource: JournalCalendarEntry['titleSource'] = propertyTitle ? 'frontmatter' : legacyTitle ? 'legacy-h1' : 'quick-note';
+	return { date, path, title, titleSource, quickNoteCount, summary: firstJournalParagraph(sectionLines(document, '今日日记')) };
 }
 export async function ensureJournal(files: PlanFiles, kind: JournalKind, date = new Date()): Promise<string> {
 	const info = journalInfo(kind, date);
+	if (kind === 'day' && files.kind(info.path) !== 'file') {
+		const legacyPath = legacyDailyPath(date);
+		if (files.kind(legacyPath) === 'file') return legacyPath;
+	}
 	return ensureSafeNote(files, info.path, [JOURNAL_ROOT, info.folder], journalTemplate(kind, date));
 }
 export interface JournalState { kind: JournalKind; exists: boolean; blocked: boolean }
 export function journalStates(files: Pick<PlanFiles, 'kind'>, date = new Date()): JournalState[] {
 	return JOURNAL_KINDS.map((kind) => {
 		const entry = files.kind(journalInfo(kind, date).path);
-		return { kind, exists: entry === 'file', blocked: entry === 'folder' };
+		const legacy = kind === 'day' ? files.kind(legacyDailyPath(date)) : undefined;
+		return { kind, exists: entry === 'file' || legacy === 'file', blocked: entry === 'folder' || legacy === 'folder' };
 	});
 }
 export interface JournalEntry { kind: JournalKind; path: string; title: string; period: string; label: string; order: number }

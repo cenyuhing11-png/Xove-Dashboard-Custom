@@ -2,7 +2,7 @@ import { App, MarkdownPostProcessorContext, MarkdownRenderChild, Notice, TFile }
 import type { EmbeddedTask } from '../../data/embeddedTasks';
 import { TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS } from '../../data/embeddedTasks';
 import type { EmbeddedTaskStore } from '../../data/embeddedTaskVault';
-import { journalDateFromPath, journalTasks } from '../../data/journal';
+import { journalDateFromPath, journalFrontmatterTitle, journalTasks, writeJournalTitle } from '../../data/journal';
 import { taskCalendarSourceLabel } from '../../data/planWorkspace';
 import { scanLearning } from '../../data/learningVault';
 import { scanProjects } from '../../data/projectVault';
@@ -65,6 +65,74 @@ class JournalTaskSummary extends MarkdownRenderChild {
 	}
 }
 
+/** Reading View enhancement anchored inside `## 今日日记`; the title persists only in frontmatter. */
+class JournalTitleEditor extends MarkdownRenderChild {
+	private inputEl?: HTMLInputElement;
+	private currentTitle = '';
+	private saving = false;
+
+	constructor(private app: App, private path: string, host: HTMLElement) { super(host); }
+
+	onload(): void {
+		this.currentTitle = this.readTitle();
+		this.render();
+		this.registerEvent(this.app.metadataCache.on('changed', file => {
+			if (file.path !== this.path || this.saving || document.activeElement === this.inputEl) return;
+			this.currentTitle = this.readTitle();
+			if (this.inputEl) this.inputEl.value = this.currentTitle;
+		}));
+	}
+
+	private readTitle(): string {
+		const file = this.app.vault.getAbstractFileByPath(this.path);
+		return file instanceof TFile ? journalFrontmatterTitle(this.app.metadataCache.getFileCache(file)?.frontmatter) : '';
+	}
+
+	private render(): void {
+		this.containerEl.empty();
+		const field = this.containerEl.createDiv({ cls: 'mx-journal-title-field' });
+		field.createEl('label', { cls: 'ad-modal-label', text: '标题', attr: { for: `mx-journal-title-${this.path}` } });
+		const input = field.createEl('input', {
+			cls: 'ad-modal-input',
+			attr: {
+				id: `mx-journal-title-${this.path}`,
+				type: 'text',
+				value: this.currentTitle,
+				placeholder: '输入今天这篇日记的标题',
+				'aria-label': '今日日记标题',
+				autocomplete: 'off',
+			},
+		});
+		this.inputEl = input;
+		input.addEventListener('keydown', event => {
+			if (event.key === 'Enter') { event.preventDefault(); input.blur(); }
+			if (event.key === 'Escape') { input.value = this.currentTitle; input.blur(); }
+		});
+		input.addEventListener('change', () => { void this.save(input.value); });
+	}
+
+	private async save(rawTitle: string): Promise<void> {
+		if (this.saving) return;
+		const file = this.app.vault.getAbstractFileByPath(this.path);
+		if (!(file instanceof TFile)) { new Notice('日记文件不存在'); return; }
+		const title = rawTitle.trim();
+		if (title === this.currentTitle) { if (this.inputEl) this.inputEl.value = title; return; }
+		this.saving = true;
+		if (this.inputEl) this.inputEl.disabled = true;
+		try {
+			await writeJournalTitle(this.app, file, title);
+			this.currentTitle = title;
+			if (this.inputEl) this.inputEl.value = title;
+		} catch (error) {
+			if (this.inputEl) this.inputEl.value = this.currentTitle;
+			new Notice(`日记标题更新失败：${String(error)}`);
+		} finally {
+			this.saving = false;
+			if (this.inputEl) this.inputEl.disabled = false;
+		}
+	}
+}
+
 export function mountJournalTaskSummary(
 	el: HTMLElement,
 	ctx: MarkdownPostProcessorContext,
@@ -73,11 +141,19 @@ export function mountJournalTaskSummary(
 ): void {
 	if (!journalDateFromPath(ctx.sourcePath)) return;
 	for (const heading of Array.from(el.querySelectorAll('h2'))) {
-		if (heading.textContent?.trim() !== '今日任务') continue;
-		if (heading.nextElementSibling?.classList.contains('mx-journal-task-summary')) continue;
-		const host = heading.ownerDocument.createElement('div');
-		host.className = 'mx-journal-task-summary';
-		heading.insertAdjacentElement('afterend', host);
-		ctx.addChild(new JournalTaskSummary(app, store, ctx.sourcePath, host));
+		const title = heading.textContent?.trim();
+		if (title === '今日任务') {
+			if (heading.nextElementSibling?.classList.contains('mx-journal-task-summary')) continue;
+			const host = heading.ownerDocument.createElement('div');
+			host.className = 'mx-journal-task-summary';
+			heading.insertAdjacentElement('afterend', host);
+			ctx.addChild(new JournalTaskSummary(app, store, ctx.sourcePath, host));
+		} else if (title === '今日日记') {
+			if (heading.nextElementSibling?.classList.contains('mx-journal-title-editor')) continue;
+			const host = heading.ownerDocument.createElement('div');
+			host.className = 'mx-journal-title-editor';
+			heading.insertAdjacentElement('afterend', host);
+			ctx.addChild(new JournalTitleEditor(app, ctx.sourcePath, host));
+		}
 	}
 }

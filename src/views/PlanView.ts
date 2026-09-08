@@ -66,6 +66,7 @@ export class PlanView extends ItemView {
 		this.registerEvent(this.app.vault.on('delete', () => { void this.renderPlanContent(); }));
 		this.registerEvent(this.app.vault.on('rename', () => { void this.renderPlanContent(); }));
 		this.registerEvent(this.app.vault.on('modify', file => { if (file.path.startsWith('05-计划/') || (this.mode === 'calendar' && !!journalDateFromPath(file.path))) void this.renderPlanContent(); }));
+		this.registerEvent(this.app.metadataCache.on('changed', file => { if (this.mode === 'calendar' && !!journalDateFromPath(file.path)) void this.renderPlanContent(); }));
 		this.register(this.plugin.embeddedTasks.subscribe(() => { if (this.mode === 'calendar') void this.renderPlanContent(); }));
 		await this.plugin.embeddedTasks.ready;
 		await this.mountView();
@@ -322,7 +323,7 @@ export class PlanView extends ItemView {
 		const section = parent.createDiv({ cls: 'mx-day-journal-section' });
 		section.createDiv({ cls: 'mx-day-task-section__title', text: '日记' });
 		section.createDiv({ cls: 'mx-day-journal-title', text: journal.title });
-		if (journal.quickNoteCount) section.createDiv({ cls: 'mx-day-journal-meta', text: `随时记 · ${journal.quickNoteCount}条` });
+		if (journal.quickNoteCount && journal.titleSource !== 'quick-note') section.createDiv({ cls: 'mx-day-journal-meta', text: `随时记 · ${journal.quickNoteCount}条` });
 		if (journal.summary) section.createDiv({ cls: 'mx-day-journal-summary', text: journal.summary });
 		const open = section.createEl('button', { cls: 'mx-inline-action mx-day-journal-open', text: '打开日记 →', attr: { type: 'button' } });
 		open.addEventListener('click', () => { const file = this.app.vault.getAbstractFileByPath(journal.path); if (file instanceof TFile) void this.app.workspace.getLeaf('tab').openFile(file); });

@@ -129,7 +129,7 @@ test('time trace rename leaves technical PlanView and identifiers intact', () =>
 });
 test('journal task summary is a Reading View post processor anchored only at 今日任务', () => {
 	assert.match(main, /registerMarkdownPostProcessor/);
-	assert.match(journalSummary, /heading\.textContent\?\.trim\(\) !== '今日任务'/);
+	assert.match(journalSummary, /title === '今日任务'/);
 	assert.match(journalSummary, /ctx\.addChild\(new JournalTaskSummary/);
 });
 test('journal task summary reuses EmbeddedTaskStore writes and never writes journal Markdown', () => {
@@ -138,4 +138,21 @@ test('journal task summary reuses EmbeddedTaskStore writes and never writes jour
 	assert.equal(journalSummary.includes('vault.process'), false);
 	assert.equal(journalSummary.includes('vault.modify'), false);
 	assert.equal(journalSummary.includes('今日任务\n- [ ]'), false);
+});
+test('optional journal title input is anchored inside 今日日记 and reuses the existing input language', () => {
+	assert.match(journalSummary, /title === '今日日记'[\s\S]*mx-journal-title-editor[\s\S]*new JournalTitleEditor/);
+	assert.match(journalSummary, /cls: 'ad-modal-input'[\s\S]*placeholder: '输入今天这篇日记的标题'/);
+	assert.match(journalSummary, /cls: 'ad-modal-label', text: '标题'/);
+});
+test('journal title editor persists one frontmatter field without creating an H1 or renaming files', () => {
+	assert.match(journalSummary, /writeJournalTitle\(this\.app, file, title\)/);
+	assert.equal(journalSummary.includes("createEl('h1'"), false);
+	assert.equal(journalSummary.includes('vault.rename'), false);
+});
+test('journal metadata changes refresh the mounted calendar without rebuilding the shell', () => {
+	const onOpen = view.match(/async onOpen\(\): Promise<void> \{[\s\S]*?\n\t\}/)?.[0] ?? '';
+	assert.match(onOpen, /metadataCache\.on\('changed', file => \{ if \(this\.mode === 'calendar' && !!journalDateFromPath\(file\.path\)\) void this\.renderPlanContent\(\); \}\)/);
+});
+test('quick-note fallback is not duplicated in day detail metadata', () => {
+	assert.match(view, /journal\.quickNoteCount && journal\.titleSource !== 'quick-note'/);
 });
