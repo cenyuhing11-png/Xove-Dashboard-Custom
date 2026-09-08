@@ -3,7 +3,6 @@ import type { MengxuProject } from '../../data/projects';
 import { runningProcessCounts, upcomingProcesses } from '../../data/processes';
 import type { Process } from '../../data/processes';
 import { KNOWLEDGE_AREAS } from './config';
-import { renderLifeCompass } from './LifeCompass';
 import { renderPlanningCard } from './PlanningCard';
 import type { PlanPeriod, PlanState } from '../../data/planning';
 import { renderLearningCard } from './LearningCard';
@@ -17,7 +16,6 @@ import { addEmpty, addEntry, createGroup, createSection } from './shared';
 export interface WorkbenchHomeData {
 	renderEmbeddedToday(parent: HTMLElement): void;
 	onAllEmbeddedTasks(): void;
-	onOpenDirection(name: string): void;
 	todayTasks: TaskItem[];
 	upcomingTasks: TaskItem[];
 	projects: MengxuProject[];
@@ -88,7 +86,6 @@ function renderContent(parent: HTMLElement, data: WorkbenchHomeData): void {
 export function renderWorkbenchHome(parent: HTMLElement, data: WorkbenchHomeData): void {
 	parent.empty();
 	parent.addClass('wb-home');
-	renderLifeCompass(parent, data.onOpenDirection);
 	const execution = parent.createDiv({ cls: 'wb-grid' });
 	renderToday(execution, data);
 	renderPlanningCard(execution, data.plans, data.onOpenPlan);

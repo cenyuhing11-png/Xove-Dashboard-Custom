@@ -83,7 +83,7 @@ test('Only top-level project overview mounts shared shell, never project detail'
 });
 test('Shared navigation reuses the current Mengxu leaf and explicitly transfers keyboard focus',()=>{
 	const source=readFileSync(new URL('../main.ts',import.meta.url),'utf8');
-	assert.ok(source.includes('const leaf = sourceLeaf'));
+	assert.ok(source.includes('sourceLeaf?.view instanceof DashboardView'));
 	assert.ok(source.includes('getLeavesOfType(PLAN_VIEW)[0]'));
 	assert.ok(source.includes('getLeavesOfType(PROJECT_VIEW)[0]'));
 	assert.ok(source.includes('this.app.workspace.setActiveLeaf(leaf, { focus: true })'));

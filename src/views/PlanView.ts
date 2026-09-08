@@ -1,4 +1,4 @@
-import { ItemView, Notice, TFile, WorkspaceLeaf } from 'obsidian';
+import { Component, ItemView, Notice, TFile, WorkspaceLeaf } from 'obsidian';
 import type { App, ViewStateResult } from 'obsidian';
 import type Dashboard from '../main';
 import type { EmbeddedTask } from '../data/embeddedTasks';
@@ -32,23 +32,23 @@ function dayLabel(date: Date): string { return `${date.getMonth() + 1}/${date.ge
 function monthTitle(year: number, month: number): string { return `${year} 年 ${month} 月`; }
 function sameDay(a: Date, b: Date): boolean { return dateKey(a) === dateKey(b); }
 
-export class PlanView extends ItemView {
+/** Reusable time-trace content. The legacy PlanView and the main workbench router
+ * mount this same renderer, so the business UI has a single implementation. */
+export class PlanWorkspaceRenderer extends Component {
 	private selectedYear = localPlanSelection().year;
 	private selectedMonth = localPlanSelection().month;
 	private mode: PlanWorkspaceMode = 'board';
 	private calendarMode: PlanCalendarMode = 'month';
 	private selectedDate = new Date(this.selectedYear, this.selectedMonth - 1, new Date().getDate(), 12);
 	private sourceLabels = new Map<string, string>();
-	private shell?: WorkbenchShell;
 	private workspaceEl?: HTMLElement;
 	private generation = 0;
+	private active = false;
+	private sectionDisposers: Array<() => void> = [];
 
-	constructor(leaf: WorkspaceLeaf, private plugin: Dashboard) { super(leaf); }
-	getViewType(): string { return PLAN_VIEW; }
-	getDisplayText(): string { return '时迹'; }
-	getIcon(): string { return 'calendar-range'; }
+	constructor(public readonly app: App, private plugin: Dashboard) { super(); }
 	getState() { return { selectedYear: this.selectedYear, selectedMonth: this.selectedMonth, mode: this.mode, calendarMode: this.calendarMode, selectedDate: dateKey(this.selectedDate) }; }
-	async setState(state: Record<string, unknown>, result: ViewStateResult): Promise<void> {
+	async setState(state: Record<string, unknown>): Promise<void> {
 		if (Number.isInteger(state.selectedYear) && Number(state.selectedYear) > 0) this.selectedYear = Number(state.selectedYear);
 		if (Number.isInteger(state.selectedMonth) && Number(state.selectedMonth) >= 1 && Number(state.selectedMonth) <= 12) this.selectedMonth = Number(state.selectedMonth);
 		if (state.mode === 'board' || state.mode === 'calendar' || state.mode === 'review') this.mode = state.mode;
@@ -58,26 +58,38 @@ export class PlanView extends ItemView {
 			this.selectedDate = new Date(year!, month! - 1, day, 12);
 		}
 		if (this.workspaceEl) await this.renderPlanContent();
-		else await this.mountView();
-		await super.setState(state, result);
 	}
-	async onOpen(): Promise<void> {
-		this.registerEvent(this.app.workspace.on('css-change', () => { void this.renderPlanContent(); }));
-		this.registerEvent(this.app.vault.on('create', () => { void this.renderPlanContent(); }));
-		this.registerEvent(this.app.vault.on('delete', () => { void this.renderPlanContent(); }));
-		this.registerEvent(this.app.vault.on('rename', () => { void this.renderPlanContent(); }));
-		this.registerEvent(this.app.vault.on('modify', file => { if (file.path.startsWith('05-计划/') || (this.mode === 'calendar' && !!journalDateFromPath(file.path))) void this.renderPlanContent(); }));
-		this.registerEvent(this.app.metadataCache.on('changed', file => { if (this.mode === 'calendar' && !!journalDateFromPath(file.path)) void this.renderPlanContent(); }));
-		this.register(this.plugin.embeddedTasks.subscribe(() => { if (this.mode === 'calendar') void this.renderPlanContent(); }));
+	private attachSectionListeners(): void {
+		if (this.sectionDisposers.length) return;
+		const refresh = () => { if (this.active) void this.renderPlanContent(); };
+		const workspaceRef = this.app.workspace.on('css-change', refresh);
+		this.sectionDisposers.push(() => this.app.workspace.offref(workspaceRef));
+		const createRef = this.app.vault.on('create', refresh);
+		const deleteRef = this.app.vault.on('delete', refresh);
+		const renameRef = this.app.vault.on('rename', refresh);
+		this.sectionDisposers.push(() => this.app.vault.offref(createRef));
+		this.sectionDisposers.push(() => this.app.vault.offref(deleteRef));
+		this.sectionDisposers.push(() => this.app.vault.offref(renameRef));
+		const modifyRef = this.app.vault.on('modify', file => { if (this.active && (file.path.startsWith('05-计划/') || (this.mode === 'calendar' && !!journalDateFromPath(file.path)))) void this.renderPlanContent(); });
+		this.sectionDisposers.push(() => this.app.vault.offref(modifyRef));
+		const metadataRef = this.app.metadataCache.on('changed', file => { if (this.active && this.mode === 'calendar' && !!journalDateFromPath(file.path)) void this.renderPlanContent(); });
+		this.sectionDisposers.push(() => this.app.metadataCache.offref(metadataRef));
+		this.sectionDisposers.push(this.plugin.embeddedTasks.subscribe(() => { if (this.active && this.mode === 'calendar') void this.renderPlanContent(); }));
+	}
+	async activate(workspaceEl: HTMLElement): Promise<void> {
+		this.active = true;
+		this.workspaceEl = workspaceEl;
+		this.attachSectionListeners();
 		await this.plugin.embeddedTasks.ready;
-		await this.mountView();
+		await this.renderPlanContent();
 	}
-	async onClose(): Promise<void> {
+	deactivate(): void {
+		this.active = false;
 		this.generation++;
-		if (this.shell) this.removeChild(this.shell);
-		this.shell = undefined;
 		this.workspaceEl = undefined;
+		for (const dispose of this.sectionDisposers.splice(0)) dispose();
 	}
+	onunload(): void { this.deactivate(); }
 
 	private planFiles() {
 		return {
@@ -96,18 +108,6 @@ export class PlanView extends ItemView {
 		this.selectedYear = year; this.selectedMonth = month;
 		this.selectedDate = new Date(year, month - 1, Math.min(day, new Date(year, month, 0).getDate()), 12);
 		void this.renderPlanContent();
-	}
-
-	private async mountView(): Promise<void> {
-		const root = this.contentEl;
-		if (this.shell) this.removeChild(this.shell);
-		root.empty(); root.removeClass('ad-modal'); root.addClass('mx-plan-workspace-view');
-		const page = root.createDiv({ cls: 'dashboard-plugin mx-plan-workspace' });
-		renderLifeCompass(page, name => { void openDirection(this.app, name); });
-		this.shell = new WorkbenchShell(this.plugin, page, action => this.plugin.navigateWorkbench(action, this.leaf), 'plan');
-		this.addChild(this.shell);
-		this.workspaceEl = page.createDiv({ cls: 'po-container mx-plan-container' });
-		await this.renderPlanContent();
 	}
 
 	private async renderPlanContent(): Promise<void> {
@@ -349,5 +349,39 @@ export class PlanView extends ItemView {
 		const subtitle = taskSourceSubtitle(task, this.sourceLabels.get(task.sourceFile) ?? taskCalendarSourceLabel(task));
 		if (subtitle) body.createSpan({ cls: 'mx-day-task-source', text: subtitle });
 		row.addEventListener('click', () => { const file = this.app.vault.getAbstractFileByPath(task.sourceFile); if (file instanceof TFile) void this.app.workspace.getLeaf('tab').openFile(file); });
+	}
+}
+
+/** Legacy compatibility wrapper for restored workspaces and old commands. */
+export class PlanView extends ItemView {
+	private shell?: WorkbenchShell;
+	private renderer: PlanWorkspaceRenderer;
+	constructor(leaf: WorkspaceLeaf, private plugin: Dashboard) {
+		super(leaf);
+		this.renderer = new PlanWorkspaceRenderer(this.app, plugin);
+	}
+	getViewType(): string { return PLAN_VIEW; }
+	getDisplayText(): string { return '时迹'; }
+	getIcon(): string { return 'calendar-range'; }
+	getState() { return this.renderer.getState(); }
+	async setState(state: Record<string, unknown>, result: ViewStateResult): Promise<void> {
+		await this.renderer.setState(state);
+		await super.setState(state, result);
+	}
+	async onOpen(): Promise<void> {
+		const root = this.contentEl;
+		root.empty(); root.removeClass('ad-modal'); root.addClass('mx-plan-workspace-view');
+		const page = root.createDiv({ cls: 'dashboard-plugin mx-plan-workspace' });
+		renderLifeCompass(page, name => { void openDirection(this.app, name); });
+		this.shell = new WorkbenchShell(this.plugin, page, action => this.plugin.navigateWorkbench(action, this.leaf), 'plan');
+		this.addChild(this.shell);
+		this.addChild(this.renderer);
+		await this.renderer.activate(page.createDiv({ cls: 'po-container mx-plan-container' }));
+	}
+	async onClose(): Promise<void> {
+		this.renderer.deactivate();
+		this.removeChild(this.renderer);
+		if (this.shell) this.removeChild(this.shell);
+		this.shell = undefined;
 	}
 }

@@ -19,10 +19,12 @@ test('global navigation names time trace directly after home', () => assert.matc
 test('plan has a dedicated top-level view', () => assert.match(view, /PLAN_VIEW = 'xove-dashboard-custom-plan-workspace'/));
 test('plan top-level view reuses WorkbenchShell with active plan state', () => assert.match(view, /new WorkbenchShell\([\s\S]*'plan'\)/));
 test('plan view is registered by the plugin', () => assert.match(main, /registerView\(PLAN_VIEW/));
-test('global plan navigation switches the supplied Mengxu leaf instead of opening a tab', () => {
+test('global plan navigation routes inside the supplied Mengxu view instead of opening a tab', () => {
 	assert.match(main, /navigateWorkbench\(action: WorkbenchAction, sourceLeaf\?: WorkspaceLeaf\)/);
-	assert.match(main, /const leaf = sourceLeaf[\s\S]*action === 'plan'[\s\S]*setViewState\(\{ type: PLAN_VIEW/);
-	assert.doesNotMatch(main.match(/async navigateWorkbench\(action: WorkbenchAction[\s\S]*?\n\t}/)?.[0] ?? '', /getLeaf\('tab'\).*action === 'plan'/);
+	assert.match(dashboardView, /action === 'plan'[\s\S]*setSection\('timeTrace'\)/);
+	const navigation = main.match(/async navigateWorkbench\(action: WorkbenchAction[\s\S]*?\n\t}/)?.[0] ?? '';
+	assert.doesNotMatch(navigation, /setViewState\(\{ type: PLAN_VIEW/);
+	assert.doesNotMatch(navigation, /setViewState\(\{ type: PROJECT_VIEW/);
 });
 test('plan board reuses original ProjectBoard primitives', () => { for (const cls of ['po-container', 'po-sidebar', 'po-kanban', 'po-kanban__col', 'po-kanban__card']) assert.ok(view.includes(cls)); });
 test('plan calendar reuses original calendar primitives', () => { for (const cls of ['po-cal__bar', 'po-cal__days', 'po-cal__week', 'po-cal__det']) assert.ok(view.includes(cls)); });
@@ -129,7 +131,7 @@ test('plan view mode switches patch content instead of rebuilding the shell', ()
 	assert.match(view, /this\.calendarMode = mode; void this\.renderPlanContent\(\)/);
 });
 test('calendar task refresh subscription does not rebuild the outer view', () => {
-	assert.match(view, /embeddedTasks\.subscribe\(\(\) => \{ if \(this\.mode === 'calendar'\) void this\.renderPlanContent\(\); \}\)/);
+	assert.match(view, /embeddedTasks\.subscribe\(\(\) => \{ if \(this\.active && this\.mode === 'calendar'\) void this\.renderPlanContent\(\); \}\)/);
 	assert.equal(view.includes("embeddedTasks.subscribe(() => { if (this.mode === 'calendar') void this.mountView()"), false);
 });
 test('time trace sidebar has three equal view rows, no explanatory labels and a lightweight today action', () => {
@@ -245,10 +247,11 @@ test('native Embedded Task checkbox reuses po-check visuals with explicit checke
 	}
 });
 test('all primary Mengxu pages route through the current leaf and keep their active shell state', () => {
-	assert.match(dashboardView, /action === 'plan' \|\| action === 'all'[\s\S]*navigateWorkbench\(action, this\.leaf\)/);
+	assert.match(dashboardView, /action === 'plan'[\s\S]*setSection\('timeTrace'\)/);
+	assert.match(dashboardView, /action === 'all'[\s\S]*setSection\('process'\)/);
 	assert.match(view, /navigateWorkbench\(action, this\.leaf\), 'plan'/);
 	assert.match(projectView, /navigateWorkbench\(action, this\.leaf\), 'all'/);
-	assert.match(main, /action === 'all'[\s\S]*setViewState\(\{ type: PROJECT_VIEW[^}]*projectId: '', path: ''/);
+	assert.doesNotMatch(main.match(/async navigateWorkbench\(action: WorkbenchAction[\s\S]*?\n\t}/)?.[0] ?? '', /setViewState\(\{ type: (?:PLAN_VIEW|PROJECT_VIEW)/);
 	assert.match(main, /leaf\.view instanceof DashboardView[\s\S]*leaf\.view\.navigateWorkbench\(action\)/);
 });
 test('time trace and ProjectBoard share the same 720px outer stack threshold', () => {
@@ -307,8 +310,8 @@ test('live preview title debounce and composition guards protect Chinese input',
 	assert.match(journalLivePreview, /ignoreEvent\(\): boolean \{ return true; \}/);
 });
 test('journal metadata changes refresh the mounted calendar without rebuilding the shell', () => {
-	const onOpen = view.match(/async onOpen\(\): Promise<void> \{[\s\S]*?\n\t\}/)?.[0] ?? '';
-	assert.match(onOpen, /metadataCache\.on\('changed', file => \{ if \(this\.mode === 'calendar' && !!journalDateFromPath\(file\.path\)\) void this\.renderPlanContent\(\); \}\)/);
+	assert.match(view, /metadataCache\.on\('changed', file => \{ if \(this\.active && this\.mode === 'calendar' && !!journalDateFromPath\(file\.path\)\) void this\.renderPlanContent\(\); \}\)/);
+	assert.match(view, /sectionDisposers\.push\(\(\) => this\.app\.metadataCache\.offref\(metadataRef\)\)/);
 });
 test('quick-note fallback is not duplicated in day detail metadata', () => {
 	assert.match(view, /journal\.quickNoteCount && journal\.titleSource !== 'quick-note'/);

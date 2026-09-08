@@ -394,24 +394,17 @@ export default class Dashboard extends Plugin {
 	async navigateWorkbench(action: WorkbenchAction, sourceLeaf?: WorkspaceLeaf): Promise<void> {
 		if (action === 'project') { new UnifiedProcessModal(this.app).open(); return; }
 		if (action === 'task') { new NewEmbeddedTaskModal(this.app, this.embeddedTasks).open(); return; }
-		const leaf = sourceLeaf
-			?? this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]
-			?? this.app.workspace.getLeavesOfType(PLAN_VIEW)[0]
-			?? this.app.workspace.getLeavesOfType(PROJECT_VIEW)[0]
-			?? this.app.workspace.getLeaf('tab');
-		if (action === 'plan') {
-			if (leaf.view.getViewType() !== PLAN_VIEW) await leaf.setViewState({ type: PLAN_VIEW, active: true });
-			await this.app.workspace.revealLeaf(leaf);
-			this.app.workspace.setActiveLeaf(leaf, { focus: true });
-			return;
+		// Normal top navigation is already inside DashboardView: route in-place and
+		// never replace its leaf with PLAN_VIEW / PROJECT_VIEW. A legacy restored
+		// tab is converted once to the main workbench as a compatibility bridge.
+		let leaf = sourceLeaf?.view instanceof DashboardView ? sourceLeaf : this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+		if (!leaf) {
+			leaf = sourceLeaf
+				?? this.app.workspace.getLeavesOfType(PLAN_VIEW)[0]
+				?? this.app.workspace.getLeavesOfType(PROJECT_VIEW)[0]
+				?? this.app.workspace.getLeaf('tab');
+			await leaf.setViewState({ type: VIEW_TYPE, active: true });
 		}
-		if (action === 'all') {
-			await leaf.setViewState({ type: PROJECT_VIEW, active: true, state: { projectId: '', path: '' } });
-			await this.app.workspace.revealLeaf(leaf);
-			this.app.workspace.setActiveLeaf(leaf, { focus: true });
-			return;
-		}
-		if (leaf.view.getViewType() !== VIEW_TYPE) await leaf.setViewState({ type: VIEW_TYPE, active: true });
 		await this.app.workspace.revealLeaf(leaf);
 		this.app.workspace.setActiveLeaf(leaf, { focus: true });
 		if (leaf.view instanceof DashboardView) await leaf.view.navigateWorkbench(action);

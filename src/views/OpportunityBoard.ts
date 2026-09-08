@@ -99,7 +99,7 @@ export class OpportunityBoard {
 		this.cache = { at: Date.now(), items: sortBoardItems(items, this.stageLabels()) };
 	}
 
-	async show(): Promise<void> {
+	async show(preserveState = false): Promise<void> {
 		if (!this.host.boardEl) return;
 		this.host.exitEditMode();
 		const items = await this.loadItems();
@@ -111,9 +111,11 @@ export class OpportunityBoard {
 		this.host.currentPage = 'opportunity';
 
 		this.currentItems = items;
-		this.selectedStatus = 'all';
-		this.showStarredOnly = false;
-		this.selectedDetailId = null;
+		if (!preserveState) {
+			this.selectedStatus = 'all';
+			this.showStarredOnly = false;
+			this.selectedDetailId = null;
+		}
 
 		const container = this.host.boardEl.createDiv({ cls: 'po-container op-container' });
 		const sidebar = container.createDiv({ cls: 'po-sidebar op-sidebar' });

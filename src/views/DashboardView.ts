@@ -15,6 +15,7 @@ import type { ParseIssue } from '../data/parserDiagnostics';
 import { DashboardStore } from '../data/dashboardStore';
 import { OpportunityBoard } from './OpportunityBoard';
 import { ProjectBoard } from './ProjectBoard';
+import type { ProjectBoardSource } from './ProjectBoard';
 import { fmtDate, todayStr, nowFmt, calcNextRemindDate, getTodayUniverse, getTodayTasks, isDoneToday, isSkipToday, overdueDays } from '../data/taskLogic';
 import { t, tArr } from '../i18n';
 import { UI_TEXT } from '../constants';
@@ -35,11 +36,15 @@ import type { JournalKind } from '../data/journal';
 import { JournalHistoryModal } from './JournalHistoryModal';
 import { openDirection } from './DirectionView';
 import { DIARY_FOLDER, PROJECT_ROOT } from '../data/vaultPaths';
+import { PlanWorkspaceRenderer } from './PlanView';
+import { processBoardItems } from '../data/processes';
+import { requestProcessStatusChange } from './ProcessStatusAction';
 
 import type Dashboard from '../main';
 import { injectSvg } from '../icons';
 
 export const VIEW_TYPE = 'xove-dashboard-custom-view';
+export type WorkbenchSection = 'home' | 'timeTrace' | 'process' | 'inbox';
 
 /** 首页模块描述符：id 对应 settings.homeModules，render 为对应渲染函数 */
 interface HomeModule {
@@ -158,6 +163,12 @@ export class DashboardView extends ItemView {
 	private parseIssuesEl: HTMLElement | null = null;
 	private dashboardEl: HTMLElement | null = null;
 	private shell?: WorkbenchShell;
+	private lifeCompass?: HTMLElement;
+	private currentSection: WorkbenchSection = 'home';
+	private sectionScroll = new Map<WorkbenchSection, number>();
+	private planRenderer: PlanWorkspaceRenderer;
+	private processBoard?: ProjectBoard;
+	private processSource?: ProjectBoardSource;
 
 	// 首页编辑态（长按进入，仿手机桌面：拖拽排序 / 拖入垃圾桶删除 / 添加卡片）
 	private adEditMode = false;
@@ -207,16 +218,13 @@ export class DashboardView extends ItemView {
 	// Project overview state (renderer extracted into ProjectBoard)
 	public selectedProject: string | null = null;
 
-	// Which top-level page is currently shown (home / project overview / opportunity board)
-	private page: 'home' | 'project' | 'opportunity' = 'home';
-	private inboxCompass?: HTMLElement;
-	get currentPage() { return this.page; }
+	// Legacy board hosts still use these page names. They map onto the unified router.
+	get currentPage(): 'home' | 'project' | 'opportunity' {
+		return this.currentSection === 'process' ? 'project' : this.currentSection === 'inbox' ? 'opportunity' : 'home';
+	}
 	set currentPage(page: 'home' | 'project' | 'opportunity') {
-		this.page = page; this.shell?.setActive(page === 'opportunity' ? 'opportunity' : page === 'project' ? 'classic' : this.homeMode === 'classic' ? 'classic' : 'home');
-		if (page === 'opportunity' && this.dashboardEl && this.boardEl) {
-			if (!this.inboxCompass) this.inboxCompass = renderLifeCompass(this.dashboardEl, name => { void openDirection(this.app, name); });
-			this.dashboardEl.insertBefore(this.inboxCompass, this.boardEl);
-		} else { this.inboxCompass?.remove(); this.inboxCompass = undefined; }
+		this.currentSection = page === 'project' ? 'process' : page === 'opportunity' ? 'inbox' : 'home';
+		this.shell?.setActive(page === 'opportunity' ? 'opportunity' : page === 'project' ? 'all' : this.homeMode === 'classic' ? 'classic' : 'home');
 	}
 
 	public taskStore: TaskStore;
@@ -239,6 +247,7 @@ export class DashboardView extends ItemView {
 		this.dashboardStore = new DashboardStore(this.taskStore);
 		this.oppBoard = new OpportunityBoard(this);
 		this.projectBoard = new ProjectBoard(this);
+		this.planRenderer = new PlanWorkspaceRenderer(this.app, plugin);
 	}
 
 	refreshThemeButton(): void { this.shell?.refreshSettings(); }
@@ -246,13 +255,14 @@ export class DashboardView extends ItemView {
 	refreshBanner(): void { this.shell?.refreshBanner(); }
 	private async updatePulse(): Promise<void> { await this.shell?.updatePulse(); }
 	async navigateWorkbench(action: WorkbenchAction): Promise<void> {
-		if (action === 'home') await this.showDashboard();
-		else if (action === 'classic') await this.showClassicDashboard();
-		else if (action === 'opportunity') await this.oppBoard.show();
+		if (action === 'home') await this.setSection('home');
+		else if (action === 'classic') { await this.setSection('home'); await this.showClassicDashboard(); }
+		else if (action === 'opportunity') await this.setSection('inbox');
+		else if (action === 'plan') await this.setSection('timeTrace');
+		else if (action === 'all') await this.setSection('process');
 		else if (action === 'diary') await this.createDiary();
 		else if (action === 'task') new NewEmbeddedTaskModal(this.app, this.plugin.embeddedTasks).open();
 		else if (action === 'project') new UnifiedProcessModal(this.app).open();
-		else if (action === 'plan' || action === 'all') await this.plugin.navigateWorkbench(action, this.leaf);
 	}
 	getViewType(): string { return VIEW_TYPE; }
 	getDisplayText(): string { return '夏知之 · 梦序'; }
@@ -260,8 +270,8 @@ export class DashboardView extends ItemView {
 
 	async onOpen(): Promise<void> {
 		this.register(this.plugin.embeddedTasks.subscribe(() => {
-			if (this.currentPage === 'project') void this.projectBoard.refresh();
-			else void this.renderWorkbenchDashboard();
+			if (this.currentSection === 'process') this.processBoard?.refreshTaskProgress();
+			else if (this.currentSection === 'home') void this.renderWorkbenchDashboard();
 		}));
 		// NOTE: earlier builds emptied this.containerEl then added .dashboard-plugin
 		// directly; that was fine (the "setText on null" bug was the titleEl field
@@ -275,17 +285,19 @@ export class DashboardView extends ItemView {
 		const d = MOCK_DATA;
 		this.shell = new WorkbenchShell(this.plugin, this.dashboardEl, action => this.navigateWorkbench(action), 'home', root => this.renderParseIssues(root));
 		this.addChild(this.shell);
+		this.lifeCompass = renderLifeCompass(this.dashboardEl, name => { void openDirection(this.app, name); });
+		this.addChild(this.planRenderer);
 		this.renderBoard(this.dashboardEl, d);
 
 		// Auto-refresh on vault changes (home cards incl. progress + weekly, or project overview)
 		const refreshAll = () => {
 			this.taskStore.invalidate();
 			void this.updatePulse();
-			if (this.currentPage === 'project') {
-				void this.projectBoard.refresh();
-			} else if (this.currentPage === 'opportunity') {
+			if (this.currentSection === 'process') {
+				void this.processBoard?.refresh();
+			} else if (this.currentSection === 'inbox') {
 				this.oppBoard.scheduleRefresh();
-			} else {
+			} else if (this.currentSection === 'home') {
 				if (this.homeMode === 'classic') this.scheduleHeatmapRefresh();
 				this.dashboardStore.requestRefresh();
 			}
@@ -294,23 +306,23 @@ export class DashboardView extends ItemView {
 		this.registerEvent(this.app.vault.on('delete', refreshAll));
 		this.registerEvent(this.app.vault.on('rename', refreshAll));
 		this.registerEvent(this.app.vault.on('modify', (file) => {
-			if (file.path.startsWith(`${PLAN_ROOT}/`) && this.currentPage === 'home' && this.homeMode === 'workbench') {
+			if (file.path.startsWith(`${PLAN_ROOT}/`) && this.currentSection === 'home' && this.homeMode === 'workbench') {
 				void this.renderWorkbenchDashboard();
 				return;
 			}
 			this.taskStore.invalidate();
-			if (this.currentPage === 'project') {
+			if (this.currentSection === 'process') {
 				// Project config files are re-rendered by setProjectStage / updateProjectFile themselves.
 				// Skipping here avoids a stale re-scan clobbering the just-set stage (flash → reset to first stage).
 				if (file instanceof TFile && file.name.startsWith('project-')) return;
 				void this.updatePulse();
-				void this.projectBoard.refresh();
-				} else if (this.currentPage === 'opportunity' && this.plugin.settings.boardEnabled) {
+				void this.processBoard?.refresh();
+				} else if (this.currentSection === 'inbox' && this.plugin.settings.boardEnabled) {
 					if (file instanceof TFile && file.path === this.plugin.settings.opportunityFile) {
 					void this.updatePulse();
 					this.oppBoard.scheduleRefresh();
 				}
-			} else {
+			} else if (this.currentSection === 'home') {
 				// Home: ignore edits to unrelated files. Only task files (markdown under
 				// the projects folder) affect the home cards, so this saves a full rescan
 				// on every unrelated note edit while still staying fresh for real changes.
@@ -320,7 +332,7 @@ export class DashboardView extends ItemView {
 			}
 		}));
 		this.storeUnsub = this.dashboardStore.subscribe(() => {
-			if (this.currentPage !== 'home' || !this.boardEl) return;
+			if (this.currentSection !== 'home' || !this.boardEl) return;
 			void this.refreshHomeCards();
 		});
 		let planDay = todayStr();
@@ -346,7 +358,11 @@ export class DashboardView extends ItemView {
 	}
 
 	async onClose(): Promise<void> {
-		this.inboxCompass?.remove(); this.inboxCompass = undefined;
+		this.planRenderer.deactivate();
+		this.removeChild(this.planRenderer);
+		this.lifeCompass?.remove(); this.lifeCompass = undefined;
+		this.processBoard?.closeTaskPreview();
+		this.processBoard?.dispose();
 		if (this.shell) { this.removeChild(this.shell); this.shell = undefined; }
 		if (this.adRowHObs) { this.adRowHObs.disconnect(); this.adRowHObs = undefined; }
 		if (this.adHmObs) { this.adHmObs.disconnect(); this.adHmObs = undefined; this.adHmObsTarget = undefined; }
@@ -860,6 +876,48 @@ export class DashboardView extends ItemView {
 		await this.projectBoard.refresh();
 	}
 
+	/** Switch only the workbench content area; the shell and compass stay mounted. */
+	async setSection(section: WorkbenchSection): Promise<void> {
+		if (!this.boardEl) return;
+		const previous = this.currentSection;
+		this.sectionScroll.set(previous, this.contentEl.scrollTop);
+		if (previous === 'timeTrace') this.planRenderer.deactivate();
+		if (previous === 'process') { this.processBoard?.closeTaskPreview(); this.processBoard?.dispose(); }
+		if (previous === 'inbox') this.oppBoard.dispose();
+
+		this.exitEditMode();
+		this.currentSection = section;
+		this.shell?.setActive(section === 'timeTrace' ? 'plan' : section === 'process' ? 'all' : section === 'inbox' ? 'opportunity' : 'home');
+		this.boardEl.empty();
+		for (const cls of ['ad-board', 'wb-home', 'po-board', 'op-board', 'mx-plan-workspace', 'mx-project-overview']) this.boardEl.removeClass(cls);
+
+		if (section === 'home') {
+			this.boardEl.addClass('ad-board', 'wb-home');
+			this.homeMode = 'workbench';
+			await this.renderWorkbenchDashboard();
+		} else if (section === 'timeTrace') {
+			this.boardEl.addClass('mx-plan-workspace');
+			await this.planRenderer.activate(this.boardEl.createDiv({ cls: 'po-container mx-plan-container' }));
+		} else if (section === 'process') {
+			this.boardEl.addClass('mx-project-overview');
+			if (!this.processSource) {
+				this.processSource = {
+					kind: 'mengxu', app: this.app, boardEl: this.boardEl, tasks: this.plugin.embeddedTasks,
+					items: () => processBoardItems(processes(scanLearning(this.app), scanProjects(this.app), this.plugin.embeddedTasks.all())),
+					open: item => { if ('process' in item) void openProcess(this.app, item.process); else void openProjects(this.app, item.project); },
+					changeStatus: (item, status) => requestProcessStatusChange(this.app, { sourceFile: item.key, processType: 'process' in item ? item.process.processType : 'project', projectId: 'project' in item ? item.project.id : item.process.processType === 'project' && !item.process.id.startsWith('project:') ? item.process.id : undefined }, status),
+				};
+				this.processBoard = new ProjectBoard(this.processSource);
+			} else this.processSource.boardEl = this.boardEl;
+			await this.processBoard!.show();
+		} else {
+			await this.oppBoard.show(true);
+		}
+		requestAnimationFrame(() => {
+			if (this.currentSection === section) this.contentEl.scrollTop = this.sectionScroll.get(section) ?? 0;
+		});
+	}
+
 	private async showDashboard(): Promise<void> {
 		if (!this.boardEl) return;
 		this.exitEditMode();
@@ -868,7 +926,7 @@ export class DashboardView extends ItemView {
 		this.boardEl.removeClass('op-board');
 		this.boardEl.addClass('ad-board');
 		this.boardEl.addClass('wb-home');
-		this.currentPage = 'home';
+		this.currentSection = 'home';
 		this.homeMode = 'workbench';
 		this.shell?.setActive('home');
 		await this.renderWorkbenchDashboard();
@@ -896,7 +954,7 @@ export class DashboardView extends ItemView {
 	private workbenchRenderVersion = 0;
 	private async renderWorkbenchDashboard(): Promise<void> {
 		const board = this.boardEl;
-		if (!board || this.currentPage !== 'home' || this.homeMode !== 'workbench') return;
+		if (!board || this.currentSection !== 'home' || this.homeMode !== 'workbench') return;
 		const version = ++this.workbenchRenderVersion;
 		await this.plugin.embeddedTasks.ready;
 		const date = new Date();
@@ -906,7 +964,7 @@ export class DashboardView extends ItemView {
 			Promise.all(PLAN_PERIODS.map((period) => readPlan(this.planFiles(), period, date))),
 			currentLearning(scanLearning(this.app), (path) => learningFiles(this.app).read(path)),
 		]);
-		if (version !== this.workbenchRenderVersion || !this.boardEl || this.boardEl !== board || this.currentPage !== 'home' || this.homeMode !== 'workbench') return;
+		if (version !== this.workbenchRenderVersion || !this.boardEl || this.boardEl !== board || this.currentSection !== 'home' || this.homeMode !== 'workbench') return;
 
 		const today = todayStr();
 		const horizonDate = new Date();
@@ -943,7 +1001,6 @@ export class DashboardView extends ItemView {
 			plans,
 			learning,
 			journals: journalStates(this.planFiles(), date),
-			onOpenDirection: (name) => { void openDirection(this.app, name); },
 			journalActions: {
 				open: (kind) => { void this.openJournal(kind); },
 				history: (mode) => new JournalHistoryModal(this.app, mode, (path) => this.openJournalPath(path), (kind) => this.openJournal(kind)).open(),
@@ -1463,7 +1520,7 @@ export class DashboardView extends ItemView {
 		const allTasks = opts?.allTasks ?? await this.taskStore.scanAllTasks();
 		for (const u of units) {
 			// 异步渲染期间用户可能已切页，必须重校验，否则会把主页卡渲染进其它页面
-			if (this.currentPage !== 'home' || !this.boardEl) return;
+			if (this.currentSection !== 'home' || !this.boardEl) return;
 			if (u.cdIdx !== undefined) {
 				// 倒计时多实例：按 data-cd-idx 渲染对应独立卡片（live:false，不进 onlyLive 刷新）
 				if (opts?.onlyLive) continue;
@@ -1526,7 +1583,7 @@ export class DashboardView extends ItemView {
 
 	/** 设置页修改显隐/排序后，立即重建首页（清空并重渲染全部启用模块） */
 	rebuildHome(): void {
-		if (this.currentPage !== 'home' || !this.boardEl) return;
+		if (this.currentSection !== 'home' || !this.boardEl) return;
 		this.boardEl.empty();
 		if (this.homeMode === 'workbench') void this.renderWorkbenchDashboard();
 		else void this.renderEnabledModules(this.boardEl);
@@ -1537,12 +1594,12 @@ export class DashboardView extends ItemView {
 		if (!this.dashboardEl) return;
 		this.shell?.refreshNav();
 		// 2) 看板被关闭且当前正停在看板页 → 切回主页
-		if (!this.plugin.settings.boardEnabled && this.currentPage === 'opportunity') {
-			void this.showDashboard();
+		if (!this.plugin.settings.boardEnabled && this.currentSection === 'inbox') {
+			void this.setSection('home');
 			return;
 		}
 		// 3) 看板仍开启且当前正停在看板页 → 重刷看板（阶段名/颜色/输入框配置变化即时生效）
-		if (this.currentPage === 'opportunity') {
+		if (this.currentSection === 'inbox') {
 			void this.oppBoard.show();
 		}
 	}
@@ -1624,7 +1681,7 @@ export class DashboardView extends ItemView {
 		// 但其中没有 .ad-card 元素，boardEmpty 恒为 true；若不拦截，长按空白处（含甘特轴/看板拖动）
 		// 会误触发 enterEditMode 并弹出「添加卡片」编辑条。这两个页面本就没有卡片编辑模式，
 		// 故非首页一律不响应板面长按。
-		if (this.currentPage !== 'home') return;
+		if (this.currentSection !== 'home') return;
 		// 比例手柄的按下：交给缩放逻辑，绝不触发长按下进入编辑态/拖拽
 		if ((e.target as HTMLElement).closest('.ad-card__resize')) return;
 		const board = this.boardEl;
@@ -1686,7 +1743,7 @@ export class DashboardView extends ItemView {
 	 *  避免入口重复、误删；新增卡片走「添加卡片」菜单）。非首页 / 非倒计时卡直接放行系统菜单。 */
 	private onBoardContextMenu(e: MouseEvent): void {
 		// 右键菜单仅作用于首页倒计时卡片；项目/机会点页无此卡片，直接放行系统右键菜单
-		if (this.currentPage !== 'home') return;
+		if (this.currentSection !== 'home') return;
 		const card = (e.target as HTMLElement).closest('.ad-card') as HTMLElement | null;
 		if (!card) return;
 		if ((card.getAttribute('data-mod') ?? '') !== 'countdown') return;
@@ -2332,7 +2389,7 @@ export class DashboardView extends ItemView {
 	 *  A single vault scan feeds all three cards; each card reuses its own shell
 	 *  (no remove/re-create), so the layout never flashes. */
 	private async refreshHomeCards(): Promise<void> {
-		if (this.currentPage !== 'home' || !this.boardEl) return;
+		if (this.currentSection !== 'home' || !this.boardEl) return;
 		if (this.homeMode === 'workbench') {
 			await this.renderWorkbenchDashboard();
 			this.refreshParseIssues();
@@ -2344,7 +2401,7 @@ export class DashboardView extends ItemView {
 		const allTasks = this.dashboardStore.getTasks() ?? await this.taskStore.scanAllTasks();
 		// scanAllTasks 是异步耗时操作；期间用户可能已切到其它页面。
 		// 必须在渲染前重校验，否则会把主页卡片渲染进机会点/项目页面。
-		if (this.currentPage !== 'home' || !this.boardEl) return;
+		if (this.currentSection !== 'home' || !this.boardEl) return;
 		// 仅重渲染 live 模块（保护快速捕捉输入框、热力图、倒计时不被重建）
 		await this.renderEnabledModules(this.boardEl, { onlyLive: true, allTasks });
 		this.refreshParseIssues();
@@ -2355,11 +2412,11 @@ export class DashboardView extends ItemView {
 		this.taskStore.invalidate();
 		// Auto-close recurring tasks that have passed their end-date bound before re-rendering.
 		void this.closeRecurringIfExpired();
-		if (this.currentPage === 'project') {
-			void this.projectBoard.refresh();
-		} else if (this.currentPage === 'opportunity') {
+		if (this.currentSection === 'process') {
+			void this.processBoard?.refresh();
+		} else if (this.currentSection === 'inbox') {
 			this.oppBoard.scheduleRefresh();
-		} else {
+		} else if (this.currentSection === 'home') {
 			void this.dashboardStore.refresh();
 		}
 	}
