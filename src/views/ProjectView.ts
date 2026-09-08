@@ -86,7 +86,7 @@ export class ProjectView extends ItemView {
 			}
 			if (this.overviewEl.parentElement !== el) { el.empty(); el.appendChild(this.overviewEl); }
 			if (!this.shell && this.plugin) {
-				this.shell = new WorkbenchShell(this.plugin, this.overviewEl, action => this.plugin!.navigateWorkbench(action), 'all');
+				this.shell = new WorkbenchShell(this.plugin, this.overviewEl, action => this.plugin!.navigateWorkbench(action, this.leaf), 'all');
 				this.addChild(this.shell);
 			}
 			const theme = this.theme();

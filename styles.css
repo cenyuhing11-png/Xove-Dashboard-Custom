@@ -1762,12 +1762,12 @@ input[type="date"].ad-modal-input { cursor: pointer; }
 .po-check.is-done::after { content: ''; width: 6px; height: 3px; border-left: 1.5px solid #fff; border-bottom: 1.5px solid #fff; transform: rotate(-45deg) translateY(-1px); }
 .mx-embedded-task-checkbox { position: relative; display: inline-flex; flex: 0 0 16px; width: 16px; height: 16px; margin: 0; cursor: pointer; }
 input.mx-embedded-task-check { appearance: none; -webkit-appearance: none; position: absolute; inset: 0; z-index: 1; width: 16px; height: 16px; margin: 0; opacity: 0; cursor: pointer; }
-.mx-embedded-task-check-visual { flex: 0 0 16px; border-color: var(--checkbox-border-color, var(--ad-line-s)); border-radius: var(--checkbox-radius, 3px); background: var(--background-primary); transition: border-color 0.12s ease, background-color 0.12s ease; pointer-events: none; }
-.mx-embedded-task-check-visual::after { content: ''; width: 6px; height: 3px; border: 0; border-left: 1.5px solid var(--interactive-accent); border-bottom: 1.5px solid var(--interactive-accent); opacity: 0; transform: rotate(-45deg) translateY(-1px); }
-input.mx-embedded-task-check:checked + .mx-embedded-task-check-visual { border-color: var(--interactive-accent); background: var(--background-primary); }
+.mx-embedded-task-check-visual { flex: 0 0 16px; border-color: var(--checkbox-border-color, var(--background-modifier-border, var(--ad-line-s))); border-radius: var(--checkbox-radius, 3px); background: var(--background-primary); transition: border-color 0.12s ease, background-color 0.12s ease; pointer-events: none; }
+.mx-embedded-task-check-visual::after { content: ''; width: 6px; height: 3px; border: 0; border-left: 1.5px solid var(--text-normal); border-bottom: 1.5px solid var(--text-normal); opacity: 0; transform: rotate(-45deg) translateY(-1px); }
+input.mx-embedded-task-check:checked + .mx-embedded-task-check-visual { border-color: var(--text-muted); background: var(--background-primary); }
 input.mx-embedded-task-check:checked + .mx-embedded-task-check-visual::after { opacity: 1; }
-.mx-embedded-task-checkbox:hover .mx-embedded-task-check-visual { border-color: var(--interactive-accent); background: var(--background-modifier-hover); }
-input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { outline: 2px solid var(--ad-accent); outline-offset: 2px; }
+.mx-embedded-task-checkbox:hover .mx-embedded-task-check-visual { border-color: var(--text-muted); background: var(--background-modifier-hover); }
+input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { outline: 2px solid var(--text-normal); outline-offset: 2px; }
 .po-prio { display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 600; font-family: var(--ad-font); }
 .po-p-high { background: rgba(239,68,68,0.12); color: var(--ad-danger); }
 .po-p-med { background: rgba(234,179,8,0.12); color: var(--ad-warn); }
@@ -1960,18 +1960,9 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
   .mx-day-detail-layout.is-split .mx-day-detail-journal-pane { padding-top: 8px; padding-left: 0; border-top: 1px solid var(--ad-line); border-left: 0; }
 }
 
-@container (max-width: 1100px) {
-  .mx-plan-container { flex-direction: column; min-height: 0; }
-  .mx-plan-container .po-sidebar { width: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--ad-line); }
-  .mx-plan-summary .po-kanban__col { min-width: 220px; }
-  .mx-plan-calendar-days { min-width: 620px; }
-  .mx-plan-workspace .po-cal { overflow-x: auto; }
-}
-
-/* Obsidian desktop reports the host window width rather than the leaf width in
-   older WebViews, so keep the original media-query path as a narrow-window
-   fallback while the container query handles split leaves. */
-@media (max-width: 1400px) {
+/* Match the original ProjectBoard outer split: both workspaces keep sidebar +
+   main until the shared page container is genuinely narrow. */
+@container (max-width: 720px) {
   .mx-plan-container { flex-direction: column; min-height: 0; }
   .mx-plan-container .po-sidebar { width: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--ad-line); }
   .mx-plan-summary .po-kanban__col { min-width: 220px; }

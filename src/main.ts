@@ -1,4 +1,5 @@
 import { Plugin } from 'obsidian';
+import type { WorkspaceLeaf } from 'obsidian';
 import { DEFAULT_SETTINGS, DEFAULT_HOME_MODULES, HOME_LAYOUT_VERSION, DashboardSettings, DashboardSettingTab, CountdownSettings } from './settings';
 import { DashboardView, VIEW_TYPE } from './views/DashboardView';
 import type { BoardStage } from './data/opportunityParser';
@@ -9,8 +10,8 @@ import { UpdateLogModal } from './views/UpdateLogModal';
 import { WelcomeModal } from './views/WelcomeModal';
 import { DirectionView, DIRECTION_VIEW } from './views/DirectionView';
 import { EmbeddedTaskStore } from './data/embeddedTaskVault';
-import { ProjectView, PROJECT_VIEW, openProjects } from './views/ProjectView';
-import { PlanView, PLAN_VIEW, openPlanWorkspace } from './views/PlanView';
+import { ProjectView, PROJECT_VIEW } from './views/ProjectView';
+import { PlanView, PLAN_VIEW } from './views/PlanView';
 import { UnifiedProcessModal } from './views/UnifiedProcessModal';
 import { NewEmbeddedTaskModal } from './views/EmbeddedTaskModal';
 import { TaskStore } from './data/taskStore';
@@ -385,13 +386,31 @@ export default class Dashboard extends Plugin {
 		this.pageShells.forEach(shell => shell.refreshSettings());
 	}
 
-	/** Reuse the existing home tab only for home/inbox/tools; project remains its own View. */
-	async navigateWorkbench(action: WorkbenchAction): Promise<void> {
-		if (action === 'plan') { await openPlanWorkspace(this.app); return; }
-		if (action === 'all') { await openProjects(this.app); return; }
+	/**
+	 * Switch top-level Mengxu pages inside one existing workspace leaf.
+	 * Detail/file routes keep their own openFile/openProjects behaviour; only the
+	 * global home/time-trace/process/inbox navigation reuses this leaf.
+	 */
+	async navigateWorkbench(action: WorkbenchAction, sourceLeaf?: WorkspaceLeaf): Promise<void> {
 		if (action === 'project') { new UnifiedProcessModal(this.app).open(); return; }
 		if (action === 'task') { new NewEmbeddedTaskModal(this.app, this.embeddedTasks).open(); return; }
-		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0] ?? this.app.workspace.getLeaf('tab');
+		const leaf = sourceLeaf
+			?? this.app.workspace.getLeavesOfType(VIEW_TYPE)[0]
+			?? this.app.workspace.getLeavesOfType(PLAN_VIEW)[0]
+			?? this.app.workspace.getLeavesOfType(PROJECT_VIEW)[0]
+			?? this.app.workspace.getLeaf('tab');
+		if (action === 'plan') {
+			if (leaf.view.getViewType() !== PLAN_VIEW) await leaf.setViewState({ type: PLAN_VIEW, active: true });
+			await this.app.workspace.revealLeaf(leaf);
+			this.app.workspace.setActiveLeaf(leaf, { focus: true });
+			return;
+		}
+		if (action === 'all') {
+			await leaf.setViewState({ type: PROJECT_VIEW, active: true, state: { projectId: '', path: '' } });
+			await this.app.workspace.revealLeaf(leaf);
+			this.app.workspace.setActiveLeaf(leaf, { focus: true });
+			return;
+		}
 		if (leaf.view.getViewType() !== VIEW_TYPE) await leaf.setViewState({ type: VIEW_TYPE, active: true });
 		await this.app.workspace.revealLeaf(leaf);
 		this.app.workspace.setActiveLeaf(leaf, { focus: true });

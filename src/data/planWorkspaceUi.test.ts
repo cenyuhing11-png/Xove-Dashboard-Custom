@@ -12,12 +12,18 @@ const journalTaskRenderer = readFileSync(new URL('../components/journal/JournalT
 const embeddedTaskCheckbox = readFileSync(new URL('../components/tasks/EmbeddedTaskCheckbox.ts', import.meta.url), 'utf8');
 const embeddedTaskModal = readFileSync(new URL('../views/EmbeddedTaskModal.ts', import.meta.url), 'utf8');
 const embeddedTasks = readFileSync(new URL('./embeddedTasks.ts', import.meta.url), 'utf8');
+const dashboardView = readFileSync(new URL('../views/DashboardView.ts', import.meta.url), 'utf8');
+const projectView = readFileSync(new URL('../views/ProjectView.ts', import.meta.url), 'utf8');
 
 test('global navigation names time trace directly after home', () => assert.match(shell, /label: '首页'[\s\S]*label: '时迹'[\s\S]*label: '进程'/));
 test('plan has a dedicated top-level view', () => assert.match(view, /PLAN_VIEW = 'xove-dashboard-custom-plan-workspace'/));
 test('plan top-level view reuses WorkbenchShell with active plan state', () => assert.match(view, /new WorkbenchShell\([\s\S]*'plan'\)/));
 test('plan view is registered by the plugin', () => assert.match(main, /registerView\(PLAN_VIEW/));
-test('global plan navigation opens the dedicated view', () => assert.match(main, /action === 'plan'[\s\S]*openPlanWorkspace/));
+test('global plan navigation switches the supplied Mengxu leaf instead of opening a tab', () => {
+	assert.match(main, /navigateWorkbench\(action: WorkbenchAction, sourceLeaf\?: WorkspaceLeaf\)/);
+	assert.match(main, /const leaf = sourceLeaf[\s\S]*action === 'plan'[\s\S]*setViewState\(\{ type: PLAN_VIEW/);
+	assert.doesNotMatch(main.match(/async navigateWorkbench\(action: WorkbenchAction[\s\S]*?\n\t}/)?.[0] ?? '', /getLeaf\('tab'\).*action === 'plan'/);
+});
 test('plan board reuses original ProjectBoard primitives', () => { for (const cls of ['po-container', 'po-sidebar', 'po-kanban', 'po-kanban__col', 'po-kanban__card']) assert.ok(view.includes(cls)); });
 test('plan calendar reuses original calendar primitives', () => { for (const cls of ['po-cal__bar', 'po-cal__days', 'po-cal__week', 'po-cal__det']) assert.ok(view.includes(cls)); });
 test('plan workspace never creates plan markdown', () => { assert.equal(view.includes('ensurePlan'), false); assert.equal(view.includes('.vault.create('), false); });
@@ -50,7 +56,8 @@ test('selected year month and all three modes are one shared view state', () => 
 test('plan view does not reference data json', () => assert.equal(view.includes('data.json'), false));
 test('month selector remains three columns at every viewport width', () => {
 	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
-	assert.match(css, /\.mx-plan-months\s*\{[^}]*repeat\(3,/); assert.equal(css.includes('.mx-plan-months { grid-template-columns: repeat(6'), false); assert.match(css, /@container \(max-width: 1100px\)[\s\S]*\.mx-plan-container/);
+	assert.match(css, /\.mx-plan-months\s*\{[^}]*repeat\(3,/); assert.equal(css.includes('.mx-plan-months { grid-template-columns: repeat(6'), false);
+	assert.match(css, /@container \(max-width: 720px\)[\s\S]*\.mx-plan-container/);
 });
 test('week board has no redundant section heading or quarter caption', () => { assert.equal(view.includes('本月周计划'), false); assert.equal(view.includes('当前选择 · Q'), false); });
 test('sidebar keeps time trace workspace name while right-side views use local titles', () => {
@@ -229,9 +236,32 @@ test('native Embedded Task checkbox reuses po-check visuals with explicit checke
 	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
 	assert.match(css, /input\.mx-embedded-task-check\s*\{[^}]*appearance:\s*none;[^}]*opacity:\s*0/);
 	assert.match(css, /\.mx-embedded-task-check-visual\s*\{[^}]*flex:\s*0 0 16px;[^}]*border-radius:\s*var\(--checkbox-radius, 3px\)/);
-	assert.match(css, /input\.mx-embedded-task-check:checked \+ \.mx-embedded-task-check-visual\s*\{[^}]*border-color:\s*var\(--interactive-accent\);[^}]*background:\s*var\(--background-primary\)/);
+	assert.match(css, /input\.mx-embedded-task-check:checked \+ \.mx-embedded-task-check-visual\s*\{[^}]*border-color:\s*var\(--text-muted\);[^}]*background:\s*var\(--background-primary\)/);
+	assert.match(css, /\.mx-embedded-task-check-visual::after\s*\{[^}]*border-left:\s*1\.5px solid var\(--text-normal\);[^}]*border-bottom:\s*1\.5px solid var\(--text-normal\)/);
 	assert.match(css, /input\.mx-embedded-task-check:checked \+ \.mx-embedded-task-check-visual::after\s*\{[^}]*opacity:\s*1/);
 	assert.doesNotMatch(css, /mx-embedded-task-check[^}]*(?:#000|black)/i);
+	for (const accent of ['--interactive-accent', '--interactive-accent-hover', '--color-accent', 'accent-color']) {
+		assert.equal(css.match(/\.mx-embedded-task-check[^}]*\}/g)?.some(rule => rule.includes(accent)) ?? false, false);
+	}
+});
+test('all primary Mengxu pages route through the current leaf and keep their active shell state', () => {
+	assert.match(dashboardView, /action === 'plan' \|\| action === 'all'[\s\S]*navigateWorkbench\(action, this\.leaf\)/);
+	assert.match(view, /navigateWorkbench\(action, this\.leaf\), 'plan'/);
+	assert.match(projectView, /navigateWorkbench\(action, this\.leaf\), 'all'/);
+	assert.match(main, /action === 'all'[\s\S]*setViewState\(\{ type: PROJECT_VIEW[^}]*projectId: '', path: ''/);
+	assert.match(main, /leaf\.view instanceof DashboardView[\s\S]*leaf\.view\.navigateWorkbench\(action\)/);
+});
+test('time trace and ProjectBoard share the same 720px outer stack threshold', () => {
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	assert.match(css, /@container \(max-width: 720px\)\s*\{[\s\S]*\.mx-plan-container\s*\{[^}]*flex-direction:\s*column/);
+	assert.match(css, /@container \(max-width: 720px\)\s*\{[\s\S]*\.mx-project-overview \.po-container\s*\{[^}]*flex-direction:\s*column/);
+	assert.doesNotMatch(css, /@container \(max-width: 1100px\)[\s\S]*\.mx-plan-container/);
+	assert.doesNotMatch(css, /@media \(max-width: 1400px\)[\s\S]*\.mx-plan-container/);
+});
+test('the independent 720px selected-day split and month 3x4 layout remain intact', () => {
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	assert.match(css, /@container \(max-width: 720px\)[\s\S]*\.mx-day-detail-layout\.is-split\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+	assert.match(css, /\.mx-plan-months\s*\{[^}]*grid-template-columns:\s*repeat\(3,/);
 });
 test('every Embedded Task summary surface reaches the one shared checkbox renderer', () => {
 	const dashboard = readFileSync(new URL('../views/DashboardView.ts', import.meta.url), 'utf8');

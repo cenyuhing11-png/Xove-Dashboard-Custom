@@ -104,7 +104,7 @@ export class PlanView extends ItemView {
 		root.empty(); root.removeClass('ad-modal'); root.addClass('mx-plan-workspace-view');
 		const page = root.createDiv({ cls: 'dashboard-plugin mx-plan-workspace' });
 		renderLifeCompass(page, name => { void openDirection(this.app, name); });
-		this.shell = new WorkbenchShell(this.plugin, page, action => this.plugin.navigateWorkbench(action), 'plan');
+		this.shell = new WorkbenchShell(this.plugin, page, action => this.plugin.navigateWorkbench(action, this.leaf), 'plan');
 		this.addChild(this.shell);
 		this.workspaceEl = page.createDiv({ cls: 'po-container mx-plan-container' });
 		await this.renderPlanContent();

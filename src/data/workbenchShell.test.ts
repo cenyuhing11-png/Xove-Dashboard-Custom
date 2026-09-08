@@ -81,9 +81,11 @@ test('Only top-level project overview mounts shared shell, never project detail'
 	const view=readFileSync(new URL('../views/ProjectView.ts',import.meta.url),'utf8');assert.ok(view.includes("'all');"));assert.ok(view.includes('this.removeChild(this.shell)'));assert.equal(view.includes("cls: 'ad-header'"),false);
 	const home=readFileSync(new URL('../views/DashboardView.ts',import.meta.url),'utf8');assert.equal(home.includes('private renderHeader('),false);assert.equal(home.includes('private renderActions('),false);
 });
-test('Shared navigation reuses existing home leaf and explicitly transfers keyboard focus',()=>{
+test('Shared navigation reuses the current Mengxu leaf and explicitly transfers keyboard focus',()=>{
 	const source=readFileSync(new URL('../main.ts',import.meta.url),'utf8');
-	assert.ok(source.includes("getLeavesOfType(VIEW_TYPE)[0] ?? this.app.workspace.getLeaf('tab')"));
+	assert.ok(source.includes('const leaf = sourceLeaf'));
+	assert.ok(source.includes('getLeavesOfType(PLAN_VIEW)[0]'));
+	assert.ok(source.includes('getLeavesOfType(PROJECT_VIEW)[0]'));
 	assert.ok(source.includes('this.app.workspace.setActiveLeaf(leaf, { focus: true })'));
 });
 test('New list dialogs reuse author modal shell and title without Setting API',()=>{
