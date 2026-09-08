@@ -19,6 +19,9 @@ import type { WorkbenchShell, WorkbenchAction } from './components/workbench/Wor
 import { mountJournalTaskSummary } from './components/journal/JournalTaskSummary';
 import { journalTitleLivePreviewExtension } from './components/journal/JournalTitleLivePreview';
 import { journalTaskLivePreviewExtension } from './components/journal/JournalTaskLivePreview';
+import { QuickJournalService } from './data/quickJournal';
+import { quickJournalFiles } from './data/quickJournalVault';
+import { QuickJournalModal } from './views/QuickJournalModal';
 
 /** 番茄钟运行时状态（与主页卡片共享，状态栏实时显示） */
 export interface PomoState {
@@ -36,6 +39,7 @@ export default class Dashboard extends Plugin {
 	settings!: DashboardSettings;
 	embeddedTasks!: EmbeddedTaskStore;
 	shellTaskStore!: TaskStore;
+	quickJournal!: QuickJournalService;
 	readonly pageShells = new Set<WorkbenchShell>();
 
 	/** 番茄钟运行时状态（主页卡片与状态栏共用同一数据源） */
@@ -55,6 +59,7 @@ export default class Dashboard extends Plugin {
 		await this.loadSettings();
 		this.embeddedTasks = new EmbeddedTaskStore(this.app, this);
 		this.shellTaskStore = new TaskStore(this.app, () => this.settings);
+		this.quickJournal = new QuickJournalService(quickJournalFiles(this.app));
 		this.registerMarkdownPostProcessor((el, ctx) => mountJournalTaskSummary(el, ctx, this.app, this.embeddedTasks));
 		this.registerEditorExtension(journalTitleLivePreviewExtension(this.app));
 		this.registerEditorExtension(journalTaskLivePreviewExtension(this.app, this.embeddedTasks));
@@ -74,6 +79,11 @@ export default class Dashboard extends Plugin {
 			callback: () => {
 				void this.activateView();
 			},
+		});
+		this.addCommand({
+			id: 'quick-journal',
+			name: '梦序：随时记',
+			callback: () => this.openQuickJournal(),
 		});
 
 		this.addSettingTab(new DashboardSettingTab(this.app, this));
@@ -394,6 +404,7 @@ export default class Dashboard extends Plugin {
 	async navigateWorkbench(action: WorkbenchAction, sourceLeaf?: WorkspaceLeaf): Promise<void> {
 		if (action === 'project') { new UnifiedProcessModal(this.app).open(); return; }
 		if (action === 'task') { new NewEmbeddedTaskModal(this.app, this.embeddedTasks).open(); return; }
+		if (action === 'quickJournal') { this.openQuickJournal(); return; }
 		// Normal top navigation is already inside DashboardView: route in-place and
 		// never replace its leaf with PLAN_VIEW / PROJECT_VIEW. A legacy restored
 		// tab is converted once to the main workbench as a compatibility bridge.
@@ -408,6 +419,10 @@ export default class Dashboard extends Plugin {
 		await this.app.workspace.revealLeaf(leaf);
 		this.app.workspace.setActiveLeaf(leaf, { focus: true });
 		if (leaf.view instanceof DashboardView) await leaf.view.navigateWorkbench(action);
+	}
+
+	openQuickJournal(): void {
+		new QuickJournalModal(this.app, this.quickJournal).open();
 	}
 
 	/**

@@ -143,10 +143,13 @@ function sectionLines(document: ReturnType<typeof markdownHeadings>, title: stri
 function countJournalEntries(lines: string[]): number {
 	let count = 0;
 	let paragraph = false;
+	let listItem = false;
 	for (const raw of lines) {
 		const line = raw.trim();
-		if (!line) { paragraph = false; continue; }
-		if (/^(?:[-*+]|\d+[.)])[ \t]+/.test(line)) { count++; paragraph = false; continue; }
+		if (!line) { paragraph = false; listItem = false; continue; }
+		if (/^(?:[-*+]|\d+[.)])[ \t]+/.test(line)) { count++; paragraph = false; listItem = true; continue; }
+		if (listItem && /^\s+/.test(raw)) continue;
+		listItem = false;
 		if (!paragraph) { count++; paragraph = true; }
 	}
 	return count;

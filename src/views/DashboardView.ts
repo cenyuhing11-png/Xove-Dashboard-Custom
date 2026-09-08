@@ -261,6 +261,7 @@ export class DashboardView extends ItemView {
 		else if (action === 'plan') await this.setSection('timeTrace');
 		else if (action === 'all') await this.setSection('process');
 		else if (action === 'diary') await this.createDiary();
+		else if (action === 'quickJournal') this.plugin.openQuickJournal();
 		else if (action === 'task') new NewEmbeddedTaskModal(this.app, this.plugin.embeddedTasks).open();
 		else if (action === 'project') new UnifiedProcessModal(this.app).open();
 	}

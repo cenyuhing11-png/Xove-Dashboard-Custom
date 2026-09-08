@@ -9,7 +9,7 @@ import { naturalTimeSummary } from '../../utils/timeProgress';
 import { todayStr } from '../../data/taskLogic';
 import { t, isEnglish } from '../../i18n';
 import { ICON_home, ICON_calendar, ICON_newDiary, ICON_newTask, ICON_newProject, ICON_allProjects, ICON_opportunity, ICON_gear, ICON_moon, ICON_sun, injectSvg } from '../../icons';
-export type WorkbenchAction = 'home' | 'plan' | 'all' | 'opportunity' | 'classic' | 'diary' | 'task' | 'project';
+export type WorkbenchAction = 'home' | 'plan' | 'all' | 'opportunity' | 'classic' | 'diary' | 'quickJournal' | 'task' | 'project';
 /** Format lunar date as "五月廿二" style */
 function getLunarDate(d: Date): string {
 	try {
@@ -382,6 +382,7 @@ export class WorkbenchShell extends Component {
 		// 全局创建入口；内部 action key 保持兼容。
 		const actionItems: Array<{ glyph: string; label: string; action: string; svg?: string }> = [
 			{ glyph: '+', label: t('home.nav.newDiary'), action: 'diary', svg: ICON_newDiary },
+			{ glyph: '\u270E', label: '随时记', action: 'quickJournal' },
 			{ glyph: '\u25A1', label: t('home.nav.newTask'), action: 'task', svg: ICON_newTask },
 			{ glyph: '\u25A3', label: t('home.nav.newProject'), action: 'project', svg: ICON_newProject },
 		];

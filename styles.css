@@ -1330,6 +1330,7 @@ body.theme-dark .dashboard-plugin:not([data-theme="light"]) { --ad-icon-accent: 
 .ad-modal-input:focus { border-color: var(--ad-accent); }
 .ad-modal-input::placeholder { color: var(--ad-text-dim); }
 textarea.ad-modal-input { resize: vertical; min-height: 60px; }
+.mx-quick-journal-input { min-height: 76px; max-height: min(240px, 45dvh); line-height: 1.6; }
 select.ad-modal-input { cursor: pointer; }
 input[type="date"].ad-modal-input { cursor: pointer; }
 
