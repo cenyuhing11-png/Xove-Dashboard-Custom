@@ -19,6 +19,7 @@ import type { WorkbenchShell, WorkbenchAction } from './components/workbench/Wor
 import { mountJournalTaskSummary } from './components/journal/JournalTaskSummary';
 import { journalTitleLivePreviewExtension } from './components/journal/JournalTitleLivePreview';
 import { journalTaskLivePreviewExtension } from './components/journal/JournalTaskLivePreview';
+import { journalLayoutLivePreviewExtension } from './components/journal/JournalLayoutLivePreview';
 import { QuickJournalService } from './data/quickJournal';
 import { quickJournalFiles } from './data/quickJournalVault';
 import { QuickJournalModal } from './views/QuickJournalModal';
@@ -63,6 +64,7 @@ export default class Dashboard extends Plugin {
 		this.registerMarkdownPostProcessor((el, ctx) => mountJournalTaskSummary(el, ctx, this.app, this.embeddedTasks));
 		this.registerEditorExtension(journalTitleLivePreviewExtension(this.app));
 		this.registerEditorExtension(journalTaskLivePreviewExtension(this.app, this.embeddedTasks));
+		this.registerEditorExtension(journalLayoutLivePreviewExtension());
 
 		this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
 		this.registerView(DIRECTION_VIEW, (leaf) => new DirectionView(leaf));

@@ -8,6 +8,7 @@ const main = readFileSync(new URL('../main.ts', import.meta.url), 'utf8');
 const journalSummary = readFileSync(new URL('../components/journal/JournalTaskSummary.ts', import.meta.url), 'utf8');
 const journalLivePreview = readFileSync(new URL('../components/journal/JournalTitleLivePreview.ts', import.meta.url), 'utf8');
 const journalTaskLivePreview = readFileSync(new URL('../components/journal/JournalTaskLivePreview.ts', import.meta.url), 'utf8');
+const journalLayoutLivePreview = readFileSync(new URL('../components/journal/JournalLayoutLivePreview.ts', import.meta.url), 'utf8');
 const journalTaskRenderer = readFileSync(new URL('../components/journal/JournalTaskRenderer.ts', import.meta.url), 'utf8');
 const embeddedTaskCheckbox = readFileSync(new URL('../components/tasks/EmbeddedTaskCheckbox.ts', import.meta.url), 'utf8');
 const embeddedTaskModal = readFileSync(new URL('../views/EmbeddedTaskModal.ts', import.meta.url), 'utf8');
@@ -280,6 +281,29 @@ test('optional journal title input is anchored inside 今日日记 and reuses th
 	assert.match(journalSummary, /title === '今日日记'[\s\S]*mx-journal-title-editor[\s\S]*new JournalTitleEditor/);
 	assert.match(journalSummary, /cls: 'ad-modal-input'[\s\S]*placeholder: '输入今天这篇日记的标题'/);
 	assert.match(journalSummary, /cls: 'ad-modal-label', text: '标题'/);
+});
+test('journal sections keep canonical order and use end-of-section dividers except after the final review', () => {
+	assert.match(journalLayoutLivePreview, /\['今日任务', '随时记', '今日日记', '今日回看'\]/);
+	assert.match(journalLayoutLivePreview, /SECTION_TITLES\.indexOf\(active\) > 0/);
+	assert.match(journalLayoutLivePreview, /JournalSectionDivider\(\), side: -1, block: true/);
+	assert.doesNotMatch(journalLayoutLivePreview, /JournalSectionDivider\(\), side: 1/);
+	assert.match(journalSummary, /insertAdjacentElement\('beforebegin', divider\)/);
+});
+test('journal Reading and Live Preview share compact section, task and quick-note visual hooks', () => {
+	assert.match(main, /registerEditorExtension\(journalLayoutLivePreviewExtension\(\)\)/);
+	assert.match(journalSummary, /mx-journal-section-title/);
+	assert.match(journalSummary, /mx-journal-quick-list/);
+	assert.match(journalLayoutLivePreview, /mx-journal-section-title mx-journal-content-line/);
+	assert.match(journalLayoutLivePreview, /mx-journal-quick-time/);
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	assert.match(css, /\.mx-journal-task-group\s*\{[^}]*max-width:\s*620px/);
+	assert.match(css, /\.mx-journal-section-divider\s*\{[^}]*border-top:\s*1px solid var\(--background-modifier-border\)/);
+	assert.match(css, /\.mx-journal-title-field \.ad-modal-input\s*\{[^}]*width:\s*100%/);
+});
+test('journal layout is visual-only, canonical Live Preview scoped and leaves Source Mode untouched', () => {
+	assert.match(journalLayoutLivePreview, /editorLivePreviewField/);
+	assert.match(journalLayoutLivePreview, /isCanonicalDailyJournalPath/);
+	assert.doesNotMatch(journalLayoutLivePreview, /vault\.(?:modify|process|create|rename)|writeJournalTitle|QuickJournalService/);
 });
 test('journal title editor persists one frontmatter field without creating an H1 or renaming files', () => {
 	assert.match(journalSummary, /writeJournalTitle\(this\.app, file, title\)/);

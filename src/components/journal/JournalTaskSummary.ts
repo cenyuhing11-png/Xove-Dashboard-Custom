@@ -3,6 +3,52 @@ import type { EmbeddedTaskStore } from '../../data/embeddedTaskVault';
 import { journalDateFromPath, readJournalTitle, writeJournalTitle } from '../../data/journal';
 import { renderJournalTaskSummary } from './JournalTaskRenderer';
 
+const JOURNAL_SECTION_TITLES = ['今日任务', '随时记', '今日日记', '今日回看'] as const;
+
+function decorateQuickJournalList(list: Element): void {
+	list.addClass('mx-journal-quick-list');
+	for (const item of Array.from(list.querySelectorAll(':scope > li'))) {
+		item.addClass('mx-journal-quick-entry');
+		const walker = item.ownerDocument.createTreeWalker(item, NodeFilter.SHOW_TEXT);
+		let textNode: Node | null = null;
+		let match: RegExpExecArray | null = null;
+		while ((textNode = walker.nextNode())) {
+			match = /^(\s*)(\d{2}:\d{2})(?=\s)/.exec(textNode.textContent ?? '');
+			if (match) break;
+		}
+		if (!textNode || !match) continue;
+		const value = textNode.textContent ?? '';
+		const fragment = item.ownerDocument.createDocumentFragment();
+		if (match[1]) fragment.append(item.ownerDocument.createTextNode(match[1]));
+		const time = item.ownerDocument.createElement('span');
+		time.className = 'wb-entry__detail mx-journal-quick-time';
+		time.textContent = match[2] ?? '';
+		fragment.append(time, item.ownerDocument.createTextNode(value.slice(match[0].length)));
+		textNode.parentNode?.replaceChild(fragment, textNode);
+	}
+}
+
+/** Reading View only: apply the same continuous-section rhythm used by Live Preview. */
+function decorateJournalReadingLayout(el: HTMLElement): void {
+	for (const heading of Array.from(el.querySelectorAll('h2'))) {
+		const title = heading.textContent?.trim();
+		const index = JOURNAL_SECTION_TITLES.indexOf(title as typeof JOURNAL_SECTION_TITLES[number]);
+		if (index < 0) continue;
+		heading.addClass('mx-journal-section-title');
+		heading.dataset.mxJournalSection = title;
+		if (index > 0 && !heading.previousElementSibling?.classList.contains('mx-journal-section-divider')) {
+			const divider = heading.ownerDocument.createElement('div');
+			divider.className = 'mx-time-trace-divider mx-journal-section-divider';
+			divider.setAttribute('aria-hidden', 'true');
+			heading.insertAdjacentElement('beforebegin', divider);
+		}
+		for (let node = heading.nextElementSibling; node && node.tagName !== 'H2'; node = node.nextElementSibling) {
+			node.addClass('mx-journal-section-content');
+			if (title === '随时记' && (node.tagName === 'UL' || node.tagName === 'OL')) decorateQuickJournalList(node);
+		}
+	}
+}
+
 /** Reading View augmentation only: the journal Markdown remains a clean anchor. */
 class JournalTaskSummary extends MarkdownRenderChild {
 	constructor(
@@ -115,4 +161,5 @@ export function mountJournalTaskSummary(
 			ctx.addChild(new JournalTitleEditor(app, ctx.sourcePath, host));
 		}
 	}
+	decorateJournalReadingLayout(el);
 }
