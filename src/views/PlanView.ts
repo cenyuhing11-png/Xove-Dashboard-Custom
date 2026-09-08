@@ -258,18 +258,15 @@ export class PlanView extends ItemView {
 		const today = new Date();
 		for (let index = 0; index < 42; index++) {
 			const date = new Date(cursor); date.setDate(cursor.getDate() + index);
-			const key = dateKey(date); const tasks = tasksOnDate(this.plugin.embeddedTasks.all(), key); const journal = journals.get(key);
+			const key = dateKey(date); const journal = journals.get(key);
 			let cls = 'po-cal__day';
 			if (date.getMonth() !== this.selectedMonth - 1) cls += ' is-out';
 			if (date.getDay() === 0 || date.getDay() === 6) cls += ' is-weekend';
 			if (sameDay(date, today)) cls += ' is-today';
 			if (sameDay(date, this.selectedDate)) cls += ' is-sel';
 			const day = days.createDiv({ cls }); day.createSpan({ cls: `po-cal__day-num${sameDay(date, today) ? ' is-today' : ''}`, text: String(date.getDate()) });
-			const body = day.createDiv({ cls: 'po-cal__day-body' }); body.createDiv({ cls: 'po-cal__slot' });
-			if (journal) this.renderCalendarJournal(body, journal);
-			for (const task of tasks.slice(0, journal ? 2 : 3)) this.renderCalendarChip(body, task);
-			const hidden = tasks.length + (journal ? 1 : 0) - 3;
-			if (hidden > 0) day.createDiv({ cls: 'po-cal__day-more', text: `+${hidden}` });
+			const body = day.createDiv({ cls: 'po-cal__day-body mx-plan-calendar-day-body' }); body.createDiv({ cls: 'po-cal__slot' });
+			if (journal) this.renderCalendarJournal(body, journal, 'month');
 			day.addEventListener('click', () => { this.setSelection(date.getFullYear(), date.getMonth() + 1, date.getDate()); });
 		}
 	}
@@ -308,9 +305,23 @@ export class PlanView extends ItemView {
 		if (journal) this.renderJournalDetail(layout.createDiv({ cls: 'mx-day-detail-journal-pane' }), journal);
 	}
 
-	private renderCalendarJournal(parent: HTMLElement, journal: JournalCalendarEntry): void {
-		const row = parent.createDiv({ cls: 'po-cal__chip mx-calendar-journal-row', text: journal.title, attr: { title: journal.title } });
+	private renderCalendarJournal(parent: HTMLElement, journal: JournalCalendarEntry, mode: 'month' | 'week' = 'week'): void {
+		const row = parent.createDiv({
+			cls: `po-cal__chip mx-calendar-journal-row${mode === 'month' ? ' is-month' : ''}${journal.titleSource === 'quick-note' ? ' is-quick-note' : ''}`,
+			text: journal.title,
+			attr: { title: journal.title },
+		});
+		if (mode === 'month' && journal.titleSource !== 'quick-note') this.fitMonthJournalTitle(row);
 		row.addEventListener('click', event => { event.stopPropagation(); const [year, month, day] = journal.date.split('-').map(Number); this.setSelection(year!, month!, day!); });
+	}
+
+	private fitMonthJournalTitle(row: HTMLElement): void {
+		requestAnimationFrame(() => {
+			if (!row.isConnected) return;
+			const lineHeight = Number.parseFloat(getComputedStyle(row).lineHeight) || 15;
+			const availableLines = Math.max(1, Math.floor(row.clientHeight / lineHeight));
+			row.style.setProperty('--mx-calendar-journal-lines', String(availableLines));
+		});
 	}
 
 	private renderCalendarChip(parent: HTMLElement, task: EmbeddedTask): void {

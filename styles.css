@@ -1916,10 +1916,13 @@ input[type="date"].ad-modal-input { cursor: pointer; }
 .mx-plan-weeks .po-kanban__col { flex: 0 0 210px; }
 .mx-plan-empty { min-height: 74px; padding: 18px 8px; text-align: center; }
 .mx-plan-calendar-days { grid-auto-rows: minmax(72px, 1fr); }
+.mx-plan-calendar-day-body { display: flex; flex: 1; min-height: 0; flex-direction: column; }
 .mx-calendar-task-marker { flex: 0 0 auto; padding: 0 3px; border-radius: 3px; background: var(--ad-s2); color: var(--ad-text-mute); font-size: 9px; font-weight: 600; line-height: 13px; }
 .mx-calendar-task-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-calendar-task-chip { display: flex; align-items: center; gap: 4px; }
 .mx-calendar-journal-row { display: block; overflow: hidden; color: var(--ad-text); font-weight: 600; text-overflow: ellipsis; }
+.mx-plan-calendar-day-body .mx-calendar-journal-row.is-month { display: -webkit-box; flex: 1; min-height: 0; height: auto; padding: 1px 4px; overflow: hidden; line-height: 1.35; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: var(--mx-calendar-journal-lines, 99); }
+.mx-plan-calendar-day-body .mx-calendar-journal-row.is-month.is-quick-note { display: block; flex: 0 0 15px; height: 15px; padding: 0 4px; line-height: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .mx-day-detail-layout { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; min-width: 0; margin-top: 5px; }
 .mx-day-detail-layout.is-split { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 12px; }
 .mx-day-detail-task-pane, .mx-day-detail-journal-pane { min-width: 0; }

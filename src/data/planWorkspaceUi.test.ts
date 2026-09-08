@@ -16,12 +16,20 @@ test('plan board reuses original ProjectBoard primitives', () => { for (const cl
 test('plan calendar reuses original calendar primitives', () => { for (const cls of ['po-cal__bar', 'po-cal__days', 'po-cal__week', 'po-cal__det']) assert.ok(view.includes(cls)); });
 test('plan workspace never creates plan markdown', () => { assert.equal(view.includes('ensurePlan'), false); assert.equal(view.includes('.vault.create('), false); });
 test('calendar checkboxes write through EmbeddedTaskStore complete', () => assert.match(view, /embeddedTasks\.complete\(task/));
-test('calendar cells use compact shared task markers without category sections', () => {
-	assert.match(view, /renderCalendarChip\(body, task\)/);
+test('month calendar cells render only journals and never task chips or task overflow', () => {
+	const month = view.match(/private renderCalendarMonth[\s\S]*?(?=\n\tprivate renderCalendarWeek)/)?.[0] ?? '';
+	assert.ok(month);
+	assert.match(month, /renderCalendarJournal\(body, journal, 'month'\)/);
+	assert.doesNotMatch(month, /tasksOnDate|renderCalendarChip|mx-calendar-task|po-cal__day-more|text: `\+\$\{hidden\}`/);
+	assert.equal(month.includes('TASK_DISPLAY_LABELS['), false);
+});
+test('week calendar keeps journals, every task chip and existing markers', () => {
+	const week = view.match(/private renderCalendarWeek[\s\S]*?(?=\n\tprivate renderDayDetail)/)?.[0] ?? '';
+	assert.ok(week);
+	assert.match(week, /tasksOnDate\(this\.plugin\.embeddedTasks\.all\(\), key\)/);
+	assert.match(week, /if \(journal\) this\.renderCalendarJournal\(col, journal\);[\s\S]*for \(const task of tasks\) this\.renderCalendarChip\(col, task\)/);
 	assert.match(view, /taskDisplayMarker\(task\.sourceType\)/);
 	assert.match(view, /mx-calendar-task-text/);
-	const month = view.match(/private renderCalendarMonth[\s\S]*?(?=\n\tprivate renderCalendarWeek)/)?.[0] ?? '';
-	assert.ok(month); assert.equal(month.includes('TASK_DISPLAY_LABELS['), false);
 });
 test('selected day detail groups only populated learning creation and daily sections', () => {
 	assert.match(view, /const groups = groupEmbeddedForDisplay\(tasks\)/);
@@ -42,12 +50,20 @@ test('sidebar keeps time trace workspace name while right-side views use local t
 	assert.match(view, /private async renderCalendar[\s\S]*mx-plan-title', text: '日历'/);
 	assert.match(view, /private renderReview[\s\S]*mx-plan-title', text: '日记回顾'/);
 });
-test('calendar journals precede task chips and receive the first visible month slot', () => {
+test('month journals use an adaptive multiline cell while quick-note fallback stays compact', () => {
 	const month = view.match(/private renderCalendarMonth[\s\S]*?(?=\n\tprivate renderCalendarWeek)/)?.[0] ?? '';
-	const week = view.match(/private renderCalendarWeek[\s\S]*?(?=\n\tprivate renderDayDetail)/)?.[0] ?? '';
-	assert.match(month, /if \(journal\) this\.renderCalendarJournal\(body, journal\);[\s\S]*tasks\.slice\(0, journal \? 2 : 3\)/);
-	assert.match(month, /tasks\.length \+ \(journal \? 1 : 0\) - 3/);
-	assert.match(week, /if \(journal\) this\.renderCalendarJournal\(col, journal\);[\s\S]*for \(const task of tasks\)/);
+	assert.match(month, /mx-plan-calendar-day-body/);
+	assert.match(view, /mode === 'month' && journal\.titleSource !== 'quick-note'[^\n]*fitMonthJournalTitle/);
+	assert.match(view, /Math\.floor\(row\.clientHeight \/ lineHeight\)/);
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	assert.match(css, /\.mx-plan-calendar-day-body\s*\{[^}]*display:\s*flex;[^}]*flex:\s*1;[^}]*min-height:\s*0/);
+	assert.match(css, /\.mx-plan-calendar-day-body \.mx-calendar-journal-row\.is-month\s*\{[^}]*flex:\s*1;[^}]*height:\s*auto;[^}]*white-space:\s*normal;[^}]*-webkit-line-clamp:\s*var\(--mx-calendar-journal-lines, 99\)/);
+	assert.match(css, /\.mx-plan-calendar-day-body \.mx-calendar-journal-row\.is-month\.is-quick-note\s*\{[^}]*white-space:\s*nowrap/);
+});
+test('month journal layout cannot grow the original calendar row height', () => {
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	assert.match(css, /\.mx-plan-calendar-days\s*\{[^}]*grid-auto-rows:\s*minmax\(72px, 1fr\)/);
+	assert.doesNotMatch(css, /\.mx-plan-calendar-day-body[^}]*min-height:\s*[1-9]\d*px/);
 });
 test('calendar task markers use one neutral class and no category color classes', () => {
 	assert.match(view, /mx-calendar-task-marker/);
@@ -138,6 +154,16 @@ test('journal task summary reuses EmbeddedTaskStore writes and never writes jour
 	assert.equal(journalSummary.includes('vault.process'), false);
 	assert.equal(journalSummary.includes('vault.modify'), false);
 	assert.equal(journalSummary.includes('今日任务\n- [ ]'), false);
+});
+test('journal task summary renders real unchecked and checked Embedded Task controls', () => {
+	assert.match(journalSummary, /cls: `po-check\$\{task\.completed \? ' is-done' : ''\}`/);
+	assert.match(journalSummary, /'aria-checked': String\(task\.completed\)/);
+	assert.match(journalSummary, /store\.complete\(task, !task\.completed\)/);
+});
+test('journal task summary keeps per-category progress, hides empty groups and maps projects to creation', () => {
+	assert.match(journalSummary, /if \(!categoryTasks\.length\) continue/);
+	assert.match(journalSummary, /categoryTasks\.filter\(task => task\.completed\)\.length} \/ \$\{categoryTasks\.length}/);
+	assert.match(journalSummary, /journalTasks\(tasks, this\.path\)/);
 });
 test('optional journal title input is anchored inside 今日日记 and reuses the existing input language', () => {
 	assert.match(journalSummary, /title === '今日日记'[\s\S]*mx-journal-title-editor[\s\S]*new JournalTitleEditor/);
