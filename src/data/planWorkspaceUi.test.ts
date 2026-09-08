@@ -224,10 +224,24 @@ test('home and all-task lists share the same daily-no-subtitle helper without hi
 	assert.match(embeddedTasks, /return `\$\{task\.sourceDisplayName\}\$\{detail \? ` · \$\{detail\}` : ''\}`/);
 });
 test('native Embedded Task checkbox reuses po-check visuals with explicit checked and unchecked states', () => {
-	assert.match(embeddedTaskCheckbox, /cls: 'po-check mx-embedded-task-check'/);
+	assert.match(embeddedTaskCheckbox, /cls: 'mx-embedded-task-checkbox'/);
+	assert.match(embeddedTaskCheckbox, /cls: 'po-check mx-embedded-task-check-visual'/);
 	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
-	assert.match(css, /input\.mx-embedded-task-check\s*\{[^}]*appearance:\s*none;[^}]*flex:\s*0 0 16px/);
-	assert.match(css, /input\.mx-embedded-task-check:checked\s*\{[^}]*background:\s*var\(--ad-accent\)/);
+	assert.match(css, /input\.mx-embedded-task-check\s*\{[^}]*appearance:\s*none;[^}]*opacity:\s*0/);
+	assert.match(css, /\.mx-embedded-task-check-visual\s*\{[^}]*flex:\s*0 0 16px;[^}]*border-radius:\s*var\(--checkbox-radius, 3px\)/);
+	assert.match(css, /input\.mx-embedded-task-check:checked \+ \.mx-embedded-task-check-visual\s*\{[^}]*border-color:\s*var\(--interactive-accent\);[^}]*background:\s*var\(--background-primary\)/);
+	assert.match(css, /input\.mx-embedded-task-check:checked \+ \.mx-embedded-task-check-visual::after\s*\{[^}]*opacity:\s*1/);
+	assert.doesNotMatch(css, /mx-embedded-task-check[^}]*(?:#000|black)/i);
+});
+test('every Embedded Task summary surface reaches the one shared checkbox renderer', () => {
+	const dashboard = readFileSync(new URL('../views/DashboardView.ts', import.meta.url), 'utf8');
+	const quick = readFileSync(new URL('../views/ProcessTasksModal.ts', import.meta.url), 'utf8');
+	assert.match(journalTaskRenderer, /renderEmbeddedTaskCheckbox\(row, task, store\)/);
+	assert.match(view, /renderEmbeddedTaskCheckbox\(row, task, this\.plugin\.embeddedTasks\)/);
+	assert.match(embeddedTaskModal, /renderEmbeddedTaskCheckbox\(row, task, store\)/);
+	assert.match(dashboard, /renderEmbeddedRows\(parent, group, this\.app, this\.plugin\.embeddedTasks/);
+	assert.match(quick, /renderEmbeddedRows\(pending,[\s\S]*renderEmbeddedRows\(completed,/);
+	assert.doesNotMatch(quick, /querySelectorAll\('input'\).*addClass\('po-check'\)/);
 });
 test('optional journal title input is anchored inside 今日日记 and reuses the existing input language', () => {
 	assert.match(journalSummary, /title === '今日日记'[\s\S]*mx-journal-title-editor[\s\S]*new JournalTitleEditor/);

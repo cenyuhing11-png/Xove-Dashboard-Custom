@@ -44,8 +44,6 @@ export class ProcessTasksModal extends Modal {
 		completed.createEl('summary', { cls: 'ad-modal-label', text: `已完成 ${groups.completed.length}` });
 		completed.ontoggle = () => { if (this.live && completed.parentElement === this.body) this.completedOpen = completed.open; };
 		renderEmbeddedRows(completed, groups.completed, this.app, this.store, () => this.close());
-		// Style the existing native checkboxes; their handlers and Embedded Task writes stay untouched.
-		this.body.querySelectorAll('input').forEach(check => check.addClass('po-check'));
 		this.body.scrollTop = scroll;
 	}
 	onClose(): void {
