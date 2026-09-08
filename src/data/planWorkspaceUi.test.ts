@@ -7,6 +7,9 @@ const shell = readFileSync(new URL('../components/workbench/WorkbenchShell.ts', 
 const main = readFileSync(new URL('../main.ts', import.meta.url), 'utf8');
 const journalSummary = readFileSync(new URL('../components/journal/JournalTaskSummary.ts', import.meta.url), 'utf8');
 const journalLivePreview = readFileSync(new URL('../components/journal/JournalTitleLivePreview.ts', import.meta.url), 'utf8');
+const journalTaskLivePreview = readFileSync(new URL('../components/journal/JournalTaskLivePreview.ts', import.meta.url), 'utf8');
+const journalTaskRenderer = readFileSync(new URL('../components/journal/JournalTaskRenderer.ts', import.meta.url), 'utf8');
+const embeddedTasks = readFileSync(new URL('./embeddedTasks.ts', import.meta.url), 'utf8');
 
 test('global navigation names time trace directly after home', () => assert.match(shell, /label: '首页'[\s\S]*label: '时迹'[\s\S]*label: '进程'/));
 test('plan has a dedicated top-level view', () => assert.match(view, /PLAN_VIEW = 'xove-dashboard-custom-plan-workspace'/));
@@ -150,21 +153,53 @@ test('journal task summary is a Reading View post processor anchored only at 今
 	assert.match(journalSummary, /ctx\.addChild\(new JournalTaskSummary/);
 });
 test('journal task summary reuses EmbeddedTaskStore writes and never writes journal Markdown', () => {
-	assert.match(journalSummary, /store\.complete\(task/);
+	assert.match(journalSummary, /renderJournalTaskSummary\(this\.containerEl, this\.app, this\.store, this\.path\)/);
 	assert.match(journalSummary, /store\.subscribe/);
-	assert.equal(journalSummary.includes('vault.process'), false);
-	assert.equal(journalSummary.includes('vault.modify'), false);
-	assert.equal(journalSummary.includes('今日任务\n- [ ]'), false);
+	assert.match(journalTaskRenderer, /store\.complete\(task, !task\.completed\)/);
+	assert.equal(journalTaskRenderer.includes('vault.process'), false);
+	assert.equal(journalTaskRenderer.includes('vault.modify'), false);
+	assert.equal(journalTaskRenderer.includes('今日任务\n- [ ]'), false);
 });
 test('journal task summary renders real unchecked and checked Embedded Task controls', () => {
-	assert.match(journalSummary, /cls: `po-check\$\{task\.completed \? ' is-done' : ''\}`/);
-	assert.match(journalSummary, /'aria-checked': String\(task\.completed\)/);
-	assert.match(journalSummary, /store\.complete\(task, !task\.completed\)/);
+	assert.match(journalTaskRenderer, /cls: `po-check\$\{task\.completed \? ' is-done' : ''\}`/);
+	assert.match(journalTaskRenderer, /'aria-checked': String\(task\.completed\)/);
+	assert.match(journalTaskRenderer, /store\.complete\(task, !task\.completed\)/);
 });
 test('journal task summary keeps per-category progress, hides empty groups and maps projects to creation', () => {
-	assert.match(journalSummary, /if \(!categoryTasks\.length\) continue/);
-	assert.match(journalSummary, /categoryTasks\.filter\(task => task\.completed\)\.length} \/ \$\{categoryTasks\.length}/);
-	assert.match(journalSummary, /journalTasks\(tasks, this\.path\)/);
+	assert.match(journalTaskRenderer, /if \(!categoryTasks\.length\) continue/);
+	assert.match(journalTaskRenderer, /categoryTasks\.filter\(task => task\.completed\)\.length} \/ \$\{categoryTasks\.length}/);
+	assert.match(journalTaskRenderer, /journalTasks\(tasks, path\)/);
+});
+test('all task detail headings share the centralized short user labels', () => {
+	for (const [key, label] of [['learning', '学习'], ['creation', '创作'], ['daily', '日常']]) assert.match(embeddedTasks, new RegExp(`${key}: '${label}'`));
+	for (const legacy of ['学习任务', '创作任务', '日常任务']) assert.doesNotMatch(journalTaskRenderer, new RegExp(`text: '${legacy}'`));
+	assert.match(view, /text: TASK_DISPLAY_LABELS\[category\]/);
+});
+test('journal Live Preview uses one block CM6 widget backed by the real EmbeddedTaskStore', () => {
+	assert.match(main, /registerEditorExtension\(journalTaskLivePreviewExtension\(this\.app, this\.embeddedTasks\)\)/);
+	assert.match(journalTaskLivePreview, /StateField\.define<JournalTaskEditorState>/);
+	assert.match(journalTaskLivePreview, /Decoration\.widget\(\{ widget: new JournalTaskWidget\(app, store, context\.path\), side: 1, block: true \}\)/);
+	assert.match(journalTaskLivePreview, /journalTaskWidgetOffset\(state\.doc\.toString\(\)\)/);
+	assert.match(journalTaskLivePreview, /renderJournalTaskSummary\(this\.host, this\.app, this\.store, this\.path\)/);
+});
+test('journal Live Preview task widget is canonical-file and Live-Preview scoped without fragile DOM injection', () => {
+	assert.match(journalTaskLivePreview, /editorLivePreviewField/);
+	assert.match(journalTaskLivePreview, /isCanonicalDailyJournalPath\(file\.path\)/);
+	assert.match(journalTaskLivePreview, /value\.decorations\.map\(transaction\.changes\)/);
+	assert.doesNotMatch(journalTaskLivePreview, /MutationObserver|setInterval|querySelector|scrollIntoView/);
+});
+test('journal Reading and Live Preview share grouping, progress, empty state and checkbox behavior', () => {
+	assert.match(journalSummary, /renderJournalTaskSummary/);
+	assert.match(journalTaskLivePreview, /renderJournalTaskSummary/);
+	assert.match(journalTaskRenderer, /text: '今日暂无任务'/);
+	assert.match(journalTaskRenderer, /TASK_DISPLAY_CATEGORIES/);
+	assert.match(journalTaskRenderer, /TASK_DISPLAY_LABELS\[category\]/);
+});
+test('task refresh rerenders only the stable Live Preview widget and releases its listener on destroy', () => {
+	assert.match(journalTaskLivePreview, /this\.store\.subscribe\(render\)/);
+	assert.match(journalTaskLivePreview, /this\.unsubscribe\?\.\(\)/);
+	assert.match(journalTaskLivePreview, /ignoreEvent\(\): boolean \{ return true; \}/);
+	assert.doesNotMatch(journalTaskLivePreview, /mountView|renderPlanContent|WorkbenchShell/);
 });
 test('optional journal title input is anchored inside 今日日记 and reuses the existing input language', () => {
 	assert.match(journalSummary, /title === '今日日记'[\s\S]*mx-journal-title-editor[\s\S]*new JournalTitleEditor/);

@@ -63,8 +63,8 @@ export function isCanonicalDailyJournalPath(path: string): boolean {
 	return !!date && path === `${JOURNAL_ROOT}/${JOURNAL_FOLDERS.day}/${date}.md`;
 }
 
-/** Find the end of the real `## 今日日记` heading without matching YAML or fenced examples. */
-export function journalTitleWidgetOffset(content: string): number | null {
+/** Find the end of a real H2 without matching YAML or fenced examples. */
+function journalSectionWidgetOffset(content: string, title: string): number | null {
 	const lines = content.split('\n');
 	let yaml = lines[0]?.replace(/^\uFEFF/, '').trim() === '---';
 	let fence = '';
@@ -79,11 +79,24 @@ export function journalTitleWidgetOffset(content: string): number | null {
 		} else {
 			const openingFence = /^ {0,3}(`{3,}|~{3,})/.exec(line);
 			if (openingFence) fence = openingFence[1] ?? '';
-			else if (/^ {0,3}##[ \t]+今日日记[ \t]*#*[ \t]*$/.test(line)) return offset + line.length;
+			else {
+				const heading = /^ {0,3}##[ \t]+(.+?)[ \t]*#*[ \t]*$/.exec(line);
+				if (heading?.[1]?.trim() === title) return offset + line.length;
+			}
 		}
 		offset += raw.length + 1;
 	}
 	return null;
+}
+
+/** Live Preview title editor anchor. */
+export function journalTitleWidgetOffset(content: string): number | null {
+	return journalSectionWidgetOffset(content, '今日日记');
+}
+
+/** Live Preview dynamic task summary anchor. */
+export function journalTaskWidgetOffset(content: string): number | null {
+	return journalSectionWidgetOffset(content, '今日任务');
 }
 
 export function journalTasks(tasks: EmbeddedTask[], path: string) {

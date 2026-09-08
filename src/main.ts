@@ -17,6 +17,7 @@ import { TaskStore } from './data/taskStore';
 import type { WorkbenchShell, WorkbenchAction } from './components/workbench/WorkbenchShell';
 import { mountJournalTaskSummary } from './components/journal/JournalTaskSummary';
 import { journalTitleLivePreviewExtension } from './components/journal/JournalTitleLivePreview';
+import { journalTaskLivePreviewExtension } from './components/journal/JournalTaskLivePreview';
 
 /** 番茄钟运行时状态（与主页卡片共享，状态栏实时显示） */
 export interface PomoState {
@@ -55,6 +56,7 @@ export default class Dashboard extends Plugin {
 		this.shellTaskStore = new TaskStore(this.app, () => this.settings);
 		this.registerMarkdownPostProcessor((el, ctx) => mountJournalTaskSummary(el, ctx, this.app, this.embeddedTasks));
 		this.registerEditorExtension(journalTitleLivePreviewExtension(this.app));
+		this.registerEditorExtension(journalTaskLivePreviewExtension(this.app, this.embeddedTasks));
 
 		this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
 		this.registerView(DIRECTION_VIEW, (leaf) => new DirectionView(leaf));

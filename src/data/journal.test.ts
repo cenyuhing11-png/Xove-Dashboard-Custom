@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ensureJournal, isCanonicalDailyJournalPath, journalCalendarEntry, journalDateFromPath, journalEntry, journalHistory, journalInfo, journalStates, journalTasks, journalTemplate, journalTitleWidgetOffset, updateJournalTitleContent } from './journal.ts';
+import { ensureJournal, isCanonicalDailyJournalPath, journalCalendarEntry, journalDateFromPath, journalEntry, journalHistory, journalInfo, journalStates, journalTaskWidgetOffset, journalTasks, journalTemplate, journalTitleWidgetOffset, updateJournalTitleContent } from './journal.ts';
 import type { JournalEntry, JournalKind } from './journal.ts';
 import type { PlanFiles } from './planning.ts';
 import { DAILY_TASK_FILE, parseEmbeddedTasks } from './embeddedTasks.ts';
@@ -44,6 +44,17 @@ test('live preview title widget does not appear without an exact heading', () =>
 	assert.equal(journalTitleWidgetOffset('---\n标题:\n---\n\n## 今日日记内容\n'), null);
 	assert.equal(journalTitleWidgetOffset('---\n说明: "## 今日日记"\n---\n\n正文'), null);
 	assert.equal(journalTitleWidgetOffset('```md\n## 今日日记\n```'), null);
+});
+test('live preview task widget is anchored immediately after the exact daily heading', () => {
+	const content = '---\n标题: 一天\n---\n\n## 今日任务\n\n## 随时记\n';
+	const offset = journalTaskWidgetOffset(content);
+	assert.equal(offset, content.indexOf('## 今日任务') + '## 今日任务'.length);
+	assert.equal(content.slice(offset ?? 0), '\n\n## 随时记\n');
+});
+test('live preview task widget ignores absent, near-match and fenced headings', () => {
+	assert.equal(journalTaskWidgetOffset('## 今日任务汇总\n'), null);
+	assert.equal(journalTaskWidgetOffset('---\n说明: "## 今日任务"\n---\n'), null);
+	assert.equal(journalTaskWidgetOffset('```md\n## 今日任务\n```'), null);
 });
 test('journal summary queries only the journal date and shares three display categories', () => {
 	const tasks = [

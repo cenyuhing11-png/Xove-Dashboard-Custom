@@ -53,7 +53,7 @@ test('today includes matching and overdue only, excludes completed/undated/futur
 test('all tasks grouped without loss', () => { const tasks = [first(), first('## 项目任务\n- [x] 完成', project), first('## 日常待办\n- [ ] 日常', DAILY_TASK_FILE)]; const groups = groupEmbedded(tasks); assert.deepEqual(Object.keys(groups), ['project', 'creation', 'learning', 'daily']); assert.equal(Object.values(groups).flat().length, 3); });
 test('summary display categories are exactly learning, creation and daily', () => {
 	assert.deepEqual(TASK_DISPLAY_CATEGORIES, ['learning', 'creation', 'daily']);
-	assert.deepEqual(TASK_DISPLAY_LABELS, { learning: '学习任务', creation: '创作任务', daily: '日常任务' });
+	assert.deepEqual(TASK_DISPLAY_LABELS, { learning: '学习', creation: '创作', daily: '日常' });
 	assert.deepEqual(TASK_DISPLAY_MARKERS, { learning: '学', creation: '创', daily: '日' });
 });
 test('summary mapping keeps learning and daily while merging knowledge and projects into creation', () => {

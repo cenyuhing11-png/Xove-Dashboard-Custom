@@ -5,7 +5,7 @@ export const EMBEDDED_HEADINGS = { learning: '学习任务', creation: '创作�
 export type EmbeddedSourceType = keyof typeof EMBEDDED_HEADINGS;
 export const TASK_DISPLAY_CATEGORIES = ['learning', 'creation', 'daily'] as const;
 export type TaskDisplayCategory = typeof TASK_DISPLAY_CATEGORIES[number];
-export const TASK_DISPLAY_LABELS: Record<TaskDisplayCategory, string> = { learning: '学习任务', creation: '创作任务', daily: '日常任务' };
+export const TASK_DISPLAY_LABELS: Record<TaskDisplayCategory, string> = { learning: '学习', creation: '创作', daily: '日常' };
 export const TASK_DISPLAY_MARKERS: Record<TaskDisplayCategory, string> = { learning: '学', creation: '创', daily: '日' };
 export interface EmbeddedTask {
 	id: string;
