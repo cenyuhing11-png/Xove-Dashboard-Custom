@@ -36,7 +36,37 @@ test('month selector remains three columns at every viewport width', () => {
 	assert.match(css, /\.mx-plan-months\s*\{[^}]*repeat\(3,/); assert.equal(css.includes('.mx-plan-months { grid-template-columns: repeat(6'), false); assert.match(css, /@container \(max-width: 1100px\)[\s\S]*\.mx-plan-container/);
 });
 test('week board has no redundant section heading or quarter caption', () => { assert.equal(view.includes('本月周计划'), false); assert.equal(view.includes('当前选择 · Q'), false); });
-test('time trace title is a static author-style toolbar label rather than a tab button', () => { assert.match(view, /po-toolbar mx-plan-toolbar/); assert.ok(view.includes("mx-plan-title', text: '时迹'")); assert.equal(view.includes("计划总览"), false); });
+test('sidebar keeps time trace workspace name while right-side views use local titles', () => {
+	assert.match(view, /mx-time-trace-title', text: '时迹'/);
+	assert.match(view, /private renderBoard[\s\S]*mx-plan-title', text: '计划表'/);
+	assert.match(view, /private async renderCalendar[\s\S]*mx-plan-title', text: '日历'/);
+	assert.match(view, /private renderReview[\s\S]*mx-plan-title', text: '日记回顾'/);
+});
+test('calendar journals precede task chips and receive the first visible month slot', () => {
+	const month = view.match(/private renderCalendarMonth[\s\S]*?(?=\n\tprivate renderCalendarWeek)/)?.[0] ?? '';
+	const week = view.match(/private renderCalendarWeek[\s\S]*?(?=\n\tprivate renderDayDetail)/)?.[0] ?? '';
+	assert.match(month, /if \(journal\) this\.renderCalendarJournal\(body, journal\);[\s\S]*tasks\.slice\(0, journal \? 2 : 3\)/);
+	assert.match(month, /tasks\.length \+ \(journal \? 1 : 0\) - 3/);
+	assert.match(week, /if \(journal\) this\.renderCalendarJournal\(col, journal\);[\s\S]*for \(const task of tasks\)/);
+});
+test('calendar task markers use one neutral class and no category color classes', () => {
+	assert.match(view, /mx-calendar-task-marker/);
+	assert.doesNotMatch(view, /mx-plan-task-\$\{taskCalendarCategory/);
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	assert.match(css, /\.mx-calendar-task-marker\s*\{[^}]*background:\s*var\(--ad-s2\)/);
+	for (const category of ['learning', 'creation', 'daily']) assert.equal(css.includes(`.mx-plan-task-${category}`), false);
+});
+test('selected day keeps task groups first and journal as a separate trailing record section', () => {
+	const detail = view.match(/private renderDayDetail[\s\S]*?(?=\n\tprivate renderCalendarJournal)/)?.[0] ?? '';
+	assert.match(detail, /if \(tasks\.length\)[\s\S]*groupEmbeddedForDisplay[\s\S]*if \(journal\) this\.renderJournalDetail/);
+	assert.equal(detail.includes("TASK_DISPLAY_LABELS['journal']"), false);
+	assert.match(detail, /!tasks\.length && !journal/);
+});
+test('journal detail opens its exact source file without a scroll hack', () => {
+	assert.match(view, /getAbstractFileByPath\(journal\.path\)/);
+	assert.match(view, /mx-day-journal-open', text: '打开日记 →'/);
+	assert.equal(view.includes('scrollIntoView'), false);
+});
 test('selected day changes refresh only the mounted plan content', () => {
 	assert.match(view, /private setSelection[\s\S]*?void this\.renderPlanContent\(\);\n\t}/);
 	assert.doesNotMatch(view, /private setSelection[\s\S]*?void this\.mountView\(\);\n\t}/);

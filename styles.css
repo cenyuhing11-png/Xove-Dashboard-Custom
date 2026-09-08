@@ -1916,16 +1916,19 @@ input[type="date"].ad-modal-input { cursor: pointer; }
 .mx-plan-weeks .po-kanban__col { flex: 0 0 210px; }
 .mx-plan-empty { min-height: 74px; padding: 18px 8px; text-align: center; }
 .mx-plan-calendar-days { grid-auto-rows: minmax(72px, 1fr); }
-.mx-plan-task-learning { border-left-color: var(--ad-accent); }
-.mx-plan-task-creation { border-left-color: var(--ad-warn); }
-.mx-plan-task-daily { border-left-color: var(--ad-success); }
-.mx-calendar-task-marker { flex: 0 0 auto; color: var(--ad-text-mute); font-size: 9px; font-weight: 600; }
+.mx-calendar-task-marker { flex: 0 0 auto; padding: 0 3px; border-radius: 3px; background: var(--ad-s2); color: var(--ad-text-mute); font-size: 9px; font-weight: 600; line-height: 13px; }
 .mx-calendar-task-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-calendar-task-chip { display: flex; align-items: center; gap: 4px; }
+.mx-calendar-journal-row { display: block; overflow: hidden; color: var(--ad-text); font-weight: 600; text-overflow: ellipsis; }
 .mx-day-task-section + .mx-day-task-section { margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--ad-hair); }
 .mx-day-task-section__title { padding: 0 8px 3px; color: var(--ad-text-mute); font-size: 11px; font-weight: 600; }
 .mx-day-task-body, .mx-journal-task-body { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 1px; }
 .mx-day-task-source, .mx-journal-task-source { overflow: hidden; color: var(--ad-text-dim); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.mx-day-journal-section { margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--ad-line); }
+.mx-day-journal-title { padding: 2px 8px 0; color: var(--ad-text); font-size: 12px; font-weight: 600; }
+.mx-day-journal-meta { padding: 2px 8px 0; color: var(--ad-text-dim); font-size: 10px; }
+.mx-day-journal-summary { display: -webkit-box; margin: 3px 8px 0; overflow: hidden; color: var(--ad-text-mute); font-size: 11px; line-height: 1.45; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.mx-day-journal-open { margin: 3px 1px 0; }
 .mx-journal-task-summary { margin: 8px 0 16px; }
 .mx-journal-task-group + .mx-journal-task-group { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--ad-hair); }
 .mx-journal-task-group__header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 3px; }

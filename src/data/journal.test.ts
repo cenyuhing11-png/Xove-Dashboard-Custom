@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ensureJournal, journalDateFromPath, journalEntry, journalHistory, journalInfo, journalStates, journalTasks, journalTemplate } from './journal.ts';
+import { ensureJournal, journalCalendarEntry, journalDateFromPath, journalEntry, journalHistory, journalInfo, journalStates, journalTasks, journalTemplate } from './journal.ts';
 import type { JournalEntry, JournalKind } from './journal.ts';
 import type { PlanFiles } from './planning.ts';
 import { DAILY_TASK_FILE, parseEmbeddedTasks } from './embeddedTasks.ts';
@@ -39,6 +39,30 @@ test('journal summary queries only the journal date and shares three display cat
 	assert.deepEqual(result.groups.learning.map(task => task.text), ['学习']);
 	assert.deepEqual(result.groups.creation.map(task => task.text), ['创作', '项目']);
 	assert.deepEqual(result.groups.daily.map(task => task.text), ['日常']);
+});
+
+test('calendar journal title follows frontmatter, H1 and quick-note fallbacks', () => {
+	const path = '04-日记与复盘/01-日记/2026-09-08.md';
+	assert.equal(journalCalendarEntry(path, '# 正文标题\n\n## 随时记\n\n- 一条', { 标题: '属性标题' })?.title, '属性标题');
+	assert.equal(journalCalendarEntry(path, '# 正文标题\n', {})?.title, '正文标题');
+	assert.equal(journalCalendarEntry(path, '## 随时记\n\n- 一条\n- 两条', {})?.title, '随时记 · 2条');
+	assert.equal(journalCalendarEntry(path, '## 今日日记\n', {})?.title, '未命名日记');
+});
+
+test('calendar journal reads quick-note count and first daily paragraph without rewriting source', () => {
+	const content = '---\n标题: 一天\n---\n\n## 随时记\n\n- A\n- B\n\n## 今日日记\n\n第一段 **内容**。\n仍是第一段。\n\n第二段。';
+	const before = content;
+	const entry = journalCalendarEntry('04-日记与复盘/01-日记/2026-09-08 日记.md', content, { 标题: '一天' });
+	assert.equal(entry?.quickNoteCount, 2);
+	assert.equal(entry?.summary, '第一段 内容。 仍是第一段。');
+	assert.equal(content, before);
+});
+
+test('calendar journal ignores headings inside frontmatter and code fences', () => {
+	const content = '---\n说明: "# 假标题"\n---\n\n```md\n# 代码标题\n## 随时记\n- 假记录\n```\n\n# 真实标题';
+	const entry = journalCalendarEntry('04-日记与复盘/01-日记/2026-09-08.md', content, {});
+	assert.equal(entry?.title, '真实标题');
+	assert.equal(entry?.quickNoteCount, 0);
 });
 test('weekly template includes current plan link and six sections', () => {
 	const md = journalTemplate('week', date);

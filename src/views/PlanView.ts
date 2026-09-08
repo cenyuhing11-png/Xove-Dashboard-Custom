@@ -4,7 +4,7 @@ import type Dashboard from '../main';
 import type { EmbeddedTask } from '../data/embeddedTasks';
 import { TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, groupEmbeddedForDisplay, taskDisplayMarker } from '../data/embeddedTasks';
 import type { PlanWorkspaceCard, PlanWorkspaceMode, PlanCalendarMode } from '../data/planWorkspace';
-import { dateKey, localPlanSelection, readPlanWorkspace, taskCalendarCategory, taskCalendarSourceLabel, tasksOnDate } from '../data/planWorkspace';
+import { dateKey, localPlanSelection, readPlanWorkspace, taskCalendarSourceLabel, tasksOnDate } from '../data/planWorkspace';
 import { planInfo } from '../data/planning';
 import { WorkbenchShell } from '../components/workbench/WorkbenchShell';
 import { renderLifeCompass } from '../components/workbench/LifeCompass';
@@ -13,6 +13,8 @@ import { scanLearning } from '../data/learningVault';
 import { scanProjects } from '../data/projectVault';
 import { processes } from '../data/processes';
 import { taskSourceTypeLabel } from '../data/processContentTypes';
+import { journalCalendarEntry, journalDateFromPath } from '../data/journal';
+import type { JournalCalendarEntry } from '../data/journal';
 
 export const PLAN_VIEW = 'xove-dashboard-custom-plan-workspace';
 
@@ -63,7 +65,7 @@ export class PlanView extends ItemView {
 		this.registerEvent(this.app.vault.on('create', () => { void this.renderPlanContent(); }));
 		this.registerEvent(this.app.vault.on('delete', () => { void this.renderPlanContent(); }));
 		this.registerEvent(this.app.vault.on('rename', () => { void this.renderPlanContent(); }));
-		this.registerEvent(this.app.vault.on('modify', file => { if (file.path.startsWith('05-计划/')) void this.renderPlanContent(); }));
+		this.registerEvent(this.app.vault.on('modify', file => { if (file.path.startsWith('05-计划/') || (this.mode === 'calendar' && !!journalDateFromPath(file.path))) void this.renderPlanContent(); }));
 		this.register(this.plugin.embeddedTasks.subscribe(() => { if (this.mode === 'calendar') void this.renderPlanContent(); }));
 		await this.plugin.embeddedTasks.ready;
 		await this.mountView();
@@ -118,7 +120,7 @@ export class PlanView extends ItemView {
 		this.renderSidebar(container, snapshot?.monthly.exists ?? false);
 		const main = container.createDiv({ cls: 'po-main' });
 		if (this.mode === 'board' && snapshot) this.renderBoard(main, snapshot);
-		else if (this.mode === 'calendar') this.renderCalendar(main);
+		else if (this.mode === 'calendar') await this.renderCalendar(main, token);
 		else this.renderReview(main);
 	}
 
@@ -170,7 +172,7 @@ export class PlanView extends ItemView {
 
 	private renderBoard(main: HTMLElement, snapshot: Awaited<ReturnType<typeof readPlanWorkspace>>): void {
 		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar' });
-		toolbar.createSpan({ cls: 'mx-plan-title', text: '时迹' });
+		toolbar.createSpan({ cls: 'mx-plan-title', text: '计划表' });
 		toolbar.createSpan({ cls: 'mx-plan-context', text: `${monthTitle(this.selectedYear, this.selectedMonth)} · Q${snapshot.quarter}` });
 		const top = main.createDiv({ cls: 'po-kanban mx-plan-summary' });
 		for (const card of [snapshot.annual, snapshot.quarterly, snapshot.monthly]) {
@@ -197,11 +199,26 @@ export class PlanView extends ItemView {
 		main.createDiv({ cls: 'po-empty mx-plan-empty', text: '暂无回顾内容' });
 	}
 
-	private renderCalendar(main: HTMLElement): void {
+	private async readCalendarJournals(): Promise<Map<string, JournalCalendarEntry>> {
+		const files = this.app.vault.getMarkdownFiles().filter(file => journalDateFromPath(file.path))
+			.sort((a, b) => a.path.length - b.path.length || a.path.localeCompare(b.path, 'zh-CN'));
+		const entries = await Promise.all(files.map(async file => {
+			try { return journalCalendarEntry(file.path, await this.app.vault.cachedRead(file), this.app.metadataCache.getFileCache(file)?.frontmatter); }
+			catch { return null; }
+		}));
+		const journals = new Map<string, JournalCalendarEntry>();
+		for (const entry of entries) if (entry && !journals.has(entry.date)) journals.set(entry.date, entry);
+		return journals;
+	}
+
+	private async renderCalendar(main: HTMLElement, token: number): Promise<void> {
 		const tasks = this.plugin.embeddedTasks.all();
 		this.sourceLabels = new Map(processes(scanLearning(this.app), scanProjects(this.app), tasks).map(process => [process.sourceFile, taskSourceTypeLabel(process.contentType)]));
+		const journals = await this.readCalendarJournals();
+		if (token !== this.generation || !main.isConnected) return;
 		const root = main.createDiv({ cls: 'po-cal' }); root.tabIndex = 0;
 		const bar = root.createDiv({ cls: 'po-cal__bar' });
+		bar.createSpan({ cls: 'mx-plan-title', text: '日历' });
 		const seg = bar.createDiv({ cls: 'po-cal__seg' });
 		for (const [mode, label] of [['month', '月'], ['week', '周']] as const) {
 			const btn = seg.createEl('button', { cls: `po-cal__seg-btn${this.calendarMode === mode ? ' is-active' : ''}`, text: label });
@@ -213,8 +230,8 @@ export class PlanView extends ItemView {
 		const today = nav.createEl('button', { cls: 'po-cal__btn', text: '今天' });
 		const next = nav.createEl('button', { cls: 'po-cal__btn', text: '›' });
 		prev.addEventListener('click', () => this.moveCalendar(-1)); today.addEventListener('click', () => { const n = new Date(); this.setSelection(n.getFullYear(), n.getMonth() + 1, n.getDate()); }); next.addEventListener('click', () => this.moveCalendar(1));
-		if (this.calendarMode === 'month') this.renderCalendarMonth(root); else this.renderCalendarWeek(root);
-		this.renderDayDetail(root);
+		if (this.calendarMode === 'month') this.renderCalendarMonth(root, journals); else this.renderCalendarWeek(root, journals);
+		this.renderDayDetail(root, journals.get(dateKey(this.selectedDate)));
 	}
 
 	private moveCalendar(direction: -1 | 1): void {
@@ -231,7 +248,7 @@ export class PlanView extends ItemView {
 	}
 	private weekTitle(): string { const dates = this.weekDates(); return `${dayLabel(dates[0]!)}–${dayLabel(dates[6]!)}`; }
 
-	private renderCalendarMonth(root: HTMLElement): void {
+	private renderCalendarMonth(root: HTMLElement, journals: Map<string, JournalCalendarEntry>): void {
 		const weekdays = root.createDiv({ cls: 'po-cal__weekdays' });
 		for (const name of ['一', '二', '三', '四', '五', '六', '日']) weekdays.createSpan({ text: name });
 		const days = root.createDiv({ cls: 'po-cal__days mx-plan-calendar-days' });
@@ -240,7 +257,7 @@ export class PlanView extends ItemView {
 		const today = new Date();
 		for (let index = 0; index < 42; index++) {
 			const date = new Date(cursor); date.setDate(cursor.getDate() + index);
-			const key = dateKey(date); const tasks = tasksOnDate(this.plugin.embeddedTasks.all(), key);
+			const key = dateKey(date); const tasks = tasksOnDate(this.plugin.embeddedTasks.all(), key); const journal = journals.get(key);
 			let cls = 'po-cal__day';
 			if (date.getMonth() !== this.selectedMonth - 1) cls += ' is-out';
 			if (date.getDay() === 0 || date.getDay() === 6) cls += ' is-weekend';
@@ -248,44 +265,65 @@ export class PlanView extends ItemView {
 			if (sameDay(date, this.selectedDate)) cls += ' is-sel';
 			const day = days.createDiv({ cls }); day.createSpan({ cls: `po-cal__day-num${sameDay(date, today) ? ' is-today' : ''}`, text: String(date.getDate()) });
 			const body = day.createDiv({ cls: 'po-cal__day-body' }); body.createDiv({ cls: 'po-cal__slot' });
-			for (const task of tasks.slice(0, 3)) this.renderCalendarChip(body, task);
-			if (tasks.length > 3) day.createDiv({ cls: 'po-cal__day-more', text: `+${tasks.length - 3}` });
+			if (journal) this.renderCalendarJournal(body, journal);
+			for (const task of tasks.slice(0, journal ? 2 : 3)) this.renderCalendarChip(body, task);
+			const hidden = tasks.length + (journal ? 1 : 0) - 3;
+			if (hidden > 0) day.createDiv({ cls: 'po-cal__day-more', text: `+${hidden}` });
 			day.addEventListener('click', () => { this.setSelection(date.getFullYear(), date.getMonth() + 1, date.getDate()); });
 		}
 	}
 
-	private renderCalendarWeek(root: HTMLElement): void {
+	private renderCalendarWeek(root: HTMLElement, journals: Map<string, JournalCalendarEntry>): void {
 		const weekdays = root.createDiv({ cls: 'po-cal__weekdays' });
 		for (const name of ['一', '二', '三', '四', '五', '六', '日']) weekdays.createSpan({ text: name });
 		const cols = root.createDiv({ cls: 'po-cal__week' });
 		const today = new Date();
 		for (const date of this.weekDates()) {
-			const key = dateKey(date); const tasks = tasksOnDate(this.plugin.embeddedTasks.all(), key);
+			const key = dateKey(date); const tasks = tasksOnDate(this.plugin.embeddedTasks.all(), key); const journal = journals.get(key);
 			const col = cols.createDiv({ cls: `po-cal__wcol${sameDay(date, today) ? ' is-today' : ''}${sameDay(date, this.selectedDate) ? ' is-sel' : ''}` });
 			const head = col.createDiv({ cls: 'po-cal__wcol-hd' }); head.createSpan({ cls: 'po-cal__wcol-day', text: String(date.getDate()) }); head.createSpan({ cls: 'po-cal__wcol-name', text: `${date.getMonth() + 1}月` });
+			if (journal) this.renderCalendarJournal(col, journal);
 			for (const task of tasks) this.renderCalendarChip(col, task);
 			col.addEventListener('click', () => { this.setSelection(date.getFullYear(), date.getMonth() + 1, date.getDate()); });
 		}
 	}
 
-	private renderDayDetail(root: HTMLElement): void {
+	private renderDayDetail(root: HTMLElement, journal?: JournalCalendarEntry): void {
 		const detail = root.createDiv({ cls: 'po-cal__det' });
 		const tasks = tasksOnDate(this.plugin.embeddedTasks.all(), dateKey(this.selectedDate));
 		detail.createDiv({ cls: 'po-cal__det-ttl', text: `${this.selectedDate.getMonth() + 1} 月 ${this.selectedDate.getDate()} 日 · ${tasks.length} 项任务` });
-		if (!tasks.length) { detail.createDiv({ cls: 'po-cal__det-empty', text: '当日暂无任务' }); return; }
-		const groups = groupEmbeddedForDisplay(tasks);
-		for (const category of TASK_DISPLAY_CATEGORIES) {
-			if (!groups[category].length) continue;
-			const section = detail.createDiv({ cls: 'mx-day-task-section' });
-			section.createDiv({ cls: 'mx-day-task-section__title', text: TASK_DISPLAY_LABELS[category] });
-			for (const task of groups[category]) this.renderTaskRow(section, task);
+		if (!tasks.length && !journal) { detail.createDiv({ cls: 'po-cal__det-empty', text: '当日暂无任务或日记' }); return; }
+		if (tasks.length) {
+			const groups = groupEmbeddedForDisplay(tasks);
+			for (const category of TASK_DISPLAY_CATEGORIES) {
+				if (!groups[category].length) continue;
+				const section = detail.createDiv({ cls: 'mx-day-task-section' });
+				section.createDiv({ cls: 'mx-day-task-section__title', text: TASK_DISPLAY_LABELS[category] });
+				for (const task of groups[category]) this.renderTaskRow(section, task);
+			}
 		}
+		if (journal) this.renderJournalDetail(detail, journal);
+	}
+
+	private renderCalendarJournal(parent: HTMLElement, journal: JournalCalendarEntry): void {
+		const row = parent.createDiv({ cls: 'po-cal__chip mx-calendar-journal-row', text: journal.title, attr: { title: journal.title } });
+		row.addEventListener('click', event => { event.stopPropagation(); const [year, month, day] = journal.date.split('-').map(Number); this.setSelection(year!, month!, day!); });
 	}
 
 	private renderCalendarChip(parent: HTMLElement, task: EmbeddedTask): void {
-		const chip = parent.createDiv({ cls: `po-cal__chip mx-calendar-task-chip mx-plan-task-${taskCalendarCategory(task)}${task.completed ? ' is-done' : ''}`, attr: { title: task.text } });
+		const chip = parent.createDiv({ cls: `po-cal__chip mx-calendar-task-chip${task.completed ? ' is-done' : ''}`, attr: { title: task.text } });
 		chip.createSpan({ cls: 'mx-calendar-task-marker', text: taskDisplayMarker(task.sourceType) });
 		chip.createSpan({ cls: 'mx-calendar-task-text', text: task.text });
+	}
+
+	private renderJournalDetail(parent: HTMLElement, journal: JournalCalendarEntry): void {
+		const section = parent.createDiv({ cls: 'mx-day-journal-section' });
+		section.createDiv({ cls: 'mx-day-task-section__title', text: '日记' });
+		section.createDiv({ cls: 'mx-day-journal-title', text: journal.title });
+		if (journal.quickNoteCount) section.createDiv({ cls: 'mx-day-journal-meta', text: `随时记 · ${journal.quickNoteCount}条` });
+		if (journal.summary) section.createDiv({ cls: 'mx-day-journal-summary', text: journal.summary });
+		const open = section.createEl('button', { cls: 'mx-inline-action mx-day-journal-open', text: '打开日记 →', attr: { type: 'button' } });
+		open.addEventListener('click', () => { const file = this.app.vault.getAbstractFileByPath(journal.path); if (file instanceof TFile) void this.app.workspace.getLeaf('tab').openFile(file); });
 	}
 
 	private renderTaskRow(parent: HTMLElement, task: EmbeddedTask): void {

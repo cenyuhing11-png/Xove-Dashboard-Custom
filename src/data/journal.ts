@@ -52,6 +52,85 @@ export function journalTasks(tasks: EmbeddedTask[], path: string) {
 	const date = journalDateFromPath(path);
 	return { date, groups: groupEmbeddedForDisplay(date ? tasks.filter(task => task.date === date) : []) };
 }
+
+export interface JournalCalendarEntry {
+	date: string;
+	path: string;
+	title: string;
+	quickNoteCount: number;
+	summary?: string;
+}
+
+interface MarkdownHeading { line: number; level: number; text: string }
+
+/** Read only real Markdown headings; fenced examples and frontmatter are ignored. */
+function markdownHeadings(content: string): { lines: string[]; headings: MarkdownHeading[] } {
+	const lines = content.split(/\r?\n/);
+	const headings: MarkdownHeading[] = [];
+	let yaml = lines[0]?.replace(/^\uFEFF/, '').trim() === '---';
+	let fence = '';
+	for (let index = 0; index < lines.length; index++) {
+		const line = lines[index]!;
+		if (yaml) { if (index > 0 && /^(---|\.\.\.)\s*$/.test(line)) yaml = false; continue; }
+		if (fence) { if (new RegExp(`^ {0,3}${fence[0]}{${fence.length},}\\s*$`).test(line)) fence = ''; continue; }
+		const openingFence = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+		if (openingFence) { fence = openingFence[1]!; continue; }
+		const heading = /^ {0,3}(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$/.exec(line);
+		if (heading) headings.push({ line: index, level: heading[1]!.length, text: heading[2]!.trim() });
+	}
+	return { lines, headings };
+}
+
+function sectionLines(document: ReturnType<typeof markdownHeadings>, title: string): string[] {
+	const heading = document.headings.find(item => item.level === 2 && item.text === title);
+	if (!heading) return [];
+	const end = document.headings.find(item => item.line > heading.line && item.level <= 2)?.line ?? document.lines.length;
+	return document.lines.slice(heading.line + 1, end);
+}
+
+function countJournalEntries(lines: string[]): number {
+	let count = 0;
+	let paragraph = false;
+	for (const raw of lines) {
+		const line = raw.trim();
+		if (!line) { paragraph = false; continue; }
+		if (/^(?:[-*+]|\d+[.)])[ \t]+/.test(line)) { count++; paragraph = false; continue; }
+		if (!paragraph) { count++; paragraph = true; }
+	}
+	return count;
+}
+
+function plainJournalText(value: string): string {
+	return value.replace(/^\s*>\s?/, '').replace(/^\s*(?:[-*+]|\d+[.)])\s+/, '')
+		.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+		.replace(/!?\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, alias?: string) => alias ?? target)
+		.replace(/[*_`~]+/g, '').trim();
+}
+
+function firstJournalParagraph(lines: string[]): string | undefined {
+	const paragraph: string[] = [];
+	for (const raw of lines) {
+		const line = plainJournalText(raw);
+		if (!line) { if (paragraph.length) break; continue; }
+		paragraph.push(line);
+	}
+	const text = paragraph.join(' ').trim();
+	return text ? text.slice(0, 360) : undefined;
+}
+
+/** Calendar projection only; the journal source remains untouched. */
+export function journalCalendarEntry(path: string, content: string, properties: unknown): JournalCalendarEntry | null {
+	const date = journalDateFromPath(path);
+	if (!date) return null;
+	const document = markdownHeadings(content);
+	const quickNoteCount = countJournalEntries(sectionLines(document, '随时记'));
+	const propertyTitle = properties && typeof properties === 'object' && !Array.isArray(properties)
+		&& typeof (properties as Record<string, unknown>)['标题'] === 'string'
+		? ((properties as Record<string, string>)['标题'] ?? '').trim() : '';
+	const h1 = document.headings.find(item => item.level === 1)?.text.trim() ?? '';
+	const title = propertyTitle || h1 || (quickNoteCount ? `随时记 · ${quickNoteCount}条` : '未命名日记');
+	return { date, path, title, quickNoteCount, summary: firstJournalParagraph(sectionLines(document, '今日日记')) };
+}
 export async function ensureJournal(files: PlanFiles, kind: JournalKind, date = new Date()): Promise<string> {
 	const info = journalInfo(kind, date);
 	return ensureSafeNote(files, info.path, [JOURNAL_ROOT, info.folder], journalTemplate(kind, date));
