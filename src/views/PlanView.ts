@@ -2,6 +2,7 @@ import { ItemView, Notice, TFile, WorkspaceLeaf } from 'obsidian';
 import type { App, ViewStateResult } from 'obsidian';
 import type Dashboard from '../main';
 import type { EmbeddedTask } from '../data/embeddedTasks';
+import { TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, groupEmbeddedForDisplay, taskDisplayMarker } from '../data/embeddedTasks';
 import type { PlanWorkspaceCard, PlanWorkspaceMode, PlanCalendarMode } from '../data/planWorkspace';
 import { dateKey, localPlanSelection, readPlanWorkspace, taskCalendarCategory, taskCalendarSourceLabel, tasksOnDate } from '../data/planWorkspace';
 import { planInfo } from '../data/planning';
@@ -247,7 +248,7 @@ export class PlanView extends ItemView {
 			if (sameDay(date, this.selectedDate)) cls += ' is-sel';
 			const day = days.createDiv({ cls }); day.createSpan({ cls: `po-cal__day-num${sameDay(date, today) ? ' is-today' : ''}`, text: String(date.getDate()) });
 			const body = day.createDiv({ cls: 'po-cal__day-body' }); body.createDiv({ cls: 'po-cal__slot' });
-			for (const task of tasks.slice(0, 3)) body.createDiv({ cls: `po-cal__chip mx-plan-task-${taskCalendarCategory(task)}${task.completed ? ' is-done' : ''}`, text: task.text });
+			for (const task of tasks.slice(0, 3)) this.renderCalendarChip(body, task);
 			if (tasks.length > 3) day.createDiv({ cls: 'po-cal__day-more', text: `+${tasks.length - 3}` });
 			day.addEventListener('click', () => { this.setSelection(date.getFullYear(), date.getMonth() + 1, date.getDate()); });
 		}
@@ -262,7 +263,7 @@ export class PlanView extends ItemView {
 			const key = dateKey(date); const tasks = tasksOnDate(this.plugin.embeddedTasks.all(), key);
 			const col = cols.createDiv({ cls: `po-cal__wcol${sameDay(date, today) ? ' is-today' : ''}${sameDay(date, this.selectedDate) ? ' is-sel' : ''}` });
 			const head = col.createDiv({ cls: 'po-cal__wcol-hd' }); head.createSpan({ cls: 'po-cal__wcol-day', text: String(date.getDate()) }); head.createSpan({ cls: 'po-cal__wcol-name', text: `${date.getMonth() + 1}月` });
-			for (const task of tasks) col.createDiv({ cls: `po-cal__chip mx-plan-task-${taskCalendarCategory(task)}${task.completed ? ' is-done' : ''}`, text: task.text });
+			for (const task of tasks) this.renderCalendarChip(col, task);
 			col.addEventListener('click', () => { this.setSelection(date.getFullYear(), date.getMonth() + 1, date.getDate()); });
 		}
 	}
@@ -272,15 +273,28 @@ export class PlanView extends ItemView {
 		const tasks = tasksOnDate(this.plugin.embeddedTasks.all(), dateKey(this.selectedDate));
 		detail.createDiv({ cls: 'po-cal__det-ttl', text: `${this.selectedDate.getMonth() + 1} 月 ${this.selectedDate.getDate()} 日 · ${tasks.length} 项任务` });
 		if (!tasks.length) { detail.createDiv({ cls: 'po-cal__det-empty', text: '当日暂无任务' }); return; }
-		for (const task of tasks) this.renderTaskRow(detail, task);
+		const groups = groupEmbeddedForDisplay(tasks);
+		for (const category of TASK_DISPLAY_CATEGORIES) {
+			if (!groups[category].length) continue;
+			const section = detail.createDiv({ cls: 'mx-day-task-section' });
+			section.createDiv({ cls: 'mx-day-task-section__title', text: TASK_DISPLAY_LABELS[category] });
+			for (const task of groups[category]) this.renderTaskRow(section, task);
+		}
+	}
+
+	private renderCalendarChip(parent: HTMLElement, task: EmbeddedTask): void {
+		const chip = parent.createDiv({ cls: `po-cal__chip mx-calendar-task-chip mx-plan-task-${taskCalendarCategory(task)}${task.completed ? ' is-done' : ''}`, attr: { title: task.text } });
+		chip.createSpan({ cls: 'mx-calendar-task-marker', text: taskDisplayMarker(task.sourceType) });
+		chip.createSpan({ cls: 'mx-calendar-task-text', text: task.text });
 	}
 
 	private renderTaskRow(parent: HTMLElement, task: EmbeddedTask): void {
 		const row = parent.createDiv({ cls: 'po-cal__task' });
 		const check = row.createSpan({ cls: `po-check${task.completed ? ' is-done' : ''}`, attr: { role: 'checkbox', 'aria-checked': String(task.completed), 'aria-label': `${task.completed ? '取消完成' : '完成'} ${task.text}` } });
 		check.addEventListener('click', event => { event.stopPropagation(); void this.plugin.embeddedTasks.complete(task, !task.completed).catch(error => new Notice(`任务更新失败：${String(error)}`)); });
-		row.createSpan({ cls: 'po-cal__task-name', text: task.text });
-		row.createSpan({ cls: 'po-status po-todo', text: this.sourceLabels.get(task.sourceFile) ?? taskCalendarSourceLabel(task) });
+		const body = row.createDiv({ cls: 'mx-day-task-body' });
+		body.createSpan({ cls: 'po-cal__task-name', text: task.text });
+		body.createSpan({ cls: 'mx-day-task-source', text: `${task.sourceDisplayName} · ${this.sourceLabels.get(task.sourceFile) ?? taskCalendarSourceLabel(task)}` });
 		row.addEventListener('click', () => { const file = this.app.vault.getAbstractFileByPath(task.sourceFile); if (file instanceof TFile) void this.app.workspace.getLeaf('tab').openFile(file); });
 	}
 }

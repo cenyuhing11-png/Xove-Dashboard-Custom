@@ -6,6 +6,7 @@ export type EmbeddedSourceType = keyof typeof EMBEDDED_HEADINGS;
 export const TASK_DISPLAY_CATEGORIES = ['learning', 'creation', 'daily'] as const;
 export type TaskDisplayCategory = typeof TASK_DISPLAY_CATEGORIES[number];
 export const TASK_DISPLAY_LABELS: Record<TaskDisplayCategory, string> = { learning: '学习任务', creation: '创作任务', daily: '日常任务' };
+export const TASK_DISPLAY_MARKERS: Record<TaskDisplayCategory, string> = { learning: '学', creation: '创', daily: '日' };
 export interface EmbeddedTask {
 	id: string;
 	text: string;
@@ -136,6 +137,9 @@ export function groupEmbedded(tasks: EmbeddedTask[]): Record<EmbeddedSourceType,
 /** Cross-source summaries expose three stable user categories; storage headings remain unchanged. */
 export function taskDisplayCategory(source: EmbeddedSourceType): TaskDisplayCategory {
 	return source === 'project' ? 'creation' : source;
+}
+export function taskDisplayMarker(source: EmbeddedSourceType): string {
+	return TASK_DISPLAY_MARKERS[taskDisplayCategory(source)];
 }
 export function groupEmbeddedForDisplay(tasks: EmbeddedTask[]): Record<TaskDisplayCategory, EmbeddedTask[]> {
 	const groups: Record<TaskDisplayCategory, EmbeddedTask[]> = { learning: [], creation: [], daily: [] };

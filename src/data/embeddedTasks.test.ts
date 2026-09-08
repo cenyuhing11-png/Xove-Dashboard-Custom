@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { appendEmbeddedTask, DAILY_TASK_FILE, DAILY_TASK_TEMPLATE, embeddedSource, EmbeddedTaskIndex, groupEmbedded, groupEmbeddedForDisplay, overdueEmbedded, parseEmbeddedTasks, setEmbeddedCompletion, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, taskDisplayCategory, todayEmbedded, validTaskDate } from './embeddedTasks.ts';
+import { appendEmbeddedTask, DAILY_TASK_FILE, DAILY_TASK_TEMPLATE, embeddedSource, EmbeddedTaskIndex, groupEmbedded, groupEmbeddedForDisplay, overdueEmbedded, parseEmbeddedTasks, setEmbeddedCompletion, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, TASK_DISPLAY_MARKERS, taskDisplayCategory, taskDisplayMarker, todayEmbedded, validTaskDate } from './embeddedTasks.ts';
 import { learningTemplate } from './learning.ts';
 
 const learning = '01-学习与资料/书籍/书.md';
@@ -54,12 +54,17 @@ test('all tasks grouped without loss', () => { const tasks = [first(), first('##
 test('summary display categories are exactly learning, creation and daily', () => {
 	assert.deepEqual(TASK_DISPLAY_CATEGORIES, ['learning', 'creation', 'daily']);
 	assert.deepEqual(TASK_DISPLAY_LABELS, { learning: '学习任务', creation: '创作任务', daily: '日常任务' });
+	assert.deepEqual(TASK_DISPLAY_MARKERS, { learning: '学', creation: '创', daily: '日' });
 });
 test('summary mapping keeps learning and daily while merging knowledge and projects into creation', () => {
 	assert.equal(taskDisplayCategory('learning'), 'learning');
 	assert.equal(taskDisplayCategory('creation'), 'creation');
 	assert.equal(taskDisplayCategory('project'), 'creation');
 	assert.equal(taskDisplayCategory('daily'), 'daily');
+	assert.equal(taskDisplayMarker('learning'), '学');
+	assert.equal(taskDisplayMarker('creation'), '创');
+	assert.equal(taskDisplayMarker('project'), '创');
+	assert.equal(taskDisplayMarker('daily'), '日');
 });
 test('summary grouping merges knowledge and project tasks without changing total count', () => {
 	const knowledge = '02-知识与思考/AI 与设计.md';

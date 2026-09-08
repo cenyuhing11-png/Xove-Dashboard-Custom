@@ -15,6 +15,7 @@ import { UnifiedProcessModal } from './views/UnifiedProcessModal';
 import { NewEmbeddedTaskModal } from './views/EmbeddedTaskModal';
 import { TaskStore } from './data/taskStore';
 import type { WorkbenchShell, WorkbenchAction } from './components/workbench/WorkbenchShell';
+import { mountJournalTaskSummary } from './components/journal/JournalTaskSummary';
 
 /** 番茄钟运行时状态（与主页卡片共享，状态栏实时显示） */
 export interface PomoState {
@@ -51,6 +52,7 @@ export default class Dashboard extends Plugin {
 		await this.loadSettings();
 		this.embeddedTasks = new EmbeddedTaskStore(this.app, this);
 		this.shellTaskStore = new TaskStore(this.app, () => this.settings);
+		this.registerMarkdownPostProcessor((el, ctx) => mountJournalTaskSummary(el, ctx, this.app, this.embeddedTasks));
 
 		this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
 		this.registerView(DIRECTION_VIEW, (leaf) => new DirectionView(leaf));

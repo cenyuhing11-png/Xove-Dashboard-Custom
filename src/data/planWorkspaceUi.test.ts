@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const view = readFileSync(new URL('../views/PlanView.ts', import.meta.url), 'utf8');
 const shell = readFileSync(new URL('../components/workbench/WorkbenchShell.ts', import.meta.url), 'utf8');
 const main = readFileSync(new URL('../main.ts', import.meta.url), 'utf8');
+const journalSummary = readFileSync(new URL('../components/journal/JournalTaskSummary.ts', import.meta.url), 'utf8');
 
 test('global navigation names time trace directly after home', () => assert.match(shell, /label: '首页'[\s\S]*label: '时迹'[\s\S]*label: '进程'/));
 test('plan has a dedicated top-level view', () => assert.match(view, /PLAN_VIEW = 'xove-dashboard-custom-plan-workspace'/));
@@ -15,6 +16,18 @@ test('plan board reuses original ProjectBoard primitives', () => { for (const cl
 test('plan calendar reuses original calendar primitives', () => { for (const cls of ['po-cal__bar', 'po-cal__days', 'po-cal__week', 'po-cal__det']) assert.ok(view.includes(cls)); });
 test('plan workspace never creates plan markdown', () => { assert.equal(view.includes('ensurePlan'), false); assert.equal(view.includes('.vault.create('), false); });
 test('calendar checkboxes write through EmbeddedTaskStore complete', () => assert.match(view, /embeddedTasks\.complete\(task/));
+test('calendar cells use compact shared task markers without category sections', () => {
+	assert.match(view, /renderCalendarChip\(body, task\)/);
+	assert.match(view, /taskDisplayMarker\(task\.sourceType\)/);
+	assert.match(view, /mx-calendar-task-text/);
+	const month = view.match(/private renderCalendarMonth[\s\S]*?(?=\n\tprivate renderCalendarWeek)/)?.[0] ?? '';
+	assert.ok(month); assert.equal(month.includes('TASK_DISPLAY_LABELS['), false);
+});
+test('selected day detail groups only populated learning creation and daily sections', () => {
+	assert.match(view, /const groups = groupEmbeddedForDisplay\(tasks\)/);
+	assert.match(view, /if \(!groups\[category\]\.length\) continue/);
+	assert.match(view, /mx-day-task-section__title/);
+});
 test('calendar dates come only from Embedded Tasks, never process start or due dates', () => { assert.equal(view.includes('process.startDate'), false); assert.equal(view.includes('process.dueDate'), false); assert.match(view, /tasksOnDate\(this\.plugin\.embeddedTasks\.all\(\)/); });
 test('selected year month and all three modes are one shared view state', () => { for (const key of ['selectedYear', 'selectedMonth', 'mode', "'review'"]) assert.ok(view.includes(key)); });
 test('plan view does not reference data json', () => assert.equal(view.includes('data.json'), false));
@@ -69,4 +82,16 @@ test('time trace rename leaves technical PlanView and identifiers intact', () =>
 	assert.ok(view.includes('class PlanView'));
 	assert.ok(view.includes("PLAN_VIEW = 'xove-dashboard-custom-plan-workspace'"));
 	assert.ok(main.includes('registerView(PLAN_VIEW'));
+});
+test('journal task summary is a Reading View post processor anchored only at 今日任务', () => {
+	assert.match(main, /registerMarkdownPostProcessor/);
+	assert.match(journalSummary, /heading\.textContent\?\.trim\(\) !== '今日任务'/);
+	assert.match(journalSummary, /ctx\.addChild\(new JournalTaskSummary/);
+});
+test('journal task summary reuses EmbeddedTaskStore writes and never writes journal Markdown', () => {
+	assert.match(journalSummary, /store\.complete\(task/);
+	assert.match(journalSummary, /store\.subscribe/);
+	assert.equal(journalSummary.includes('vault.process'), false);
+	assert.equal(journalSummary.includes('vault.modify'), false);
+	assert.equal(journalSummary.includes('今日任务\n- [ ]'), false);
 });

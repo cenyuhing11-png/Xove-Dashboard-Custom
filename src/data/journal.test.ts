@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ensureJournal, journalEntry, journalHistory, journalInfo, journalStates, journalTemplate } from './journal.ts';
+import { ensureJournal, journalDateFromPath, journalEntry, journalHistory, journalInfo, journalStates, journalTasks, journalTemplate } from './journal.ts';
 import type { JournalEntry, JournalKind } from './journal.ts';
 import type { PlanFiles } from './planning.ts';
+import { DAILY_TASK_FILE, parseEmbeddedTasks } from './embeddedTasks.ts';
 
 const date = new Date(2026, 8, 6, 0, 1);
 for (const [kind, suffix] of Object.entries({ day: '01-日记/2026-09-06 日记', week: '02-周记/2026-W36 周记', month: '03-月度复盘/2026-09 月度复盘', year: '04-年度复盘/2026 年度复盘' })) {
@@ -18,7 +19,26 @@ test('local late night and midnight do not shift date', () => {
 	assert.equal(journalInfo('day', new Date(2026, 11, 31, 23, 59)).period, '2026-12-31');
 });
 test('daily template is lightweight with exact sections', () => {
-	assert.equal(journalTemplate('day', date), '---\n类型: 日记\n日期: 2026-09-06\n---\n\n# 2026年9月6日\n\n## 今天\n\n## 想法\n\n## 学习与收获\n\n## 明天\n\n');
+	assert.equal(journalTemplate('day', date), '---\n类型: 日记\n日期: 2026-09-06\n---\n\n# 2026年9月6日\n\n## 今日任务\n\n## 随时记\n\n## 今日日记\n\n## 今日回看\n\n');
+});
+test('daily journal date parser accepts current and clean names without touching unrelated notes', () => {
+	assert.equal(journalDateFromPath('04-日记与复盘/01-日记/2026-09-08 日记.md'), '2026-09-08');
+	assert.equal(journalDateFromPath('04-日记与复盘/01-日记/2026-09-08.md'), '2026-09-08');
+	assert.equal(journalDateFromPath('04-日记与复盘/01-日记/快捷指令测试.md'), null);
+	assert.equal(journalDateFromPath('Daily/2026-09-08.md'), null);
+});
+test('journal summary queries only the journal date and shares three display categories', () => {
+	const tasks = [
+		...parseEmbeddedTasks('01-学习与资料/视频/学习.md', '## 学习任务\n- [ ] 学习 📅 2026-09-08\n- [ ] 明天 📅 2026-09-09'),
+		...parseEmbeddedTasks('02-知识与思考/创作.md', '## 创作任务\n- [ ] 创作 📅 2026-09-08'),
+		...parseEmbeddedTasks('03-项目与成果/项目/项目.md', '## 项目任务\n- [ ] 项目 📅 2026-09-08'),
+		...parseEmbeddedTasks(DAILY_TASK_FILE, '## 日常待办\n- [ ] 日常 📅 2026-09-08'),
+	];
+	const result = journalTasks(tasks, '04-日记与复盘/01-日记/2026-09-08 日记.md');
+	assert.equal(result.date, '2026-09-08');
+	assert.deepEqual(result.groups.learning.map(task => task.text), ['学习']);
+	assert.deepEqual(result.groups.creation.map(task => task.text), ['创作', '项目']);
+	assert.deepEqual(result.groups.daily.map(task => task.text), ['日常']);
 });
 test('weekly template includes current plan link and six sections', () => {
 	const md = journalTemplate('week', date);
