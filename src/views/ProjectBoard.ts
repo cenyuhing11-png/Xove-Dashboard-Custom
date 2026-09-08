@@ -92,7 +92,7 @@ export class ProjectBoard {
 	// Project overview state
 	private currentProjects: ProjectInfo[] = [];
 	private currentTasks: TaskItem[] = [];
-	private currentView: string = 'gantt';
+	private currentView: string = 'list';
 	private poMainEl: HTMLElement | null = null;
 	private calYear: number = new Date().getFullYear();
 	private calMonth: number = new Date().getMonth();
@@ -193,7 +193,7 @@ export class ProjectBoard {
 		const tabs = main.createDiv({ cls: 'po-tabs' });
 		const content = main.createDiv({ cls: 'po-content' });
 		const panel = content.createDiv({ cls: 'po-panel is-active', attr: { 'data-view': this.currentView } });
-		for (const [key, label, icon] of [['gantt', UI_TEXT.poGantt, ICON_gantt], ['list', UI_TEXT.poList, ICON_list], ['calendar', UI_TEXT.poCalendar, ICON_calendar], ['kanban', UI_TEXT.poKanban, ICON_kanban]]) {
+		for (const [key, label, icon] of [['list', UI_TEXT.poList, ICON_list], ['kanban', UI_TEXT.poKanban, ICON_kanban], ['gantt', UI_TEXT.poGantt, ICON_gantt], ['calendar', UI_TEXT.poCalendar, ICON_calendar]]) {
 			const button = tabs.createEl('button', { cls: 'po-tab' + (this.currentView === key ? ' is-active' : '') });
 			injectSvg(button.createSpan({ cls: 'ad-glyph' }), icon!); button.createSpan({ text: label }); button.dataset.view = key;
 			button.onclick = () => { this.currentView = key!; this.renderMengxuPanels(); };

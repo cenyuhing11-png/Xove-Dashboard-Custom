@@ -47,6 +47,9 @@ test('legacy PlanView delegates to the shared renderer', () => {
 	assert.match(plan, /this\.renderer\.activate/);
 });
 test('process section reuses the original ProjectBoard renderer', () => assert.match(router, /new ProjectBoard\(this\.processSource\)/));
+test('process route keeps one ProjectBoard instance so its selected view survives route changes', () => {
+	assert.match(router, /if \(!this\.processSource\)[\s\S]*this\.processBoard = new ProjectBoard\(this\.processSource\);[\s\S]*else this\.processSource\.boardEl = this\.boardEl/);
+});
 test('process section keeps the Mengxu adapter and modern detail callbacks', () => {
 	assert.match(router, /processBoardItems\(processes\(scanLearning/);
 	assert.match(router, /openProcess\(this\.app, item\.process\)/);

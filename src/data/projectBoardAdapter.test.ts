@@ -98,7 +98,7 @@ class Element {
 	remove(){if(this.parent)this.parent.children=this.parent.children.filter(e=>e!==this);} scrollIntoView(){}
 }
 const bundle=buildSync({entryPoints:[fileURLToPath(new URL('../views/ProjectBoard.ts',import.meta.url))],bundle:true,platform:'node',format:'cjs',write:false,external:['obsidian']}).outputFiles[0]!.text;
-function boardFixture(view='kanban', values=[project], processItems?: ProcessBoardItem[]) {
+function boardFixture(view: string | null='kanban', values=[project], processItems?: ProcessBoardItem[]) {
 	const module:{exports:any}={exports:{}};const opened:any[]=[];let created=0,learningCreated=0;const menuItems:any[]=[],previews:any[]=[],statusChanges:any[]=[];
 	class Menu { setUseNativeMenu(){return this;} addItem(fn:(item:any)=>void){const item={title:'',checked:false,click:()=>{},setTitle(title:string){this.title=title;return this;},setChecked(value:boolean){this.checked=value;return this;},onClick(click:()=>void){this.click=click;return this;}};fn(item);menuItems.push(item);} showAtMouseEvent(){} showAtPosition(){} }
 	runInNewContext(bundle,{module,exports:module.exports,require:(id:string)=>{assert.equal(id,'obsidian');return {Menu,Modal:class{open(){previews.push(this);}close(){}},ItemView:class{}};},
@@ -108,12 +108,33 @@ function boardFixture(view='kanban', values=[project], processItems?: ProcessBoa
 	});
 	const root=new Element();const items=processItems ?? projectBoardItems(values,tasks);
 	const board=new module.exports.ProjectBoard({kind:'mengxu',app:{},boardEl:root,tasks:{},items:()=>items,open:(p:any)=>opened.push(p.process ?? p.project),changeStatus:async(item:any,status:string)=>{statusChanges.push({path:item.key,status});item.status=status;/* Simulate the existing metadata-event rescan, not a local optimistic pill. */await board.refresh();},create:()=>created++,...(processItems ? {createLearning:()=>learningCreated++} : {})});
-	board.currentView=view;
+	if (view) board.currentView=view;
 	return {board,root,items,opened,created:()=>created,learningCreated:()=>learningCreated,menuItems,previews,statusChanges};
 }
 test('ProjectBoard uses original container/sidebar/tabs/card classes', async()=>{
 	const f=boardFixture();await f.board.show();for(const cls of ['po-board','po-container','po-sidebar','po-main','po-tabs','po-panel','po-kanban','po-kanban__card'])assert.ok(f.root.querySelector('.'+cls),cls);
 	assert.equal(f.root.querySelectorAll('.po-tab').length,4);assert.equal(f.root.querySelector('.mx-project-card'),undefined);
+});
+
+test('Process view tabs use list, kanban, gantt and calendar order with list as the first fallback',async()=>{
+	const f=boardFixture(null,[],mixed);await f.board.show();
+	assert.deepEqual(f.root.querySelectorAll('.po-tab').map(e=>e.children.map(child=>child.text).join('')),['列表','看板','甘特图','日历']);
+	assert.equal(f.board.currentView,'list');assert.equal(f.root.querySelector('.po-panel')!.dataset.view,'list');
+	assert.equal(f.root.querySelectorAll('.po-tab').find(e=>e.classes.has('is-active'))!.dataset.view,'list');
+});
+test('Every process mode keeps its stable key and active tab after switching',async()=>{
+	const f=boardFixture(null,[],mixed);await f.board.show();
+	for(const mode of ['kanban','gantt','calendar','list']){
+		f.root.querySelectorAll('.po-tab').find(e=>e.dataset.view===mode)!.onclick();
+		assert.equal(f.board.currentView,mode);assert.equal(f.root.querySelector('.po-panel')!.dataset.view,mode);
+		assert.equal(f.root.querySelectorAll('.po-tab').find(e=>e.classes.has('is-active'))!.dataset.view,mode);
+	}
+});
+test('Process board session restores the selected view when its route is mounted again',async()=>{
+	const f=boardFixture(null,[],mixed);await f.board.show();
+	f.root.querySelectorAll('.po-tab').find(e=>e.dataset.view==='kanban')!.onclick();
+	await f.board.show();
+	assert.equal(f.board.currentView,'kanban');assert.equal(f.root.querySelectorAll('.po-tab').find(e=>e.classes.has('is-active'))!.dataset.view,'kanban');
 });
 
 test('Process status pill reuses author classes and opens five checked menu options', async()=>{
