@@ -1,6 +1,6 @@
-import { App, Notice, TFile } from 'obsidian';
+import { App, TFile } from 'obsidian';
 import type { EmbeddedTask } from '../../data/embeddedTasks';
-import { TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS } from '../../data/embeddedTasks';
+import { TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, taskSourceSubtitle } from '../../data/embeddedTasks';
 import type { EmbeddedTaskStore } from '../../data/embeddedTaskVault';
 import { journalTasks } from '../../data/journal';
 import { taskCalendarSourceLabel } from '../../data/planWorkspace';
@@ -8,6 +8,7 @@ import { scanLearning } from '../../data/learningVault';
 import { scanProjects } from '../../data/projectVault';
 import { processes } from '../../data/processes';
 import { taskSourceTypeLabel } from '../../data/processContentTypes';
+import { renderEmbeddedTaskCheckbox } from '../tasks/EmbeddedTaskCheckbox';
 
 /** Shared Reading/Live Preview renderer. It never writes into the journal Markdown. */
 export function renderJournalTaskSummary(parent: HTMLElement, app: App, store: EmbeddedTaskStore, path: string): void {
@@ -33,14 +34,11 @@ export function renderJournalTaskSummary(parent: HTMLElement, app: App, store: E
 
 function renderJournalTask(parent: HTMLElement, task: EmbeddedTask, app: App, store: EmbeddedTaskStore, sourceLabels: Map<string, string>): void {
 	const row = parent.createDiv({ cls: 'po-cal__task mx-journal-task-row' });
-	const check = row.createSpan({ cls: `po-check${task.completed ? ' is-done' : ''}`, attr: { role: 'checkbox', 'aria-checked': String(task.completed), 'aria-label': `${task.completed ? '取消完成' : '完成'} ${task.text}` } });
-	check.addEventListener('click', event => {
-		event.stopPropagation();
-		void store.complete(task, !task.completed).catch(error => new Notice(`任务更新失败：${String(error)}`));
-	});
+	renderEmbeddedTaskCheckbox(row, task, store);
 	const body = row.createDiv({ cls: 'mx-journal-task-body' });
 	body.createSpan({ cls: 'po-cal__task-name', text: task.text });
-	body.createSpan({ cls: 'mx-journal-task-source', text: `${task.sourceDisplayName} · ${sourceLabels.get(task.sourceFile) ?? taskCalendarSourceLabel(task)}` });
+	const subtitle = taskSourceSubtitle(task, sourceLabels.get(task.sourceFile) ?? taskCalendarSourceLabel(task));
+	if (subtitle) body.createSpan({ cls: 'mx-journal-task-source', text: subtitle });
 	row.addEventListener('click', () => {
 		const file = app.vault.getAbstractFileByPath(task.sourceFile);
 		if (file instanceof TFile) void app.workspace.getLeaf('tab').openFile(file);

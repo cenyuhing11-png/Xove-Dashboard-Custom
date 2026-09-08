@@ -9,6 +9,8 @@ const journalSummary = readFileSync(new URL('../components/journal/JournalTaskSu
 const journalLivePreview = readFileSync(new URL('../components/journal/JournalTitleLivePreview.ts', import.meta.url), 'utf8');
 const journalTaskLivePreview = readFileSync(new URL('../components/journal/JournalTaskLivePreview.ts', import.meta.url), 'utf8');
 const journalTaskRenderer = readFileSync(new URL('../components/journal/JournalTaskRenderer.ts', import.meta.url), 'utf8');
+const embeddedTaskCheckbox = readFileSync(new URL('../components/tasks/EmbeddedTaskCheckbox.ts', import.meta.url), 'utf8');
+const embeddedTaskModal = readFileSync(new URL('../views/EmbeddedTaskModal.ts', import.meta.url), 'utf8');
 const embeddedTasks = readFileSync(new URL('./embeddedTasks.ts', import.meta.url), 'utf8');
 
 test('global navigation names time trace directly after home', () => assert.match(shell, /label: '首页'[\s\S]*label: '时迹'[\s\S]*label: '进程'/));
@@ -19,7 +21,10 @@ test('global plan navigation opens the dedicated view', () => assert.match(main,
 test('plan board reuses original ProjectBoard primitives', () => { for (const cls of ['po-container', 'po-sidebar', 'po-kanban', 'po-kanban__col', 'po-kanban__card']) assert.ok(view.includes(cls)); });
 test('plan calendar reuses original calendar primitives', () => { for (const cls of ['po-cal__bar', 'po-cal__days', 'po-cal__week', 'po-cal__det']) assert.ok(view.includes(cls)); });
 test('plan workspace never creates plan markdown', () => { assert.equal(view.includes('ensurePlan'), false); assert.equal(view.includes('.vault.create('), false); });
-test('calendar checkboxes write through EmbeddedTaskStore complete', () => assert.match(view, /embeddedTasks\.complete\(task/));
+test('calendar checkboxes write through the shared Embedded Task checkbox', () => {
+	assert.match(view, /renderEmbeddedTaskCheckbox\(row, task, this\.plugin\.embeddedTasks\)/);
+	assert.match(embeddedTaskCheckbox, /store\.complete\(task, check\.checked\)/);
+});
 test('month calendar cells render only journals and never task chips or task overflow', () => {
 	const month = view.match(/private renderCalendarMonth[\s\S]*?(?=\n\tprivate renderCalendarWeek)/)?.[0] ?? '';
 	assert.ok(month);
@@ -155,15 +160,17 @@ test('journal task summary is a Reading View post processor anchored only at 今
 test('journal task summary reuses EmbeddedTaskStore writes and never writes journal Markdown', () => {
 	assert.match(journalSummary, /renderJournalTaskSummary\(this\.containerEl, this\.app, this\.store, this\.path\)/);
 	assert.match(journalSummary, /store\.subscribe/);
-	assert.match(journalTaskRenderer, /store\.complete\(task, !task\.completed\)/);
+	assert.match(journalTaskRenderer, /renderEmbeddedTaskCheckbox\(row, task, store\)/);
+	assert.match(embeddedTaskCheckbox, /store\.complete\(task, check\.checked\)/);
 	assert.equal(journalTaskRenderer.includes('vault.process'), false);
 	assert.equal(journalTaskRenderer.includes('vault.modify'), false);
 	assert.equal(journalTaskRenderer.includes('今日任务\n- [ ]'), false);
 });
 test('journal task summary renders real unchecked and checked Embedded Task controls', () => {
-	assert.match(journalTaskRenderer, /cls: `po-check\$\{task\.completed \? ' is-done' : ''\}`/);
-	assert.match(journalTaskRenderer, /'aria-checked': String\(task\.completed\)/);
-	assert.match(journalTaskRenderer, /store\.complete\(task, !task\.completed\)/);
+	assert.match(journalTaskRenderer, /renderEmbeddedTaskCheckbox\(row, task, store\)/);
+	assert.match(embeddedTaskCheckbox, /createEl\('input',[\s\S]*type: 'checkbox'/);
+	assert.match(embeddedTaskCheckbox, /check\.checked = task\.completed/);
+	assert.match(embeddedTaskCheckbox, /store\.complete\(task, check\.checked\)/);
 });
 test('journal task summary keeps per-category progress, hides empty groups and maps projects to creation', () => {
 	assert.match(journalTaskRenderer, /if \(!categoryTasks\.length\) continue/);
@@ -200,6 +207,27 @@ test('task refresh rerenders only the stable Live Preview widget and releases it
 	assert.match(journalTaskLivePreview, /this\.unsubscribe\?\.\(\)/);
 	assert.match(journalTaskLivePreview, /ignoreEvent\(\): boolean \{ return true; \}/);
 	assert.doesNotMatch(journalTaskLivePreview, /mountView|renderPlanContent|WorkbenchShell/);
+});
+test('daily subtitles are absent in journal Reading, journal Live Preview and shared month/week day detail', () => {
+	assert.match(journalTaskRenderer, /taskSourceSubtitle\(task,/);
+	assert.match(journalTaskRenderer, /if \(subtitle\) body\.createSpan/);
+	assert.match(journalSummary, /renderJournalTaskSummary/);
+	assert.match(journalTaskLivePreview, /renderJournalTaskSummary/);
+	assert.match(view, /private renderTaskRow[\s\S]*taskSourceSubtitle\(task,[\s\S]*if \(subtitle\) body\.createSpan/);
+	assert.match(view, /if \(this\.calendarMode === 'month'\) this\.renderCalendarMonth\(root, journals\); else this\.renderCalendarWeek\(root, journals\);[\s\S]*this\.renderDayDetail\(root,/);
+});
+test('home and all-task lists share the same daily-no-subtitle helper without hiding useful sources', () => {
+	assert.match(embeddedTaskModal, /taskSourceSubtitle\(task, detail\)/);
+	assert.match(embeddedTaskModal, /if \(subtitle\) meta\.createEl/);
+	assert.match(embeddedTaskModal, /renderEmbeddedTaskCheckbox\(row, task, store\)/);
+	assert.match(embeddedTasks, /if \(task\.sourceType === 'daily'\) return null/);
+	assert.match(embeddedTasks, /return `\$\{task\.sourceDisplayName\}\$\{detail \? ` · \$\{detail\}` : ''\}`/);
+});
+test('native Embedded Task checkbox reuses po-check visuals with explicit checked and unchecked states', () => {
+	assert.match(embeddedTaskCheckbox, /cls: 'po-check mx-embedded-task-check'/);
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	assert.match(css, /input\.mx-embedded-task-check\s*\{[^}]*appearance:\s*none;[^}]*flex:\s*0 0 16px/);
+	assert.match(css, /input\.mx-embedded-task-check:checked\s*\{[^}]*background:\s*var\(--ad-accent\)/);
 });
 test('optional journal title input is anchored inside 今日日记 and reuses the existing input language', () => {
 	assert.match(journalSummary, /title === '今日日记'[\s\S]*mx-journal-title-editor[\s\S]*new JournalTitleEditor/);

@@ -141,6 +141,11 @@ export function taskDisplayCategory(source: EmbeddedSourceType): TaskDisplayCate
 export function taskDisplayMarker(source: EmbeddedSourceType): string {
 	return TASK_DISPLAY_MARKERS[taskDisplayCategory(source)];
 }
+/** Daily actions are self-contained; learning/creation actions retain their useful source context. */
+export function taskSourceSubtitle(task: EmbeddedTask, detail?: string): string | null {
+	if (task.sourceType === 'daily') return null;
+	return `${task.sourceDisplayName}${detail ? ` · ${detail}` : ''}`;
+}
 export function groupEmbeddedForDisplay(tasks: EmbeddedTask[]): Record<TaskDisplayCategory, EmbeddedTask[]> {
 	const groups: Record<TaskDisplayCategory, EmbeddedTask[]> = { learning: [], creation: [], daily: [] };
 	for (const task of tasks) groups[taskDisplayCategory(task.sourceType)].push(task);

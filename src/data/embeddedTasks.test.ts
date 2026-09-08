@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { appendEmbeddedTask, DAILY_TASK_FILE, DAILY_TASK_TEMPLATE, embeddedSource, EmbeddedTaskIndex, groupEmbedded, groupEmbeddedForDisplay, overdueEmbedded, parseEmbeddedTasks, setEmbeddedCompletion, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, TASK_DISPLAY_MARKERS, taskDisplayCategory, taskDisplayMarker, todayEmbedded, validTaskDate } from './embeddedTasks.ts';
+import { appendEmbeddedTask, DAILY_TASK_FILE, DAILY_TASK_TEMPLATE, embeddedSource, EmbeddedTaskIndex, groupEmbedded, groupEmbeddedForDisplay, overdueEmbedded, parseEmbeddedTasks, setEmbeddedCompletion, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, TASK_DISPLAY_MARKERS, taskDisplayCategory, taskDisplayMarker, taskSourceSubtitle, todayEmbedded, validTaskDate } from './embeddedTasks.ts';
 import { learningTemplate } from './learning.ts';
 
 const learning = '01-学习与资料/书籍/书.md';
@@ -65,6 +65,16 @@ test('summary mapping keeps learning and daily while merging knowledge and proje
 	assert.equal(taskDisplayMarker('creation'), '创');
 	assert.equal(taskDisplayMarker('project'), '创');
 	assert.equal(taskDisplayMarker('daily'), '日');
+});
+test('source subtitles stay useful for learning and creation but disappear for daily tasks', () => {
+	const learningTask = first('## 学习任务\n- [ ] 学习', learning);
+	const creationTask = first('## 创作任务\n- [ ] 创作', '02-知识与思考/文章.md');
+	const projectTask = first('## 项目任务\n- [ ] 项目', project);
+	const dailyTask = first('## 日常待办\n- [ ] 买纸巾', DAILY_TASK_FILE);
+	assert.equal(taskSourceSubtitle(learningTask, '视频'), '书 · 视频');
+	assert.equal(taskSourceSubtitle(creationTask, '知识与思考'), '文章 · 知识与思考');
+	assert.equal(taskSourceSubtitle(projectTask, '项目'), '视觉 · 项目');
+	assert.equal(taskSourceSubtitle(dailyTask, '日常'), null);
 });
 test('summary grouping merges knowledge and project tasks without changing total count', () => {
 	const knowledge = '02-知识与思考/AI 与设计.md';

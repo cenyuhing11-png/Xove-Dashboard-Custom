@@ -1,5 +1,5 @@
 import { App, Modal, Notice, TFile } from 'obsidian';
-import { DAILY_TASK_FILE, groupEmbeddedForDisplay, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS } from '../data/embeddedTasks';
+import { DAILY_TASK_FILE, groupEmbeddedForDisplay, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, taskSourceSubtitle } from '../data/embeddedTasks';
 import type { EmbeddedTask } from '../data/embeddedTasks';
 import type { EmbeddedTaskStore } from '../data/embeddedTaskVault';
 import { scanProjects } from '../data/projectVault';
@@ -7,6 +7,7 @@ import { scanLearning } from '../data/learningVault';
 import { processes } from '../data/processes';
 import { processCategoryLabel, processContentTypeLabel, taskSourceTypeLabel } from '../data/processContentTypes';
 import { beginListModal, closeListModal } from './viewPrimitives';
+import { renderEmbeddedTaskCheckbox } from '../components/tasks/EmbeddedTaskCheckbox';
 
 export function openEmbeddedSource(app: App, task: EmbeddedTask): void {
 	const file = app.vault.getAbstractFileByPath(task.sourceFile);
@@ -17,21 +18,19 @@ export function renderEmbeddedRows(parent: HTMLElement, tasks: EmbeddedTask[], a
 	if (!tasks.length) parent.createEl('p', { text: '暂无任务', cls: 'wb-empty' });
 	for (const task of tasks) {
 		const row = parent.createDiv({ cls: 'mx-task-row' });
-		const check = row.createEl('input', { type: 'checkbox', attr: { 'aria-label': `完成任务：${task.text}` } });
-		check.checked = task.completed;
-		check.onchange = () => {
-			check.disabled = true;
-			void store.complete(task, check.checked).catch(e => { check.checked = task.completed; new Notice(String(e)); }).finally(() => { check.disabled = false; });
-		};
+		renderEmbeddedTaskCheckbox(row, task, store);
 		const body = row.createDiv({ cls: 'mx-task-body' });
 		const title = body.createEl('button', { text: task.text, cls: 'mx-task-link' });
 		if (task.completed) title.addClass('is-complete');
 		const open = () => { openEmbeddedSource(app, task); onOpen?.(); };
 		title.onclick = open;
-		const meta = body.createDiv({ cls: 'mx-task-meta' });
-		if (task.date) meta.createSpan({ text: `📅 ${task.date} · ` });
 		const detail = sourceDetail?.(task);
-		meta.createEl('button', { text: `↳ ${task.sourceDisplayName}${detail ? ` · ${detail}` : ''}`, cls: 'mx-task-link', attr: { title: task.sourceFile } }).onclick = open;
+		const subtitle = taskSourceSubtitle(task, detail);
+		if (task.date || subtitle) {
+			const meta = body.createDiv({ cls: 'mx-task-meta' });
+			if (task.date) meta.createSpan({ text: `📅 ${task.date}${subtitle ? ' · ' : ''}` });
+			if (subtitle) meta.createEl('button', { text: `↳ ${subtitle}`, cls: 'mx-task-link', attr: { title: task.sourceFile } }).onclick = open;
+		}
 	}
 }
 export class NewEmbeddedTaskModal extends Modal {

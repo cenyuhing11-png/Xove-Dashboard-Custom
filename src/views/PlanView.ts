@@ -2,7 +2,7 @@ import { ItemView, Notice, TFile, WorkspaceLeaf } from 'obsidian';
 import type { App, ViewStateResult } from 'obsidian';
 import type Dashboard from '../main';
 import type { EmbeddedTask } from '../data/embeddedTasks';
-import { TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, groupEmbeddedForDisplay, taskDisplayMarker } from '../data/embeddedTasks';
+import { TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, groupEmbeddedForDisplay, taskDisplayMarker, taskSourceSubtitle } from '../data/embeddedTasks';
 import type { PlanWorkspaceCard, PlanWorkspaceMode, PlanCalendarMode } from '../data/planWorkspace';
 import { dateKey, localPlanSelection, readPlanWorkspace, taskCalendarSourceLabel, tasksOnDate } from '../data/planWorkspace';
 import { planInfo } from '../data/planning';
@@ -15,6 +15,7 @@ import { processes } from '../data/processes';
 import { taskSourceTypeLabel } from '../data/processContentTypes';
 import { journalCalendarEntry, journalDateFromPath } from '../data/journal';
 import type { JournalCalendarEntry } from '../data/journal';
+import { renderEmbeddedTaskCheckbox } from '../components/tasks/EmbeddedTaskCheckbox';
 
 export const PLAN_VIEW = 'xove-dashboard-custom-plan-workspace';
 
@@ -342,11 +343,11 @@ export class PlanView extends ItemView {
 
 	private renderTaskRow(parent: HTMLElement, task: EmbeddedTask): void {
 		const row = parent.createDiv({ cls: 'po-cal__task' });
-		const check = row.createSpan({ cls: `po-check${task.completed ? ' is-done' : ''}`, attr: { role: 'checkbox', 'aria-checked': String(task.completed), 'aria-label': `${task.completed ? '取消完成' : '完成'} ${task.text}` } });
-		check.addEventListener('click', event => { event.stopPropagation(); void this.plugin.embeddedTasks.complete(task, !task.completed).catch(error => new Notice(`任务更新失败：${String(error)}`)); });
+		renderEmbeddedTaskCheckbox(row, task, this.plugin.embeddedTasks);
 		const body = row.createDiv({ cls: 'mx-day-task-body' });
 		body.createSpan({ cls: 'po-cal__task-name', text: task.text });
-		body.createSpan({ cls: 'mx-day-task-source', text: `${task.sourceDisplayName} · ${this.sourceLabels.get(task.sourceFile) ?? taskCalendarSourceLabel(task)}` });
+		const subtitle = taskSourceSubtitle(task, this.sourceLabels.get(task.sourceFile) ?? taskCalendarSourceLabel(task));
+		if (subtitle) body.createSpan({ cls: 'mx-day-task-source', text: subtitle });
 		row.addEventListener('click', () => { const file = this.app.vault.getAbstractFileByPath(task.sourceFile); if (file instanceof TFile) void this.app.workspace.getLeaf('tab').openFile(file); });
 	}
 }

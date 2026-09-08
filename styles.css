@@ -1760,6 +1760,10 @@ input[type="date"].ad-modal-input { cursor: pointer; }
 .po-check { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--ad-line); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .po-check.is-done { background: var(--ad-accent); border-color: var(--ad-accent); }
 .po-check.is-done::after { content: ''; width: 6px; height: 3px; border-left: 1.5px solid #fff; border-bottom: 1.5px solid #fff; transform: rotate(-45deg) translateY(-1px); }
+input.mx-embedded-task-check { appearance: none; flex: 0 0 16px; margin: 0; padding: 0; box-shadow: none; background: transparent; border-color: var(--ad-line-s); }
+input.mx-embedded-task-check:checked { background: var(--ad-accent); border-color: var(--ad-accent); }
+input.mx-embedded-task-check:checked::after { content: ''; width: 6px; height: 3px; border-left: 1.5px solid var(--ad-on-accent, #fff); border-bottom: 1.5px solid var(--ad-on-accent, #fff); transform: rotate(-45deg) translateY(-1px); }
+input.mx-embedded-task-check:focus-visible { outline: 2px solid var(--ad-accent); outline-offset: 2px; }
 .po-prio { display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 600; font-family: var(--ad-font); }
 .po-p-high { background: rgba(239,68,68,0.12); color: var(--ad-danger); }
 .po-p-med { background: rgba(234,179,8,0.12); color: var(--ad-warn); }
