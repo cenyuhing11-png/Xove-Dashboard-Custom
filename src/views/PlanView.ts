@@ -293,16 +293,18 @@ export class PlanView extends ItemView {
 		const tasks = tasksOnDate(this.plugin.embeddedTasks.all(), dateKey(this.selectedDate));
 		detail.createDiv({ cls: 'po-cal__det-ttl', text: `${this.selectedDate.getMonth() + 1} 月 ${this.selectedDate.getDate()} 日 · ${tasks.length} 项任务` });
 		if (!tasks.length && !journal) { detail.createDiv({ cls: 'po-cal__det-empty', text: '当日暂无任务或日记' }); return; }
+		const layout = detail.createDiv({ cls: `mx-day-detail-layout${tasks.length && journal ? ' is-split' : ''}` });
 		if (tasks.length) {
+			const taskPane = layout.createDiv({ cls: 'mx-day-detail-task-pane' });
 			const groups = groupEmbeddedForDisplay(tasks);
 			for (const category of TASK_DISPLAY_CATEGORIES) {
 				if (!groups[category].length) continue;
-				const section = detail.createDiv({ cls: 'mx-day-task-section' });
+				const section = taskPane.createDiv({ cls: 'mx-day-task-section' });
 				section.createDiv({ cls: 'mx-day-task-section__title', text: TASK_DISPLAY_LABELS[category] });
 				for (const task of groups[category]) this.renderTaskRow(section, task);
 			}
 		}
-		if (journal) this.renderJournalDetail(detail, journal);
+		if (journal) this.renderJournalDetail(layout.createDiv({ cls: 'mx-day-detail-journal-pane' }), journal);
 	}
 
 	private renderCalendarJournal(parent: HTMLElement, journal: JournalCalendarEntry): void {

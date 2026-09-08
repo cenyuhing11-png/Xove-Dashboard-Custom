@@ -62,6 +62,20 @@ test('selected day keeps task groups first and journal as a separate trailing re
 	assert.equal(detail.includes("TASK_DISPLAY_LABELS['journal']"), false);
 	assert.match(detail, /!tasks\.length && !journal/);
 });
+test('selected day creates left task and right journal panes only when their content exists', () => {
+	const detail = view.match(/private renderDayDetail[\s\S]*?(?=\n\tprivate renderCalendarJournal)/)?.[0] ?? '';
+	assert.match(detail, /mx-day-detail-layout\$\{tasks\.length && journal \? ' is-split' : ''\}/);
+	assert.match(detail, /if \(tasks\.length\)[\s\S]*mx-day-detail-task-pane[\s\S]*if \(journal\)[\s\S]*mx-day-detail-journal-pane/);
+	assert.equal(detail.includes("text: '暂无日记'"), false);
+	assert.equal(detail.includes("text: '暂无任务'"), false);
+});
+test('day detail uses a responsive two-fifths three-fifths split without fixed heights', () => {
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	assert.match(css, /\.mx-day-detail-layout\.is-split\s*\{[^}]*minmax\(0, 2fr\) minmax\(0, 3fr\)/);
+	assert.match(css, /@container \(max-width: 720px\)[\s\S]*\.mx-day-detail-layout\.is-split\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+	assert.match(css, /\.mx-day-detail-layout\s*\{[^}]*align-items:\s*start/);
+	assert.doesNotMatch(css, /\.mx-day-detail-layout[^}]*height:/);
+});
 test('journal detail opens its exact source file without a scroll hack', () => {
 	assert.match(view, /getAbstractFileByPath\(journal\.path\)/);
 	assert.match(view, /mx-day-journal-open', text: '打开日记 →'/);
