@@ -2,7 +2,7 @@ import type { EmbeddedTask } from './embeddedTasks.ts';
 import { isoWeek, planInfo, readSection } from './planning.ts';
 import type { PlanFiles, PlanPeriod } from './planning.ts';
 
-export type PlanWorkspaceMode = 'board' | 'calendar';
+export type PlanWorkspaceMode = 'board' | 'calendar' | 'review';
 export type PlanCalendarMode = 'month' | 'week';
 
 export interface PlanWorkspaceSelection { year: number; month: number }

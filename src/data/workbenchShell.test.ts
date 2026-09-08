@@ -50,7 +50,7 @@ test('Home and project use identical brand/date/progress/pulse data and cover se
 	home.instance.unload();project.instance.unload();
 });
 test('Eight shared navigation labels remain in the approved order',()=>{
-	const f=fixture(),s=f.shell();assert.deepEqual(s.root.querySelectorAll('.ad-toolbar__btn').map(e=>e.textContent),['首页','计划','进程','收件箱','新建日记','新建任务','新建进程','▦更多工具']);s.instance.unload();
+	const f=fixture(),s=f.shell();assert.deepEqual(s.root.querySelectorAll('.ad-toolbar__btn').map(e=>e.textContent),['首页','时迹','进程','收件箱','新建日记','新建任务','新建进程','▦更多工具']);s.instance.unload();
 });
 test('Home, inbox and project active navigation are independent and persistent',()=>{
 	const f=fixture(),home=f.shell(),project=f.shell('all');home.instance.setActive('opportunity');

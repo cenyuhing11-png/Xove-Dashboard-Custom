@@ -21,7 +21,7 @@ export async function openPlanWorkspace(app: App): Promise<void> {
 		if (leaf.view.getViewType() !== PLAN_VIEW) await leaf.setViewState({ type: PLAN_VIEW, active: true });
 		await app.workspace.revealLeaf(leaf);
 		app.workspace.setActiveLeaf(leaf, { focus: true });
-	} catch (error) { new Notice(`无法打开计划总览：${String(error)}`); }
+	} catch (error) { new Notice(`无法打开时迹：${String(error)}`); }
 }
 
 function dayLabel(date: Date): string { return `${date.getMonth() + 1}/${date.getDate()}`; }
@@ -41,13 +41,13 @@ export class PlanView extends ItemView {
 
 	constructor(leaf: WorkspaceLeaf, private plugin: Dashboard) { super(leaf); }
 	getViewType(): string { return PLAN_VIEW; }
-	getDisplayText(): string { return '计划总览'; }
+	getDisplayText(): string { return '时迹'; }
 	getIcon(): string { return 'calendar-range'; }
 	getState() { return { selectedYear: this.selectedYear, selectedMonth: this.selectedMonth, mode: this.mode, calendarMode: this.calendarMode, selectedDate: dateKey(this.selectedDate) }; }
 	async setState(state: Record<string, unknown>, result: ViewStateResult): Promise<void> {
 		if (Number.isInteger(state.selectedYear) && Number(state.selectedYear) > 0) this.selectedYear = Number(state.selectedYear);
 		if (Number.isInteger(state.selectedMonth) && Number(state.selectedMonth) >= 1 && Number(state.selectedMonth) <= 12) this.selectedMonth = Number(state.selectedMonth);
-		if (state.mode === 'board' || state.mode === 'calendar') this.mode = state.mode;
+		if (state.mode === 'board' || state.mode === 'calendar' || state.mode === 'review') this.mode = state.mode;
 		if (state.calendarMode === 'month' || state.calendarMode === 'week') this.calendarMode = state.calendarMode;
 		if (typeof state.selectedDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(state.selectedDate)) {
 			const [year, month, day] = state.selectedDate.split('-').map(Number);
@@ -117,32 +117,27 @@ export class PlanView extends ItemView {
 		this.renderSidebar(container, snapshot?.monthly.exists ?? false);
 		const main = container.createDiv({ cls: 'po-main' });
 		if (this.mode === 'board' && snapshot) this.renderBoard(main, snapshot);
-		else this.renderCalendar(main);
+		else if (this.mode === 'calendar') this.renderCalendar(main);
+		else this.renderReview(main);
 	}
 
 	private renderSidebar(container: HTMLElement, _selectedMonthExists: boolean): void {
 		const side = container.createDiv({ cls: 'po-sidebar' });
 		const list = side.createDiv({ cls: 'po-sidebar__list' });
-		const now = localPlanSelection();
-		const currentSelected = this.selectedYear === now.year && this.selectedMonth === now.month;
-		const current = list.createDiv({ cls: `po-sidebar__item${currentSelected ? ' is-active' : ''}`, attr: { role: 'button', tabindex: '0' } });
-		current.createSpan({ cls: 'po-dot mx-plan-current-dot' });
-		current.createSpan({ text: '当前计划' });
-		const selectCurrent = () => this.setSelection(now.year, now.month, new Date().getDate());
-		current.addEventListener('click', selectCurrent);
-		current.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectCurrent(); } });
-
-		const modeTitle = list.createDiv({ cls: 'po-toolbar__label po-direction-group', text: '视图' });
-		modeTitle.setAttribute('aria-hidden', 'true');
-		for (const [mode, label] of [['board', '计划表'], ['calendar', '日历']] as const) {
+		list.createDiv({ cls: 'po-toolbar__label mx-time-trace-title', text: '时迹' });
+		for (const [mode, label] of [['board', '计划表'], ['calendar', '日历'], ['review', '日记回顾']] as const) {
 			const item = list.createDiv({ cls: `po-sidebar__item${this.mode === mode ? ' is-active' : ''}`, text: label, attr: { role: 'button', tabindex: '0' } });
 			const selectMode = () => { this.mode = mode; void this.renderPlanContent(); };
 			item.addEventListener('click', selectMode);
 			item.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectMode(); } });
 		}
+		list.createDiv({ cls: 'mx-time-trace-divider', attr: { 'aria-hidden': 'true' } });
 
-		const timeTitle = list.createDiv({ cls: 'po-toolbar__label po-direction-group', text: '时间' });
-		timeTitle.setAttribute('aria-hidden', 'true');
+		const now = localPlanSelection();
+		const current = list.createDiv({ cls: 'po-sidebar__item mx-time-trace-today', text: '今天', attr: { role: 'button', tabindex: '0' } });
+		const selectCurrent = () => this.setSelection(now.year, now.month, new Date().getDate());
+		current.addEventListener('click', selectCurrent);
+		current.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectCurrent(); } });
 		const yearBar = list.createDiv({ cls: 'mx-plan-year' });
 		const prev = yearBar.createEl('button', { cls: 'po-cal__btn', text: '‹', attr: { 'aria-label': '上一年' } });
 		yearBar.createSpan({ text: `${this.selectedYear}` });
@@ -174,7 +169,7 @@ export class PlanView extends ItemView {
 
 	private renderBoard(main: HTMLElement, snapshot: Awaited<ReturnType<typeof readPlanWorkspace>>): void {
 		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar' });
-		toolbar.createSpan({ cls: 'mx-plan-title', text: '计划总览' });
+		toolbar.createSpan({ cls: 'mx-plan-title', text: '时迹' });
 		toolbar.createSpan({ cls: 'mx-plan-context', text: `${monthTitle(this.selectedYear, this.selectedMonth)} · Q${snapshot.quarter}` });
 		const top = main.createDiv({ cls: 'po-kanban mx-plan-summary' });
 		for (const card of [snapshot.annual, snapshot.quarterly, snapshot.monthly]) {
@@ -193,6 +188,12 @@ export class PlanView extends ItemView {
 				item.addEventListener('click', () => { void this.openExisting(week.path); });
 			}
 		}
+	}
+
+	private renderReview(main: HTMLElement): void {
+		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar' });
+		toolbar.createSpan({ cls: 'mx-plan-title', text: '日记回顾' });
+		main.createDiv({ cls: 'po-empty mx-plan-empty', text: '暂无回顾内容' });
 	}
 
 	private renderCalendar(main: HTMLElement): void {

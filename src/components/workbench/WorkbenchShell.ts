@@ -373,7 +373,7 @@ export class WorkbenchShell extends Component {
 		// 仅调整工作台导航标签，保留原有页面与数据行为。
 		const navItems: Array<{ glyph: string; label: string; action: string; svg?: string }> = [
 			{ glyph: '\u2302', label: '首页', action: 'home', svg: ICON_home },
-			{ glyph: '\u25A4', label: '计划', action: 'plan', svg: ICON_calendar },
+			{ glyph: '\u25A4', label: '时迹', action: 'plan', svg: ICON_calendar },
 			{ glyph: '\u203A', label: '进程', action: 'all', svg: ICON_allProjects },
 		];
 		if (this.plugin.settings.boardEnabled) {
