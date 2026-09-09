@@ -27,7 +27,7 @@ test('narrative and stage headings share typography and the same outer-edge inse
 test('section and stage actions occupy one full-width right action rail',()=>{
 	assert.match(css,/\.mx-long-term-stages \{ padding-right: 0; padding-left: 0;/);
 	assert.match(css,/\.mx-long-term-detail-content \.mx-detail-task-head > \.mx-inline-action \{ margin-left: auto;/);
-	assert.match(css,/\.mx-long-term-stage-menu \{ margin-left: auto;/);
+	assert.match(css,/\.mx-long-term-stage-actions \{[^}]*margin-left: auto/);
 	assert.match(plan,/mx-detail-menu[\s\S]*mx-long-term-stage-toggle/);
 	assert.match(plan,/mx-detail-task-head[\s\S]*text:'＋ 添加阶段'/);
 });
@@ -68,7 +68,7 @@ test('stage content uses one 24px indent without changing the collapsed header e
 });
 test('stage hierarchy leaves the shared checkbox and current pill dimensions unchanged',()=>{
 	assert.match(css,/\.mx-embedded-task-checkbox \{[^}]*width: 16px; height: 16px/);
-	assert.match(css,/\.mx-long-term-stage > \.mx-embedded-task-checkbox \{ margin-top: 1px; \}/);
+	assert.match(css,/\.mx-long-term-stage-main > \.mx-embedded-task-checkbox \{[^}]*margin-top: 1px/);
 	assert.match(css,/\.mx-long-term-current \{[^}]*min-height: 20px[^}]*font-size: 10px/);
 });
 test('each stage keeps one bottom divider and no large collapsed height',()=>{
