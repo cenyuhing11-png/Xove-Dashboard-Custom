@@ -24,6 +24,9 @@ import { hasProcessSchedule } from '../data/processes';
 import { ConfirmActionModal, LongTermStageModal, StageProcessPickerModal } from './LongTermPlanPickerModal';
 import { renderTaskProgressPill } from './ProcessTaskProgress';
 import { ProcessTasksModal } from './ProcessTasksModal';
+import { renderProcessRow } from './ProcessRow';
+import { NarrativeDisclosure, narrativeMarkdown, updateNarrativeMarkdown } from '../data/longTermNarrative';
+import { LongTermNarrativeModal } from './LongTermNarrativeModal';
 
 export const PLAN_VIEW = 'xove-dashboard-custom-plan-workspace';
 
@@ -58,8 +61,9 @@ export class PlanWorkspaceRenderer extends Component {
 	private expandedLongTermPlanId = '';
 	private expandedLongTermStageIds = new Set<string>();
 	private quickTasks?: ProcessTasksModal;
+	private narrativeDisclosure = new NarrativeDisclosure();
 
-	constructor(public readonly app: App, private plugin: Dashboard, private navigation?: { openProcess(process: Process): void; openGantt(process: Process): void }) { super(); }
+	constructor(public readonly app: App, private plugin: Dashboard, private navigation?: { openProcess(process: Process): void; openGantt(process: Process): void; locateProcess?(process: Process): void }) { super(); }
 	getState() { return { selectedYear: this.selectedYear, selectedMonth: this.selectedMonth, mode: this.mode, calendarMode: this.calendarMode, selectedDate: dateKey(this.selectedDate), selectedLongTermPlanId: this.selectedLongTermPlanId }; }
 	async setState(state: Record<string, unknown>): Promise<void> {
 		if (Number.isInteger(state.selectedYear) && Number(state.selectedYear) > 0) this.selectedYear = Number(state.selectedYear);
@@ -246,17 +250,19 @@ export class PlanWorkspaceRenderer extends Component {
 		await assign();
 	}
 	private renderStageProcess(parent: HTMLElement, process: Process, plan: LongTermPlan, stageId: string): void {
-		const row = parent.createDiv({ cls: 'wb-entry mx-long-term-process' });
-		const name = row.createEl('button', { cls: 'mx-inline-action wb-entry__label mx-long-term-process__name', text: process.name }); name.onclick = () => this.navigation?.openProcess(process);
-		row.createSpan({ cls: 'mx-long-term-process__meta', text: `${process.category === 'learning' ? '学习' : '创作'} · ${processContentTypeLabel(process.contentType, true)} · ${process.status}` });
 		const scheduled = hasProcessSchedule({ startDate: process.startDate ?? null, endDate: process.dueDate ?? null });
-		row.createSpan({ cls: 'mx-long-term-process__date', text: scheduled ? `${compactProcessDate(process.startDate)} → ${compactProcessDate(process.dueDate)}` : '未排期' });
-		if (scheduled) { const schedule = row.createEl('button', { cls: 'mx-inline-action mx-long-term-process__schedule', text: '查看排期 →' }); schedule.onclick = () => this.navigation?.openGantt(process); }
-		if (process.taskTotal > 0) renderTaskProgressPill(row, process.name, process.sourceFile, process.taskTotal, process.taskCompleted, () => { this.quickTasks?.close(); this.quickTasks = new ProcessTasksModal(this.app, this.plugin.embeddedTasks, { name: process.name, processType: process.processType, sourceFile: process.sourceFile, category: process.category, contentType: process.contentType }, () => this.navigation?.openProcess(process)); this.quickTasks.open(); });
-		const actions = row.createEl('button', { cls: 'mx-inline-action mx-long-term-process__menu', text: '···', attr: { 'aria-label': `管理 ${process.name}` } });
-		actions.onclick = event => { const menu = new Menu(); menu.addItem(item => item.setTitle('移动阶段').setIsLabel(true)); for (const stage of plan.stages) if (stage.id !== stageId) menu.addItem(item => item.setTitle(stage.text).onClick(() => { void updateLongTermPlanMarkdown(this.app, plan, content => assignLongTermProcessToStage(content, process.sourceFile, process.name, stage.id)).then(() => this.renderPlanContent()); }));
+		renderProcessRow(parent, { key: process.sourceFile, name: process.name, layout: 'inline', open: () => this.navigation?.locateProcess?.(process), fields: [
+			{ key: 'meta', render: cell => { cell.createSpan({ text: `${process.category === 'learning' ? '学习' : '创作'} · ${processContentTypeLabel(process.contentType, true)} · ${process.status}` }); } },
+			{ key: 'date', render: cell => { cell.createSpan({ text: scheduled ? `${compactProcessDate(process.startDate)} → ${compactProcessDate(process.dueDate)}` : '未排期' }); } },
+			...(scheduled ? [{ key: 'schedule', render: (cell: HTMLElement) => { const schedule = cell.createEl('button', { cls: 'mx-inline-action', text: '查看排期 →' }); schedule.onclick = () => this.navigation?.openGantt(process); } }] : []),
+			...(process.taskTotal > 0 ? [{ key: 'progress', render: (cell: HTMLElement) => { renderTaskProgressPill(cell, process.name, process.sourceFile, process.taskTotal, process.taskCompleted, () => { this.quickTasks?.close(); this.quickTasks = new ProcessTasksModal(this.app, this.plugin.embeddedTasks, { name: process.name, processType: process.processType, sourceFile: process.sourceFile, category: process.category, contentType: process.contentType }, () => this.navigation?.openProcess(process)); this.quickTasks.open(); }); } }] : []),
+			{ key: 'menu', render: cell => {
+		const actions = cell.createEl('button', { cls: 'mx-inline-action mx-detail-menu', text: '···', attr: { 'aria-label': `管理 ${process.name}` } });
+		actions.onclick = event => { const menu = new Menu(); menu.addItem(item => item.setTitle('打开详情').onClick(() => this.navigation?.openProcess(process))); menu.addSeparator(); menu.addItem(item => item.setTitle('移动阶段').setIsLabel(true)); for (const stage of plan.stages) if (stage.id !== stageId) menu.addItem(item => item.setTitle(stage.text).onClick(() => { void updateLongTermPlanMarkdown(this.app, plan, content => assignLongTermProcessToStage(content, process.sourceFile, process.name, stage.id)).then(() => this.renderPlanContent()); }));
 			menu.addSeparator(); menu.addItem(item => item.setTitle('移出阶段').onClick(() => { void updateLongTermPlanMarkdown(this.app, plan, content => removeLongTermProcessFromStages(content, process.sourceFile)).then(() => this.renderPlanContent()); }));
 			menu.addItem(item => item.setTitle('取消长期计划关联').onClick(() => { void updateLongTermPlanMarkdown(this.app, plan, content => removeLongTermProcessFromStages(content, process.sourceFile)).then(() => setProcessLongTermPlan(this.app, process)).then(() => this.renderPlanContent()); })); menu.showAtMouseEvent(event); };
+			} },
+		] });
 	}
 	private renderUnassignedProcess(parent: HTMLElement, process: Process, plan: LongTermPlan): void {
 		const row = parent.createDiv({ cls: 'wb-entry mx-long-term-process' }); const body = row.createDiv({ cls: 'mx-long-term-process__body' }); const name = body.createEl('button', { cls: 'mx-inline-action wb-entry__label', text: process.name }); name.onclick = () => this.navigation?.openProcess(process); body.createDiv({ cls: 'ad-modal-hint', text: `${process.category === 'learning' ? '学习' : '创作'} · ${processContentTypeLabel(process.contentType, true)} · ${process.status} · ${process.taskCompleted} / ${process.taskTotal}` });
@@ -278,9 +284,23 @@ export class PlanWorkspaceRenderer extends Component {
 		const progress = longTermStageProgress(plan.stages); summary.createEl('p', { cls: 'ad-modal-hint', text: `${plan.startMonth.replace('-','.')} — ${plan.endMonth.replace('-','.')} · 预计 ${longTermMonths(plan.startMonth,plan.endMonth)} 个月 · ${plan.status} · 阶段进度 ${progress.completed} / ${progress.total}` });
 		const directions=[...new Set(mapped.map(process=>process.direction).filter(Boolean))]; if(directions.length) summary.createEl('p',{cls:'ad-modal-hint',text:`涉及：${directions.join(' · ')}`});
 		const narrative = main.createDiv({ cls: 'wb-section mx-long-term-narrative' });
+		this.narrativeDisclosure.selectPlan(plan.id);
 		for (const [title, value] of [['为什么做', plan.why || plan.goal], ['希望达到的状态', plan.desiredState], ['完成标准', plan.completionCriteria]] as const) {
-			const section = narrative.createDiv({ cls: 'mx-long-term-narrative__section' }); section.createEl('h2', { cls: 'ad-modal-title', text: title });
-			this.renderLongTermMarkdown(section, value, plan.path, '尚未填写');
+			const section = narrative.createDiv({ cls: 'mx-long-term-narrative__section' });
+			const header = section.createDiv({ cls: 'mx-long-term-stage' });
+			const label = header.createEl('button', { cls: 'mx-inline-action mx-narrative-title', text: title });
+			const menuButton = header.createEl('button', { cls: 'mx-inline-action mx-detail-menu', text: '···', attr: { 'aria-label': `管理${title}` } });
+			const toggle = header.createEl('button', { cls: 'mx-inline-action mx-long-term-stage-toggle', attr: { 'aria-label': `展开或收起${title}` } });
+			const body = section.createDiv({ cls: 'mx-narrative-body' });
+			const sync = () => { const expanded = this.narrativeDisclosure.isOpen(title); body.hidden = !expanded; toggle.textContent = expanded ? '⌄' : '›'; toggle.setAttribute('aria-expanded', String(expanded)); label.setAttribute('aria-expanded', String(expanded)); };
+			label.onclick = toggle.onclick = () => { this.narrativeDisclosure.toggle(title); sync(); }; sync();
+			const file = this.app.vault.getAbstractFileByPath(plan.path);
+			if (file instanceof TFile) void this.app.vault.cachedRead(file).then(raw => { if (body.isConnected) this.renderLongTermMarkdown(body, narrativeMarkdown(raw, title) || value, plan.path); });
+			menuButton.onclick = event => { const menu = new Menu(); menu.addItem(item => item.setTitle('编辑内容').onClick(async () => {
+				if (!(file instanceof TFile)) return;
+				const original = narrativeMarkdown(await this.app.vault.read(file), title);
+				new LongTermNarrativeModal(this.app, title, original, async next => { await updateLongTermPlanMarkdown(this.app, plan, raw => updateNarrativeMarkdown(raw, title, next, original)); await this.renderPlanContent(); }).open();
+			})); menu.showAtMouseEvent(event); };
 		}
 		const stages=main.createDiv({cls:'ad-update-block mx-long-term-stages'}); const stageHead=stages.createDiv({cls:'ad-card__head mx-detail-task-head'}); stageHead.createEl('h2',{cls:'ad-modal-title',text:'阶段推进'}); stageHead.createEl('button',{cls:'mx-inline-action',text:'＋ 添加阶段'}).onclick=()=>new LongTermStageModal(this.app,async(name,note)=>{const stageId=crypto.randomUUID();await updateLongTermPlanMarkdown(this.app,plan,content=>updateLongTermStage(appendLongTermStage(content,name,stageId),stageId,name,note));await this.renderPlanContent();}).open();
 		if(!plan.stages.length) stages.createDiv({cls:'po-empty mx-plan-empty',text:'尚未添加阶段'});

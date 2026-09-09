@@ -251,6 +251,7 @@ export class DashboardView extends ItemView {
 		this.planRenderer = new PlanWorkspaceRenderer(this.app, plugin, {
 			openProcess: process => { void openProcess(this.app, process); },
 			openGantt: process => { void this.openProcessGantt(process.sourceFile); },
+			locateProcess: async process => { await this.setSection('process'); await this.processBoard?.locateProcess(process.sourceFile); },
 		});
 	}
 
