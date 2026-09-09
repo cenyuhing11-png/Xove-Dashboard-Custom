@@ -1939,7 +1939,7 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-long-term-stage-details { min-width: 0; padding: 6px 3px 4px 27px; }
 .mx-long-term-stage-details[hidden] { display: none; }
 .mx-long-term-stage-processes { min-width: 0; padding-top: 9px; border-top: 1px solid var(--ad-hair); }
-.mx-long-term-process-head { display: flex; min-height: 25px; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 3px; }
+.mx-long-term-process-head { display: flex; min-height: 22px; align-items: center; gap: 8px; margin-bottom: 2px; }
 .mx-long-term-process-head .ad-modal-label { margin: 0; }
 .mx-long-term-stage { position: relative; display: flex; min-width: 0; align-items: center; gap: 7px; padding: 3px; color: var(--ad-text); font-size: 12px; line-height: 1.45; }
 .mx-long-term-stage > .mx-embedded-task-checkbox { margin-top: 1px; }
@@ -1954,12 +1954,19 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-long-term-stage-toggle::after { display: none; content: none; }
 .mx-long-term-stage-toggle { font-size: 15px; line-height: 1; }
 .mx-long-term-stage-meta { padding: 0 3px 3px 27px; color: var(--ad-text-dim); font-size: 10px; line-height: 1.4; }
-.mx-long-term-stage-note { padding-bottom: 9px; }
-.mx-long-term-stage-note > .ad-modal-label { margin: 0 0 5px; }
-.mx-long-term-stage-empty { padding: 6px 2px; }
-.mx-long-term-process { gap: 8px; padding: 6px 2px; }
-.mx-long-term-process__body { flex: 1; min-width: 0; }
-.mx-long-term-process__body .ad-modal-hint { margin: 1px 0; }
+.mx-long-term-stage-note { padding: 1px 0 9px; }
+.mx-long-term-process { min-height: 0; gap: 8px; padding: 5px 2px; border: 0; border-bottom: 1px solid var(--ad-hair); border-radius: 0; background: transparent; box-shadow: none; }
+.mx-long-term-process:hover { background: var(--ad-h1); }
+.mx-long-term-process__name { flex: 1 1 150px; min-width: 90px; padding: 2px 0; color: var(--ad-text); font-weight: 600; text-align: left; }
+.mx-long-term-process__meta,
+.mx-long-term-process__date { flex: 0 1 auto; min-width: 0; overflow: hidden; color: var(--ad-text-dim); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.mx-long-term-process__schedule,
+.mx-long-term-process .po-task-progress,
+.mx-long-term-process__menu { flex: 0 0 auto; }
+.mx-long-term-process__menu { width: auto; min-width: 0; min-height: 0; padding: 2px 4px; background: transparent; box-shadow: none; }
+.mx-long-term-process__menu::before,
+.mx-long-term-process__menu::after { display: none; content: none; }
+.mx-long-term-process-add { margin-top: 3px; padding-left: 2px; }
 .mx-long-term-unassigned { margin-top: 10px; }
 .mx-process-long-term-field { margin: 7px 0; background: transparent; border-color: var(--ad-line); }
 .mx-process-long-term-field > :last-child { margin-left: auto; }
@@ -2035,6 +2042,13 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
   .mx-plan-calendar-days { min-width: 620px; }
   .mx-plan-workspace .po-cal { overflow-x: auto; }
   .mx-long-term-stage-details { padding-left: 3px; }
+  .mx-long-term-process { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; grid-template-areas: "name meta meta meta" "date schedule progress menu"; gap: 3px 7px; }
+  .mx-long-term-process__name { grid-area: name; width: 100%; min-width: 0; }
+  .mx-long-term-process__meta { grid-area: meta; max-width: 100%; text-align: right; }
+  .mx-long-term-process__date { grid-area: date; }
+  .mx-long-term-process__schedule { grid-area: schedule; }
+  .mx-long-term-process .po-task-progress { grid-area: progress; }
+  .mx-long-term-process__menu { grid-area: menu; }
 }
 
 /* Gantt resized (after drag) */
