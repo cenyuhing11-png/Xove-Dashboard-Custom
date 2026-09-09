@@ -29,12 +29,16 @@ export class StageProcessPickerModal extends Modal {
 }
 
 export class LongTermStageModal extends Modal {
-	constructor(app: App, private save: (name: string) => void | Promise<void>) { super(app); }
+	constructor(app: App, private save: (name: string, note: string) => void | Promise<void>, private stage?: { name: string; note: string }) { super(app); }
 	onOpen(): void {
-		const el = beginListModal(this, '添加阶段'); el.createEl('label', { cls: 'ad-modal-label', text: '阶段名称' });
+		const el = beginListModal(this, this.stage ? '编辑阶段' : '添加阶段'); el.createEl('label', { cls: 'ad-modal-label', text: '阶段名称' });
 		const input = el.createEl('input', { cls: 'ad-modal-input', attr: { type: 'text', placeholder: '例如：基础准备' } });
+		input.value = this.stage?.name ?? '';
+		el.createEl('label', { cls: 'ad-modal-label', text: '阶段说明' });
+		const note = el.createEl('textarea', { cls: 'ad-modal-input ad-modal-textarea', attr: { placeholder: '可使用段落、列表、粗体和简单链接' } });
+		note.value = this.stage?.note ?? '';
 		const footer = el.createDiv({ cls: 'ad-modal-btns' }); footer.createEl('button', { cls: 'ad-modal-btn', text: '取消' }).onclick = () => this.close();
-		footer.createEl('button', { cls: 'ad-modal-btn ad-modal-btn--primary', text: '添加' }).onclick = () => { if (!input.value.trim()) return; void Promise.resolve(this.save(input.value.trim())).then(() => this.close()); };
+		footer.createEl('button', { cls: 'ad-modal-btn ad-modal-btn--primary', text: this.stage ? '保存' : '添加' }).onclick = () => { if (!input.value.trim()) return; void Promise.resolve(this.save(input.value.trim(), note.value.trim())).then(() => this.close()); };
 	}
 	onClose(): void { closeListModal(this); }
 }
