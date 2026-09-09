@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dateKey, localPlanSelection, monthIsoWeeks, quarterForMonth, readPlanWorkspace, selectionDate, taskCalendarCategory, taskCalendarSourceLabel, tasksInMonth, tasksOnDate } from './planWorkspace.ts';
+import { dateKey, incompleteTaskCountOnDate, localPlanSelection, monthIsoWeeks, quarterForMonth, readPlanWorkspace, selectionDate, taskCalendarCategory, taskCalendarSourceLabel, tasksInMonth, tasksOnDate } from './planWorkspace.ts';
 import { planInfo } from './planning.ts';
 import type { EmbeddedTask, EmbeddedSourceType } from './embeddedTasks.ts';
 
@@ -43,6 +43,10 @@ test('week range always spans six calendar days', () => { for (const week of mon
 
 test('tasks on date excludes undated and other dates', () => assert.equal(tasksOnDate([task('daily'), task('daily', '2026-09-07'), task('daily', '2026-09-08')], '2026-09-07').length, 1));
 test('tasks on date sorts incomplete before complete', () => assert.deepEqual(tasksOnDate([task('daily', '2026-09-07', true), task('daily', '2026-09-07')], '2026-09-07').map(value => value.completed), [false, true]));
+test('one incomplete task produces a count of one', () => assert.equal(incompleteTaskCountOnDate([task('daily', '2026-09-07')], '2026-09-07'), 1));
+test('completed tasks never enter the incomplete count', () => assert.equal(incompleteTaskCountOnDate([task('daily', '2026-09-07', true)], '2026-09-07'), 0));
+test('learning creation project and daily tasks all enter the incomplete count', () => assert.equal(incompleteTaskCountOnDate(['learning', 'creation', 'project', 'daily'].map(source => task(source as EmbeddedSourceType, '2026-09-07')), '2026-09-07'), 4));
+test('incomplete count stays on its original past date', () => { const values=[task('daily','2026-09-07'),task('daily','2026-09-08')];assert.equal(incompleteTaskCountOnDate(values,'2026-09-07'),1);assert.equal(incompleteTaskCountOnDate(values,'2026-09-09'),0); });
 test('tasks in month excludes undated tasks', () => assert.equal(tasksInMonth([task('daily'), task('daily', '2026-09-01')], 2026, 9).length, 1));
 test('tasks in month does not prefix-match another month', () => assert.equal(tasksInMonth([task('daily', '2026-09-01'), task('daily', '2026-10-01')], 2026, 9).length, 1));
 for (const [source, category] of [['learning', 'learning'], ['creation', 'creation'], ['project', 'creation'], ['daily', 'daily']] as const) test(`${source} aggregates as ${category}`, () => assert.equal(taskCalendarCategory(task(source)), category));

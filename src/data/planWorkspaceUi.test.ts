@@ -34,12 +34,20 @@ test('calendar checkboxes write through the shared Embedded Task checkbox', () =
 	assert.match(view, /renderEmbeddedTaskCheckbox\(row, task, this\.plugin\.embeddedTasks\)/);
 	assert.match(embeddedTaskCheckbox, /store\.complete\(task, check\.checked\)/);
 });
-test('month calendar cells render only journals and never task chips or task overflow', () => {
+test('month calendar cells render journals plus an incomplete count but never task titles or task overflow', () => {
 	const month = view.match(/private renderCalendarMonth[\s\S]*?(?=\n\tprivate renderCalendarWeek)/)?.[0] ?? '';
 	assert.ok(month);
 	assert.match(month, /renderCalendarJournal\(body, journal, 'month'\)/);
-	assert.doesNotMatch(month, /tasksOnDate|renderCalendarChip|mx-calendar-task|po-cal__day-more|text: `\+\$\{hidden\}`/);
+	assert.match(month, /incompleteTaskCountOnDate\(tasks, key\)/);
+	assert.match(month, /incompleteCount > 0[\s\S]*mx-plan-calendar-incomplete[\s\S]*`☐ \$\{incompleteCount\}`/);
+	assert.doesNotMatch(month, /tasksOnDate|renderCalendarChip|mx-calendar-task|po-cal__day-more|text: `\+\$\{hidden\}`|task\.text/);
 	assert.equal(month.includes('TASK_DISPLAY_LABELS['), false);
+});
+test('month incomplete cue stays bottom-right, muted, noninteractive and reserves body space', () => {
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	assert.match(css, /\.mx-plan-calendar-incomplete \{[^}]*position: absolute[^}]*right: 7px[^}]*bottom: 5px[^}]*color: var\(--ad-text-dim\)[^}]*font-size: 10px[^}]*pointer-events: none/);
+	assert.match(css, /\.po-cal__day\.has-incomplete-tasks \.mx-plan-calendar-day-body \{[^}]*padding-bottom: 15px/);
+	assert.doesNotMatch(css, /\.mx-plan-calendar-incomplete \{[^}]*(?:background|border-radius|accent)/);
 });
 test('week calendar keeps journals, every task chip and existing markers', () => {
 	const week = view.match(/private renderCalendarWeek[\s\S]*?(?=\n\tprivate renderDayDetail)/)?.[0] ?? '';
@@ -69,6 +77,25 @@ test('month selector remains three columns at every viewport width', () => {
 	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
 	assert.match(css, /\.mx-plan-months\s*\{[^}]*repeat\(3,/); assert.equal(css.includes('.mx-plan-months { grid-template-columns: repeat(6'), false);
 	assert.match(css, /@container \(max-width: 720px\)[\s\S]*\.mx-plan-container/);
+});
+test('week cards use one non-wrapping flex strip that fills wide space and scrolls when narrow', () => {
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	const strip = css.match(/\.mx-plan-weeks \{([^}]+)\}/)?.[1] ?? '';
+	const card = css.match(/\.mx-plan-weeks \.po-kanban__col \{([^}]+)\}/)?.[1] ?? '';
+	assert.match(strip, /flex-wrap: nowrap/);
+	assert.match(strip, /overflow-x: auto/);
+	assert.match(card, /flex: 1 0 180px/);
+	assert.match(card, /min-width: 180px/);
+});
+test('five-week and six-week boards share the same natural flex-fill renderer', () => {
+	const board = view.match(/private renderBoard[\s\S]*?(?=\n\tprivate renderReview)/)?.[0] ?? '';
+	assert.match(board, /for \(const week of snapshot\.weeks\)/);
+	assert.doesNotMatch(board, /weeks\.length\s*===\s*[56]|grid-template-columns|flexBasis/);
+});
+test('annual quarter and month cards keep their established three-column summary', () => {
+	const board = view.match(/private renderBoard[\s\S]*?(?=\n\tprivate renderReview)/)?.[0] ?? '';
+	assert.match(board, /for \(const card of \[snapshot\.annual, snapshot\.quarterly, snapshot\.monthly\]\)/);
+	assert.match(board, /mx-plan-summary/);
 });
 test('week board has no redundant section heading or quarter caption', () => { assert.equal(view.includes('本月周计划'), false); assert.equal(view.includes('当前选择 · Q'), false); });
 test('sidebar removes its duplicate title and exposes four settled time-trace view names', () => {
@@ -233,7 +260,7 @@ test('daily subtitles are absent in journal Reading, journal Live Preview and sh
 	assert.match(journalSummary, /renderJournalTaskSummary/);
 	assert.match(journalTaskLivePreview, /renderJournalTaskSummary/);
 	assert.match(view, /private renderTaskRow[\s\S]*taskSourceSubtitle\(task,[\s\S]*if \(subtitle\) body\.createSpan/);
-	assert.match(view, /if \(this\.calendarMode === 'month'\) this\.renderCalendarMonth\(root, journals\); else this\.renderCalendarWeek\(root, journals\);[\s\S]*this\.renderDayDetail\(root,/);
+	assert.match(view, /if \(this\.calendarMode === 'month'\) this\.renderCalendarMonth\(root, journals, tasks\); else this\.renderCalendarWeek\(root, journals\);[\s\S]*this\.renderDayDetail\(root,/);
 });
 test('home and all-task lists share the same daily-no-subtitle helper without hiding useful sources', () => {
 	assert.match(embeddedTaskModal, /taskSourceSubtitle\(task, detail\)/);

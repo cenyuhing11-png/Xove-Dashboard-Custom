@@ -85,6 +85,10 @@ export function tasksOnDate(tasks: EmbeddedTask[], date: string): EmbeddedTask[]
 	return tasks.filter(task => task.date === date).sort((a, b) => Number(a.completed) - Number(b.completed) || a.sourceFile.localeCompare(b.sourceFile, 'zh-CN') || a.text.localeCompare(b.text, 'zh-CN'));
 }
 
+export function incompleteTaskCountOnDate(tasks: EmbeddedTask[], date: string): number {
+	return tasks.reduce((count, task) => count + Number(task.date === date && !task.completed), 0);
+}
+
 export function tasksInMonth(tasks: EmbeddedTask[], year: number, month: number): EmbeddedTask[] {
 	const prefix = `${year}-${String(month).padStart(2, '0')}-`;
 	return tasks.filter(task => task.date?.startsWith(prefix));

@@ -48,10 +48,28 @@ test('stage bodies render no process heading count or empty-state label',()=>{
 	assert.ok(pane>=0&&pane<rows&&rows<add);
 });
 test('expanded stage note process rows and add action share the stage content edge',()=>{
-	assert.match(css,/\.mx-long-term-stage-details \{[^}]*padding: 2px 12px 4px/);
+	assert.match(css,/\.mx-long-term-stage-details \{[^}]*padding: 2px 12px 4px 36px/);
 	assert.doesNotMatch(css,/\.mx-long-term-stage-details \{[^}]*27px/);
 	assert.match(css,/\.mx-long-term-stage-processes > \.mx-process-row--inline \{ padding-left: 0;/);
 	assert.match(css,/\.mx-long-term-process-add \{[^}]*padding: 2px 0/);
+});
+test('stage name is a stronger heading while its number remains secondary',()=>{
+	assert.match(plan,/mx-long-term-stage__number',text:String\(stage\.index\+1\)\.padStart\(2,'0'\)/);
+	assert.match(plan,/mx-long-term-stage__title',text:stage\.text/);
+	assert.match(css,/\.mx-long-term-stage__number \{[^}]*color: var\(--ad-text-dim\)[^}]*font-size: 11px[^}]*font-weight: 500/);
+	assert.match(css,/\.mx-long-term-stage__title \{[^}]*font-size: 15px[^}]*font-weight: 650[^}]*line-height: 1\.35/);
+});
+test('stage content uses one 24px indent without changing the collapsed header edge',()=>{
+	assert.match(css,/\.mx-long-term-stage-row > \.mx-long-term-stage \{ padding: 2px 12px;/);
+	assert.match(css,/\.mx-long-term-stage-details \{[^}]*padding: 2px 12px 4px 36px/);
+	assert.doesNotMatch(css,/\.mx-long-term-stage-note \{[^}]*(?:margin-left|padding-left)/);
+	assert.match(css,/\.mx-long-term-stage-processes > \.mx-process-row--inline \{ padding-left: 0;/);
+	assert.doesNotMatch(css,/\.mx-long-term-process-add \{[^}]*(?:margin-left|padding-left)/);
+});
+test('stage hierarchy leaves the shared checkbox and current pill dimensions unchanged',()=>{
+	assert.match(css,/\.mx-embedded-task-checkbox \{[^}]*width: 16px; height: 16px/);
+	assert.match(css,/\.mx-long-term-stage > \.mx-embedded-task-checkbox \{ margin-top: 1px; \}/);
+	assert.match(css,/\.mx-long-term-current \{[^}]*min-height: 20px[^}]*font-size: 10px/);
 });
 test('each stage keeps one bottom divider and no large collapsed height',()=>{
 	const stage=css.match(/\.mx-long-term-stage-row \{([^}]+)\}/)![1]!;

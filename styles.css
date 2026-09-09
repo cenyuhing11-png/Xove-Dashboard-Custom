@@ -1921,8 +1921,8 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-plan-context { margin-left: auto; color: var(--ad-text-dim); font-size: 11px; }
 .mx-plan-title { color: var(--ad-text); font-size: 12px; font-weight: 600; }
 .mx-plan-summary { flex: 1 1 0; min-height: 220px; padding-bottom: 5px; }
-.mx-plan-weeks { flex: 2 1 0; min-height: 300px; padding-top: 5px; border-top: 1px solid var(--ad-line); }
-.mx-plan-weeks .po-kanban__col { flex: 0 0 210px; }
+.mx-plan-weeks { flex: 2 1 0; flex-wrap: nowrap; min-height: 300px; padding-top: 5px; overflow-x: auto; border-top: 1px solid var(--ad-line); }
+.mx-plan-weeks .po-kanban__col { flex: 1 0 180px; min-width: 180px; }
 .mx-plan-empty { min-height: 74px; padding: 18px 8px; text-align: center; }
 .mx-long-term-list { display: flex; flex-direction: column; gap: 5px; padding: 10px; }
 .mx-long-term-row__body { min-width: 0; flex: 1; }
@@ -1948,12 +1948,13 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-long-term-stages { padding-right: 0; padding-left: 0; }
 .mx-long-term-stage-row { min-width: 0; padding: 4px 0; border-bottom: 1px solid var(--background-modifier-border); }
 .mx-long-term-stage-row > .mx-long-term-stage { padding: 2px 12px; }
-.mx-long-term-stage-details { min-width: 0; padding: 2px 12px 4px; }
+.mx-long-term-stage-details { min-width: 0; padding: 2px 12px 4px 36px; }
 .mx-long-term-stage-details[hidden] { display: none; }
 .mx-long-term-stage-processes { max-width: 1080px; min-width: 0; padding-top: 0; box-sizing: border-box; }
 .mx-long-term-stage { position: relative; display: flex; min-width: 0; align-items: center; gap: 7px; padding: 3px; color: var(--ad-text); font-size: 12px; line-height: 1.45; }
 .mx-long-term-stage > .mx-embedded-task-checkbox { margin-top: 1px; }
-.mx-long-term-stage__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-long-term-stage__number { flex: 0 0 auto; color: var(--ad-text-dim); font-family: var(--ad-font-mono); font-size: 11px; font-weight: 500; line-height: 1.35; }
+.mx-long-term-stage__title { min-width: 0; overflow: hidden; color: var(--ad-text); font-size: 15px; font-weight: 650; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .mx-long-term-current { flex: 0 0 auto; min-height: 20px; padding: 2px 7px; color: var(--ad-text-mute); font-size: 10px; pointer-events: none; }
 .mx-long-term-stage-menu { margin-left: auto; }
 .mx-long-term-stage-menu,
@@ -2006,6 +2007,8 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-process-long-term-link:hover { color: var(--ad-text); text-decoration: underline; }
 .mx-plan-calendar-days { grid-auto-rows: minmax(72px, 1fr); }
 .mx-plan-calendar-day-body { display: flex; flex: 1; min-height: 0; flex-direction: column; }
+.po-cal__day.has-incomplete-tasks .mx-plan-calendar-day-body { padding-bottom: 15px; box-sizing: border-box; }
+.mx-plan-calendar-incomplete { position: absolute; right: 7px; bottom: 5px; color: var(--ad-text-dim); font-size: 10px; font-weight: 500; line-height: 1; pointer-events: none; }
 .mx-calendar-task-marker { flex: 0 0 auto; padding: 0 3px; border-radius: 3px; background: var(--ad-s2); color: var(--ad-text-mute); font-size: 9px; font-weight: 600; line-height: 13px; }
 .mx-calendar-task-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-calendar-task-chip { display: flex; align-items: center; gap: 4px; }

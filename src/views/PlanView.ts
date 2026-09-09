@@ -4,7 +4,7 @@ import type Dashboard from '../main';
 import type { EmbeddedTask } from '../data/embeddedTasks';
 import { TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, groupEmbeddedForDisplay, taskDisplayMarker, taskSourceSubtitle } from '../data/embeddedTasks';
 import type { PlanWorkspaceCard, PlanWorkspaceMode, PlanCalendarMode } from '../data/planWorkspace';
-import { dateKey, localPlanSelection, readPlanWorkspace, taskCalendarSourceLabel, tasksOnDate } from '../data/planWorkspace';
+import { dateKey, incompleteTaskCountOnDate, localPlanSelection, readPlanWorkspace, taskCalendarSourceLabel, tasksOnDate } from '../data/planWorkspace';
 import { planInfo } from '../data/planning';
 import { WorkbenchShell } from '../components/workbench/WorkbenchShell';
 import { renderLifeCompass } from '../components/workbench/LifeCompass';
@@ -310,7 +310,7 @@ export class PlanWorkspaceRenderer extends Component {
 		if(this.expandedLongTermPlanId!==plan.id){this.expandedLongTermPlanId=plan.id;this.expandedLongTermStageIds.clear();if(currentStageId)this.expandedLongTermStageIds.add(currentStageId);}
 		for(const stage of plan.stages){
 			const refs=stage.processRefs.map(ref=>this.processForRef(allProcesses,ref)).filter((process):process is Process=>!!process&&process.longTermPlanId===plan.id);for(const process of refs)assigned.add(normalizeLongTermProcessRef(process.sourceFile));
-			const expanded=this.expandedLongTermStageIds.has(stage.id);const row=stages.createDiv({cls:`mx-long-term-stage-row${expanded?' is-expanded':''}`});const title=row.createDiv({cls:'mx-long-term-stage'});const control=title.createEl('label',{cls:'mx-embedded-task-checkbox'});const check=control.createEl('input',{cls:'mx-embedded-task-check',attr:{type:'checkbox','aria-label':`${stage.completed?'取消完成':'完成'} ${stage.text}`}});check.checked=stage.completed;control.createSpan({cls:'po-check mx-embedded-task-check-visual',attr:{'aria-hidden':'true'}});title.createSpan({cls:'mx-long-term-stage__title',text:`${String(stage.index+1).padStart(2,'0')}  ${stage.text}`});if(stage.id===currentStageId)title.createSpan({cls:'po-chip mx-long-term-current',text:'当前'});check.onchange=()=>{check.disabled=true;void updateLongTermPlanMarkdown(this.app,plan,content=>toggleLongTermStage(content,stage.id,check.checked)).catch(error=>{check.checked=stage.completed;new Notice(String(error));}).finally(()=>{check.disabled=false;});};
+			const expanded=this.expandedLongTermStageIds.has(stage.id);const row=stages.createDiv({cls:`mx-long-term-stage-row${expanded?' is-expanded':''}`});const title=row.createDiv({cls:'mx-long-term-stage'});const control=title.createEl('label',{cls:'mx-embedded-task-checkbox'});const check=control.createEl('input',{cls:'mx-embedded-task-check',attr:{type:'checkbox','aria-label':`${stage.completed?'取消完成':'完成'} ${stage.text}`}});check.checked=stage.completed;control.createSpan({cls:'po-check mx-embedded-task-check-visual',attr:{'aria-hidden':'true'}});title.createSpan({cls:'mx-long-term-stage__number',text:String(stage.index+1).padStart(2,'0')});title.createSpan({cls:'mx-long-term-stage__title',text:stage.text});if(stage.id===currentStageId)title.createSpan({cls:'po-chip mx-long-term-current',text:'当前'});check.onchange=()=>{check.disabled=true;void updateLongTermPlanMarkdown(this.app,plan,content=>toggleLongTermStage(content,stage.id,check.checked)).catch(error=>{check.checked=stage.completed;new Notice(String(error));}).finally(()=>{check.disabled=false;});};
 			const stageMenu=title.createEl('button',{cls:'mx-inline-action mx-long-term-stage-menu',text:'···',attr:{'aria-label':`管理阶段 ${stage.text}`}});stageMenu.onclick=event=>{const menu=new Menu();menu.addItem(item=>item.setTitle('编辑阶段').onClick(()=>new LongTermStageModal(this.app,async(name,note)=>{await updateLongTermPlanMarkdown(this.app,plan,content=>updateLongTermStage(content,stage.id,name,note));await this.renderPlanContent();},{name:stage.text,note:stage.note}).open()));menu.addSeparator();menu.addItem(item=>item.setTitle('调整顺序').setIsLabel(true));if(stage.index>0)menu.addItem(item=>item.setTitle('上移').onClick(()=>{void updateLongTermPlanMarkdown(this.app,plan,content=>moveLongTermStage(content,stage.id,-1)).then(()=>this.renderPlanContent());}));if(stage.index<plan.stages.length-1)menu.addItem(item=>item.setTitle('下移').onClick(()=>{void updateLongTermPlanMarkdown(this.app,plan,content=>moveLongTermStage(content,stage.id,1)).then(()=>this.renderPlanContent());}));menu.addSeparator();menu.addItem(item=>item.setTitle('删除阶段').setWarning(true).onClick(()=>{const remove=async()=>{await updateLongTermPlanMarkdown(this.app,plan,content=>deleteLongTermStage(content,stage.id));await this.renderPlanContent();};if(stage.processRefs.length)new ConfirmActionModal(this.app,'删除阶段',`该阶段包含 ${stage.processRefs.length} 个关联进程。删除后这些进程将移到“未分配”。`,'删除并移到未分配',remove).open();else void remove();}));menu.showAtMouseEvent(event);};
 			const toggle=title.createEl('button',{cls:'mx-inline-action mx-long-term-stage-toggle',text:expanded?'⌄':'›',attr:{'aria-label':`${expanded?'收起':'展开'}阶段 ${stage.text}`,'aria-expanded':String(expanded)}});
 			const details=row.createDiv({cls:'mx-long-term-stage-details'});details.hidden=!expanded;
@@ -352,7 +352,7 @@ export class PlanWorkspaceRenderer extends Component {
 		const today = nav.createEl('button', { cls: 'po-cal__btn', text: '今天' });
 		const next = nav.createEl('button', { cls: 'po-cal__btn', text: '›' });
 		prev.addEventListener('click', () => this.moveCalendar(-1)); today.addEventListener('click', () => { const n = new Date(); this.setSelection(n.getFullYear(), n.getMonth() + 1, n.getDate()); }); next.addEventListener('click', () => this.moveCalendar(1));
-		if (this.calendarMode === 'month') this.renderCalendarMonth(root, journals); else this.renderCalendarWeek(root, journals);
+		if (this.calendarMode === 'month') this.renderCalendarMonth(root, journals, tasks); else this.renderCalendarWeek(root, journals);
 		this.renderDayDetail(root, journals.get(dateKey(this.selectedDate)));
 	}
 
@@ -370,7 +370,7 @@ export class PlanWorkspaceRenderer extends Component {
 	}
 	private weekTitle(): string { const dates = this.weekDates(); return `${dayLabel(dates[0]!)}–${dayLabel(dates[6]!)}`; }
 
-	private renderCalendarMonth(root: HTMLElement, journals: Map<string, JournalCalendarEntry>): void {
+	private renderCalendarMonth(root: HTMLElement, journals: Map<string, JournalCalendarEntry>, tasks: EmbeddedTask[]): void {
 		const weekdays = root.createDiv({ cls: 'po-cal__weekdays' });
 		for (const name of ['一', '二', '三', '四', '五', '六', '日']) weekdays.createSpan({ text: name });
 		const days = root.createDiv({ cls: 'po-cal__days mx-plan-calendar-days' });
@@ -379,15 +379,17 @@ export class PlanWorkspaceRenderer extends Component {
 		const today = new Date();
 		for (let index = 0; index < 42; index++) {
 			const date = new Date(cursor); date.setDate(cursor.getDate() + index);
-			const key = dateKey(date); const journal = journals.get(key);
+			const key = dateKey(date); const journal = journals.get(key); const incompleteCount = incompleteTaskCountOnDate(tasks, key);
 			let cls = 'po-cal__day';
 			if (date.getMonth() !== this.selectedMonth - 1) cls += ' is-out';
 			if (date.getDay() === 0 || date.getDay() === 6) cls += ' is-weekend';
 			if (sameDay(date, today)) cls += ' is-today';
 			if (sameDay(date, this.selectedDate)) cls += ' is-sel';
+			if (incompleteCount > 0) cls += ' has-incomplete-tasks';
 			const day = days.createDiv({ cls }); day.createSpan({ cls: `po-cal__day-num${sameDay(date, today) ? ' is-today' : ''}`, text: String(date.getDate()) });
 			const body = day.createDiv({ cls: 'po-cal__day-body mx-plan-calendar-day-body' }); body.createDiv({ cls: 'po-cal__slot' });
 			if (journal) this.renderCalendarJournal(body, journal, 'month');
+			if (incompleteCount > 0) day.createSpan({ cls: 'mx-plan-calendar-incomplete', text: `☐ ${incompleteCount}`, attr: { 'aria-label': `${incompleteCount} 项未完成任务` } });
 			day.addEventListener('click', () => { this.setSelection(date.getFullYear(), date.getMonth() + 1, date.getDate()); });
 		}
 	}
