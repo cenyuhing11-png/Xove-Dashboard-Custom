@@ -21,7 +21,7 @@ test('narrative and stage headings share typography and the same outer-edge inse
 	assert.match(css,/\.mx-long-term-narrative__section > \.mx-long-term-stage \{ padding: 3px 12px;/);
 	assert.match(css,/\.mx-long-term-narrative\.wb-section \{ padding: 0;/);
 	assert.match(css,/\.mx-long-term-detail-content \.mx-detail-task-head \{[^}]*padding: 0 12px 6px/);
-	assert.match(css,/\.mx-long-term-stage-row > \.mx-long-term-stage \{ padding: 3px 12px;/);
+	assert.match(css,/\.mx-long-term-stage-row > \.mx-long-term-stage \{ padding: 2px 12px;/);
 	assert.match(css,/\.mx-long-term-narrative button\.mx-narrative-title \{[^}]*padding-left: 0/);
 });
 test('section and stage actions occupy one full-width right action rail',()=>{
@@ -48,10 +48,28 @@ test('stage bodies render no process heading count or empty-state label',()=>{
 	assert.ok(pane>=0&&pane<rows&&rows<add);
 });
 test('expanded stage note process rows and add action share the stage content edge',()=>{
-	assert.match(css,/\.mx-long-term-stage-details \{[^}]*padding: 6px 12px 4px/);
+	assert.match(css,/\.mx-long-term-stage-details \{[^}]*padding: 2px 12px 4px/);
 	assert.doesNotMatch(css,/\.mx-long-term-stage-details \{[^}]*27px/);
 	assert.match(css,/\.mx-long-term-stage-processes > \.mx-process-row--inline \{ padding-left: 0;/);
-	assert.match(css,/\.mx-long-term-process-add \{[^}]*padding-left: 0/);
+	assert.match(css,/\.mx-long-term-process-add \{[^}]*padding: 2px 0/);
+});
+test('each stage keeps one bottom divider and no large collapsed height',()=>{
+	const stage=css.match(/\.mx-long-term-stage-row \{([^}]+)\}/)![1]!;
+	assert.match(stage,/padding: 4px 0/);
+	assert.match(stage,/border-bottom: 1px solid var\(--background-modifier-border\)/);
+	assert.doesNotMatch(stage,/border-top|min-height/);
+});
+test('expanded stage content is continuous without internal stage dividers',()=>{
+	const details=css.match(/\.mx-long-term-stage-details \{([^}]+)\}/)![1]!;
+	const processes=css.match(/\.mx-long-term-stage-processes \{([^}]+)\}/)![1]!;
+	const note=css.match(/\.mx-long-term-stage-note \{([^}]+)\}/)![1]!;
+	assert.doesNotMatch(details,/border-(?:top|bottom|left|right)|border:/);
+	assert.doesNotMatch(processes,/border-(?:top|bottom|left|right)|border:/);
+	assert.doesNotMatch(note,/border-(?:top|bottom|left|right)|border:/);
+});
+test('process separators appear only between adjacent stage process rows',()=>{
+	assert.match(css,/\.mx-long-term-stage-processes > \.mx-process-row--inline \{[^}]*border-bottom: 0/);
+	assert.match(css,/\.mx-long-term-stage-processes > \.mx-process-row--inline \+ \.mx-process-row--inline \{ border-top: 1px solid var\(--ad-hair\); \}/);
 });
 test('compact fields retain the existing two-row narrow layout and secondary metadata',()=>{
 	assert.match(css,/@container \(max-width: 720px\)[\s\S]*grid-template-areas: "name meta meta meta" "date schedule progress menu"/);
