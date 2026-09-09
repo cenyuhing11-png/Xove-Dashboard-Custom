@@ -20,6 +20,8 @@ import { WorkbenchShell } from '../components/workbench/WorkbenchShell';
 import { renderLifeCompass } from '../components/workbench/LifeCompass';
 import { openDirection } from './DirectionView';
 import type Dashboard from '../main';
+import { scanLongTermPlans, setProcessLongTermPlan } from '../data/longTermPlanVault';
+import { renderProcessLongTermField } from './ProcessLongTermField';
 
 export const PROJECT_VIEW = 'xove-dashboard-custom-projects';
 export async function openProjects(app: App, project?: Pick<MengxuProject, 'id' | 'path'>, timeline?: 'calendar' | 'gantt'): Promise<void> {
@@ -69,6 +71,7 @@ export class ProjectView extends ItemView {
 	private async render(): Promise<void> {
 		const token = ++this.generation;
 		const projects = scanProjects(this.app);
+		const longTermPlans = await scanLongTermPlans(this.app);
 		const el = this.contentEl;
 		if (!this.projectId && !this.path) {
 			el.removeClass('mx-project-view');
@@ -82,6 +85,7 @@ export class ProjectView extends ItemView {
 					items: () => processBoardItems(processes(scanLearning(this.app), scanProjects(this.app), this.tasks.all())),
 					open: item => { if ('process' in item) void openProcess(this.app, item.process); else void openProjects(this.app, item.project); },
 					changeStatus: (item, status) => requestProcessStatusChange(this.app, { sourceFile: item.key, processType: 'process' in item ? item.process.processType : 'project', projectId: 'project' in item ? item.project.id : item.process.processType === 'project' && !item.process.id.startsWith('project:') ? item.process.id : undefined }, status),
+					openLongTermPlan: id => { void this.plugin?.openLongTermPlan(id); },
 				});
 			}
 			if (this.overviewEl.parentElement !== el) { el.empty(); el.appendChild(this.overviewEl); }
@@ -106,8 +110,10 @@ export class ProjectView extends ItemView {
 				if (!note || !processes(notes, [], this.tasks.all()).some(process => process.sourceFile === note.path)) throw new Error('内容不存在、未纳入进程或 Properties 无效');
 				const content = await learningFiles(this.app).read(note.path);
 				if (token === this.generation) {
-					if (note.kind === '知识与思考') renderCreationProcessDetail(el, this.app, this.tasks, note, content, () => { void openProjects(this.app); });
-					else renderLearningProcessDetail(el, this.app, this.tasks, note, notes, content, () => { void openProjects(this.app); });
+					const process = processes(notes, [], this.tasks.all()).find(process => process.sourceFile === note.path)!;
+					const relation = { plans: longTermPlans, selectedId: note.longTermPlanId, change: async (id?: string) => { await setProcessLongTermPlan(this.app, process, id); await this.render(); }, open: (id: string) => { void this.plugin?.openLongTermPlan(id); } };
+					if (note.kind === '知识与思考') renderCreationProcessDetail(el, this.app, this.tasks, note, content, () => { void openProjects(this.app); }, relation);
+					else renderLearningProcessDetail(el, this.app, this.tasks, note, notes, content, () => { void openProjects(this.app); }, relation);
 				}
 			} catch { if (token === this.generation) { el.empty(); el.createEl('p', { cls: 'po-empty', text: '进程内容无法读取，请检查是否已移动、删除或取消纳入进程。' }); el.createEl('button', { cls: 'ad-modal-btn', text: '全部进程 →' }).onclick = () => { void openProjects(this.app); }; } }
 			return;
@@ -128,6 +134,7 @@ export class ProjectView extends ItemView {
 			el.createEl('h1', { cls: 'ad-modal-title', text: project.name });
 			el.createEl('p', { cls: 'ad-modal-hint', text: `${project.status} · 方向：${project.direction || '未关联'}` });
 			el.createEl('p', { cls: 'ad-modal-hint', text: `开始日期：${project.startDate || '未设置'} · 截止日期：${project.dueDate || '未设置'}` });
+			renderProcessLongTermField(el, this.app, { plans: longTermPlans, selectedId: project.longTermPlanId, change: async id => { const process = processes([], [project], this.tasks.all())[0]!; await setProcessLongTermPlan(this.app, process, id); await this.render(); }, open: id => { void this.plugin?.openLongTermPlan(id); } });
 			const goal = el.createDiv({ cls: 'ad-update-block' });
 			goal.createEl('h2', { cls: 'ad-modal-title', text: '项目目标' }); goal.createEl('p', { cls: 'ad-modal-desc', text: summary.goal || '尚未填写项目目标' });
 			const tasks = el.createDiv({ cls: 'ad-update-block' });

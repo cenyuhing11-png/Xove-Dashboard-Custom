@@ -25,6 +25,7 @@ import { compactProcessDate, processDateTitle, directionProcessCounts, matchesPr
 import { LIFE_COMPASS } from '../components/workbench/config';
 import { renderTaskProgressPill, updateTaskProgressPill } from './ProcessTaskProgress';
 import { ProcessTasksModal } from './ProcessTasksModal';
+import { longTermPlanName } from '../data/longTermPlanVault';
 
 type BoardItem = ProjectBoardItem | ProcessBoardItem;
 function itemType(item: BoardItem): ProcessType { return 'process' in item ? item.process.processType : 'project'; }
@@ -38,6 +39,7 @@ export interface ProjectBoardSource {
 	items(): BoardItem[];
 	open(item: BoardItem): void;
 	changeStatus?(item: BoardItem, status: ProjectStatus): Promise<void>;
+	openLongTermPlan?(id: string): void;
 }
 
 /** 宿主接口：ProjectBoard 渲染器所需的宿主依赖。 */
@@ -221,6 +223,7 @@ export class ProjectBoard {
 				const card = col.createDiv({ cls: 'po-kanban__card', attr: { 'data-project-path': item.key, role: 'button', tabindex: '0' } });
 				card.createDiv({ text: item.name });
 				card.createDiv({ cls: 'po-kanban__meta', text: [itemTypeText(item), item.status, item.direction].filter(Boolean).join(' · ') });
+				this.renderLongTermLink(card, item);
 				if (item.startDate || item.endDate) card.createDiv({ cls: 'po-kanban__meta', text: `${item.startDate || '未设置开始'} → ${item.endDate || '未设置截止'}` });
 				this.renderProcessProgress(card.createDiv({ cls: 'po-kanban__meta' }), item);
 				card.onclick = event => { if (!(event?.target as HTMLElement)?.closest?.('.po-task-progress')) this.source!.open(item); };
@@ -252,7 +255,7 @@ export class ProjectBoard {
 		const statusClasses = { '计划中': 'po-todo', '进行中': 'po-progress', '暂停': 'po-blocked', '已完成': 'po-done', '归档': 'po-cancelled' };
 		const rows = sorted.map(item => {
 			const row = tbody.createEl('tr', { cls: 'po-data-row' }); row.dataset.projectPath = item.key;
-			const name = row.createEl('td', { cls: 'po-name-cell po-clickable', text: item.name, attr: { role: 'button', tabindex: '0' } }); name.onclick = () => this.source!.open(item);
+			const name = row.createEl('td', { cls: 'po-name-cell po-clickable', attr: { role: 'button', tabindex: '0' } }); name.createDiv({ text: item.name }); this.renderLongTermLink(name, item); name.onclick = () => this.source!.open(item);
 			name.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.source!.open(item); } };
 			row.createEl('td', { text: itemTypeText(item) });
 			row.createEl('td', { text: item.direction || '未关联' });
@@ -273,6 +276,12 @@ export class ProjectBoard {
 		});
 		if (!items.length) section.createDiv({ cls: 'po-empty', text: '暂无符合条件的进程' });
 		return { tbody, rows };
+	}
+	private renderLongTermLink(parent: HTMLElement, item: BoardItem): void {
+		const id = 'process' in item ? item.process.longTermPlanId : undefined; if (!id) return;
+		const title = longTermPlanName(this.app, id); if (!title) return;
+		const link = parent.createEl('button', { cls: 'mx-inline-action mx-process-long-term-link', text: `↳ ${title}` });
+		link.onclick = event => { event.stopPropagation(); this.source?.openLongTermPlan?.(id); };
 	}
 	private renderProcessProgress(parent: HTMLElement, item: BoardItem): void {
 		renderTaskProgressPill(parent, item.name, item.key, item.taskCount, item.doneCount ?? 0, () => {
@@ -317,6 +326,10 @@ export class ProjectBoard {
 		else this.host.selectedProject = null;
 		this.currentView = view;
 		await this.show(true);
+	}
+	async openProcessGantt(sourceFile: string): Promise<void> {
+		if (!this.source) return; this.directionFilter = null; this.projectFilter = '全部'; this.processTypeFilter = 'all'; this.currentView = 'gantt'; this.showMengxu();
+		requestAnimationFrame(() => { const target = this.source?.boardEl.querySelector<HTMLElement>(`[data-task-id="${CSS.escape(sourceFile)}"]`); target?.addClass('po-bar--highlight'); target?.scrollIntoView({ block: 'center', inline: 'center' }); });
 	}
 
 

@@ -16,6 +16,14 @@ import { taskSourceTypeLabel } from '../data/processContentTypes';
 import { journalCalendarEntry, journalDateFromPath } from '../data/journal';
 import type { JournalCalendarEntry } from '../data/journal';
 import { renderEmbeddedTaskCheckbox } from '../components/tasks/EmbeddedTaskCheckbox';
+import { scanLongTermPlans, scanLinkedPeriodPlans, setProcessLongTermPlan } from '../data/longTermPlanVault';
+import { currentLongTermStage, longTermMonths, longTermPlansForMonth, longTermStageProgress, toggleLongTermStage } from '../data/longTermPlans';
+import type { LongTermPlan } from '../data/longTermPlans';
+import type { Process } from '../data/processes';
+import { hasProcessSchedule } from '../data/processes';
+import { ProcessAssociationModal } from './LongTermPlanPickerModal';
+import { renderTaskProgressPill } from './ProcessTaskProgress';
+import { ProcessTasksModal } from './ProcessTasksModal';
 
 export const PLAN_VIEW = 'xove-dashboard-custom-plan-workspace';
 
@@ -45,13 +53,16 @@ export class PlanWorkspaceRenderer extends Component {
 	private generation = 0;
 	private active = false;
 	private sectionDisposers: Array<() => void> = [];
+	private selectedLongTermPlanId = '';
+	private quickTasks?: ProcessTasksModal;
 
-	constructor(public readonly app: App, private plugin: Dashboard) { super(); }
-	getState() { return { selectedYear: this.selectedYear, selectedMonth: this.selectedMonth, mode: this.mode, calendarMode: this.calendarMode, selectedDate: dateKey(this.selectedDate) }; }
+	constructor(public readonly app: App, private plugin: Dashboard, private navigation?: { openProcess(process: Process): void; openGantt(process: Process): void }) { super(); }
+	getState() { return { selectedYear: this.selectedYear, selectedMonth: this.selectedMonth, mode: this.mode, calendarMode: this.calendarMode, selectedDate: dateKey(this.selectedDate), selectedLongTermPlanId: this.selectedLongTermPlanId }; }
 	async setState(state: Record<string, unknown>): Promise<void> {
 		if (Number.isInteger(state.selectedYear) && Number(state.selectedYear) > 0) this.selectedYear = Number(state.selectedYear);
 		if (Number.isInteger(state.selectedMonth) && Number(state.selectedMonth) >= 1 && Number(state.selectedMonth) <= 12) this.selectedMonth = Number(state.selectedMonth);
-		if (state.mode === 'board' || state.mode === 'calendar' || state.mode === 'review') this.mode = state.mode;
+		if (state.mode === 'board' || state.mode === 'longTermPlan' || state.mode === 'calendar' || state.mode === 'review') this.mode = state.mode;
+		if (typeof state.selectedLongTermPlanId === 'string') this.selectedLongTermPlanId = state.selectedLongTermPlanId;
 		if (state.calendarMode === 'month' || state.calendarMode === 'week') this.calendarMode = state.calendarMode;
 		if (typeof state.selectedDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(state.selectedDate)) {
 			const [year, month, day] = state.selectedDate.split('-').map(Number);
@@ -85,6 +96,7 @@ export class PlanWorkspaceRenderer extends Component {
 	}
 	deactivate(): void {
 		this.active = false;
+		this.quickTasks?.close(); this.quickTasks = undefined;
 		this.generation++;
 		this.workspaceEl = undefined;
 		for (const dispose of this.sectionDisposers.splice(0)) dispose();
@@ -109,6 +121,7 @@ export class PlanWorkspaceRenderer extends Component {
 		this.selectedDate = new Date(year, month - 1, Math.min(day, new Date(year, month, 0).getDate()), 12);
 		void this.renderPlanContent();
 	}
+	async openLongTermPlan(id: string): Promise<void> { this.mode = 'longTermPlan'; this.selectedLongTermPlanId = id; if (this.workspaceEl) await this.renderPlanContent(); }
 
 	private async renderPlanContent(): Promise<void> {
 		const container = this.workspaceEl;
@@ -117,11 +130,13 @@ export class PlanWorkspaceRenderer extends Component {
 		const snapshot = this.mode === 'board'
 			? await readPlanWorkspace(this.planFiles(), this.selectedYear, this.selectedMonth)
 			: undefined;
+		const longTermPlans = this.mode === 'longTermPlan' ? await scanLongTermPlans(this.app) : [];
 		if (token !== this.generation || container !== this.workspaceEl) return;
 		container.empty();
 		this.renderSidebar(container, snapshot?.monthly.exists ?? false);
 		const main = container.createDiv({ cls: 'po-main' });
 		if (this.mode === 'board' && snapshot) this.renderBoard(main, snapshot);
+		else if (this.mode === 'longTermPlan') this.renderLongTermPlans(main, longTermPlans);
 		else if (this.mode === 'calendar') await this.renderCalendar(main, token);
 		else this.renderReview(main);
 	}
@@ -129,8 +144,7 @@ export class PlanWorkspaceRenderer extends Component {
 	private renderSidebar(container: HTMLElement, _selectedMonthExists: boolean): void {
 		const side = container.createDiv({ cls: 'po-sidebar' });
 		const list = side.createDiv({ cls: 'po-sidebar__list' });
-		list.createDiv({ cls: 'po-toolbar__label mx-time-trace-title', text: '时迹' });
-		for (const [mode, label] of [['board', '计划表'], ['calendar', '日历'], ['review', '日记回顾']] as const) {
+		for (const [mode, label] of [['board', '周期计划'], ['longTermPlan', '长期计划'], ['calendar', '综合日历'], ['review', '日记回顾']] as const) {
 			const item = list.createDiv({ cls: `po-sidebar__item${this.mode === mode ? ' is-active' : ''}`, text: label, attr: { role: 'button', tabindex: '0' } });
 			const selectMode = () => { this.mode = mode; void this.renderPlanContent(); };
 			item.addEventListener('click', selectMode);
@@ -174,7 +188,7 @@ export class PlanWorkspaceRenderer extends Component {
 
 	private renderBoard(main: HTMLElement, snapshot: Awaited<ReturnType<typeof readPlanWorkspace>>): void {
 		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar' });
-		toolbar.createSpan({ cls: 'mx-plan-title', text: '计划表' });
+		toolbar.createSpan({ cls: 'mx-plan-title', text: '周期计划' });
 		toolbar.createSpan({ cls: 'mx-plan-context', text: `${monthTitle(this.selectedYear, this.selectedMonth)} · Q${snapshot.quarter}` });
 		const top = main.createDiv({ cls: 'po-kanban mx-plan-summary' });
 		for (const card of [snapshot.annual, snapshot.quarterly, snapshot.monthly]) {
@@ -201,6 +215,42 @@ export class PlanWorkspaceRenderer extends Component {
 		main.createDiv({ cls: 'po-empty mx-plan-empty', text: '暂无回顾内容' });
 	}
 
+	private renderLongTermPlans(main: HTMLElement, plans: LongTermPlan[]): void {
+		const selected = plans.find(plan => plan.id === this.selectedLongTermPlanId);
+		if (selected) { this.renderLongTermDetail(main, selected); return; }
+		this.selectedLongTermPlanId = '';
+		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar' }); toolbar.createSpan({ cls: 'mx-plan-title', text: '长期计划' });
+		toolbar.createSpan({ cls: 'mx-plan-context', text: `${this.selectedYear} 年 ${this.selectedMonth} 月` });
+		const visible = longTermPlansForMonth(plans, this.selectedYear, this.selectedMonth);
+		const list = main.createDiv({ cls: 'po-tasklist mx-long-term-list' });
+		if (!visible.length) { list.createDiv({ cls: 'po-empty mx-plan-empty', text: '该月份暂无长期计划' }); return; }
+		for (const plan of visible) {
+			const progress = longTermStageProgress(plan.stages); const row = list.createDiv({ cls: 'wb-entry wb-entry--button', attr: { role: 'button', tabindex: '0' } });
+			const body = row.createDiv({ cls: 'mx-long-term-row__body' }); body.createDiv({ cls: 'wb-entry__label', text: plan.name });
+			body.createDiv({ cls: 'ad-modal-hint', text: `${plan.startMonth.replace('-', '.')} — ${plan.endMonth.replace('-', '.')} · ${longTermMonths(plan.startMonth, plan.endMonth)}个月 · ${plan.status}` });
+			row.createSpan({ cls: 'wb-entry__detail', text: `阶段 ${progress.completed} / ${progress.total}` }); row.createSpan({ cls: 'wb-entry__arrow', text: '→' });
+			const open = () => { this.selectedLongTermPlanId = plan.id; void this.renderPlanContent(); }; row.onclick = open; row.onkeydown = event => { if(event.key==='Enter'||event.key===' '){event.preventDefault();open();} };
+		}
+	}
+
+	private renderLongTermDetail(main: HTMLElement, plan: LongTermPlan): void {
+		const allProcesses = processes(scanLearning(this.app), scanProjects(this.app), this.plugin.embeddedTasks.all());
+		const linked = allProcesses.filter(process => process.longTermPlanId === plan.id); const linkedPlans = scanLinkedPeriodPlans(this.app).filter(item => item.longTermPlanIds.includes(plan.id));
+		const toolbar = main.createDiv({ cls: 'po-topbar' }); const back = toolbar.createEl('button', { cls: 'po-cal__seg-btn', text: '← 返回长期计划列表' }); back.onclick = () => { this.selectedLongTermPlanId=''; void this.renderPlanContent(); };
+		const summary = main.createDiv({ cls: 'ad-update-block mx-long-term-summary' }); summary.createEl('h1', { cls: 'ad-modal-title', text: plan.name });
+		const progress = longTermStageProgress(plan.stages); summary.createEl('p', { cls: 'ad-modal-hint', text: `${plan.startMonth.replace('-','.')} — ${plan.endMonth.replace('-','.')} · 预计 ${longTermMonths(plan.startMonth,plan.endMonth)} 个月 · ${plan.status} · 阶段进度 ${progress.completed} / ${progress.total}` });
+		const directions=[...new Set(linked.map(process=>process.direction).filter(Boolean))]; if(directions.length) summary.createEl('p',{cls:'ad-modal-hint',text:`涉及：${directions.join(' · ')}`});
+		summary.createEl('p',{cls:'ad-modal-desc mx-long-term-goal',text:plan.goal||'尚未填写长期目标'});
+		const layout=main.createDiv({cls:'mx-long-term-detail'}); const stages=layout.createDiv({cls:'ad-update-block mx-long-term-stages'}); stages.createEl('h2',{cls:'ad-modal-title',text:'阶段安排'});
+		if(!plan.stages.length) stages.createDiv({cls:'po-empty mx-plan-empty',text:'尚未添加阶段'});
+		for(const stage of plan.stages){const row=stages.createDiv({cls:'mx-long-term-stage'});const control=row.createEl('label',{cls:'mx-embedded-task-checkbox'});const check=control.createEl('input',{cls:'mx-embedded-task-check',attr:{type:'checkbox','aria-label':`${stage.completed?'取消完成':'完成'} ${stage.text}`}});check.checked=stage.completed;control.createSpan({cls:'po-check mx-embedded-task-check-visual',attr:{'aria-hidden':'true'}});row.createSpan({text:stage.text});check.onchange=()=>{const file=this.app.vault.getAbstractFileByPath(plan.path);if(!(file instanceof TFile))return;check.disabled=true;void this.app.vault.process(file,content=>toggleLongTermStage(content,stage.index,check.checked)).catch(error=>{check.checked=stage.completed;new Notice(String(error));}).finally(()=>{check.disabled=false;});};}
+		const right=layout.createDiv({cls:'mx-long-term-related'}); const processBlock=right.createDiv({cls:'ad-update-block'}); const processHead=processBlock.createDiv({cls:'ad-card__head mx-detail-task-head'}); processHead.createEl('h2',{cls:'ad-modal-title',text:'关联进程'}); processHead.createEl('button',{cls:'po-cal__seg-btn',text:'＋ 添加'}).onclick=()=>new ProcessAssociationModal(this.app,allProcesses,plan,async selected=>{const chosen=new Set(selected.map(item=>item.sourceFile));await Promise.all(allProcesses.filter(item=>item.longTermPlanId===plan.id||chosen.has(item.sourceFile)).map(item=>setProcessLongTermPlan(this.app,item,chosen.has(item.sourceFile)?plan.id:undefined)));await this.renderPlanContent();}).open();
+		if(!linked.length) processBlock.createDiv({cls:'po-empty mx-plan-empty',text:'暂无关联进程'});
+		for(const process of linked){const row=processBlock.createDiv({cls:'wb-entry'});const name=row.createEl('button',{cls:'mx-inline-action wb-entry__label',text:process.name});name.onclick=()=>this.navigation?.openProcess(process);row.createSpan({cls:'ad-modal-hint',text:`${process.category==='learning'?'学习':'创作'} · ${process.status}${process.startDate||process.dueDate?` · ${process.startDate||'未设置'} → ${process.dueDate||'未设置'}`:''}`});renderTaskProgressPill(row,process.name,process.sourceFile,process.taskTotal,process.taskCompleted,()=>{this.quickTasks?.close();this.quickTasks=new ProcessTasksModal(this.app,this.plugin.embeddedTasks,{name:process.name,processType:process.processType,sourceFile:process.sourceFile,category:process.category,contentType:process.contentType},()=>this.navigation?.openProcess(process));this.quickTasks.open();});if(hasProcessSchedule({startDate:process.startDate??null,endDate:process.dueDate??null})){const schedule=row.createEl('button',{cls:'mx-inline-action',text:'查看排期 →'});schedule.onclick=()=>this.navigation?.openGantt(process);}else row.createSpan({cls:'ad-modal-hint',text:'未排期'});}
+		const periodBlock=right.createDiv({cls:'ad-update-block'});periodBlock.createEl('h2',{cls:'ad-modal-title',text:'关联计划'});if(!linkedPlans.length)periodBlock.createDiv({cls:'po-empty mx-plan-empty',text:'暂无关联周期计划'});for(const item of linkedPlans){const row=periodBlock.createDiv({cls:'wb-entry wb-entry--button'});row.createSpan({cls:'wb-entry__label',text:item.name});row.createSpan({cls:'wb-entry__detail',text:item.period});row.onclick=()=>void this.openExisting(item.path);}
+		const current=main.createEl('p',{cls:'ad-modal-hint',text:`当前阶段：${currentLongTermStage(plan.stages)}`});current.title='由第一条未完成阶段自动推导';
+	}
+
 	private async readCalendarJournals(): Promise<Map<string, JournalCalendarEntry>> {
 		const files = this.app.vault.getMarkdownFiles().filter(file => journalDateFromPath(file.path))
 			.sort((a, b) => a.path.length - b.path.length || a.path.localeCompare(b.path, 'zh-CN'));
@@ -220,7 +270,7 @@ export class PlanWorkspaceRenderer extends Component {
 		if (token !== this.generation || !main.isConnected) return;
 		const root = main.createDiv({ cls: 'po-cal' }); root.tabIndex = 0;
 		const bar = root.createDiv({ cls: 'po-cal__bar' });
-		bar.createSpan({ cls: 'mx-plan-title', text: '日历' });
+		bar.createSpan({ cls: 'mx-plan-title', text: '综合日历' });
 		const seg = bar.createDiv({ cls: 'po-cal__seg' });
 		for (const [mode, label] of [['month', '月'], ['week', '周']] as const) {
 			const btn = seg.createEl('button', { cls: `po-cal__seg-btn${this.calendarMode === mode ? ' is-active' : ''}`, text: label });

@@ -11,9 +11,10 @@ export type ProjectStatus = typeof PROJECT_STATUSES[number];
 export interface MengxuProject {
 	id: string; path: string; name: string; status: ProjectStatus; direction: string;
 	startDate: string; dueDate: string; createdDate: string; goal: string;
+	longTermPlanId?: string;
 }
 export interface NewProject {
-	name: string; status: ProjectStatus; direction?: string; startDate?: string; dueDate?: string; goal?: string;
+	name: string; status: ProjectStatus; direction?: string; startDate?: string; dueDate?: string; goal?: string; longTermPlanId?: string;
 }
 export function projectDirections(): string[] { return LIFE_COMPASS.flatMap(l => l.items); }
 export function projectPath(name: string): { name: string; folder: string; path: string } {
@@ -32,7 +33,8 @@ export function projectNote(path: string, properties: unknown): MengxuProject | 
 	if (fm['类型'] !== '项目') return null;
 	return { id: text(fm['项目ID']), path, name: path.split('/').pop()!.slice(0, -3),
 		status: PROJECT_STATUSES.includes(fm['状态'] as ProjectStatus) ? fm['状态'] as ProjectStatus : '计划中',
-		direction: text(fm['方向']), startDate: date(fm['开始日期']), dueDate: date(fm['截止日期']), createdDate: date(fm['创建日期']), goal: text(fm['项目目标']) };
+		direction: text(fm['方向']), startDate: date(fm['开始日期']), dueDate: date(fm['截止日期']), createdDate: date(fm['创建日期']), goal: text(fm['项目目标']),
+		...(text(fm['关联长期计划ID']) ? { longTermPlanId: text(fm['关联长期计划ID']) } : {}) };
 }
 export function projectTemplate(input: NewProject, id: string, createdDate: string): string {
 	const { name } = projectPath(input.name);
@@ -42,7 +44,7 @@ export function projectTemplate(input: NewProject, id: string, createdDate: stri
 	for (const value of [input.startDate, input.dueDate, createdDate]) if (value && !validTaskDate(value)) throw new Error('项目日期无效');
 	if (input.startDate && input.dueDate && input.startDate > input.dueDate) throw new Error('截止日期不能早于开始日期');
 	const scalar = (s?: string) => s ? JSON.stringify(s) : '';
-	return `---\n类型: 项目\n项目ID: ${id}\n状态: ${input.status}\n方向: ${scalar(input.direction)}\n开始日期: ${scalar(input.startDate)}\n截止日期: ${scalar(input.dueDate)}\n创建日期: ${createdDate}\n项目目标: ${scalar(input.goal)}\n---\n\n# ${name}\n\n## 项目目标\n\n${input.goal?.trim() || ''}\n\n## 项目任务\n\n- [ ]\n\n## 项目资料\n\n\n## 过程记录\n\n\n## 最终成果\n\n\n## 项目复盘\n\n`;
+	return `---\n类型: 项目\n项目ID: ${id}\n状态: ${input.status}\n方向: ${scalar(input.direction)}\n关联长期计划ID: ${scalar(input.longTermPlanId)}\n开始日期: ${scalar(input.startDate)}\n截止日期: ${scalar(input.dueDate)}\n创建日期: ${createdDate}\n项目目标: ${scalar(input.goal)}\n---\n\n# ${name}\n\n## 项目目标\n\n${input.goal?.trim() || ''}\n\n## 项目任务\n\n- [ ]\n\n## 项目资料\n\n\n## 过程记录\n\n\n## 最终成果\n\n\n## 项目复盘\n\n`;
 }
 export async function createMengxuProject(files: PlanFiles, input: NewProject, id: string, createdDate: string): Promise<string> {
 	const info = projectPath(input.name);

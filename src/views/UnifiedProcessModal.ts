@@ -11,6 +11,9 @@ import { todayStr } from '../data/taskLogic';
 import { openProjects } from './ProjectView';
 import { beginListModal, closeListModal } from './viewPrimitives';
 import { DirectionAbilityModal, EditDirectionAbilityModal } from './DirectionAbilityModal';
+import { activeLongTermPlans } from '../data/longTermPlans';
+import type { LongTermPlan } from '../data/longTermPlans';
+import { scanLongTermPlans } from '../data/longTermPlanVault';
 
 /** One author-style form; each type keeps its existing Markdown creator. */
 export class UnifiedProcessModal extends Modal {
@@ -18,8 +21,9 @@ export class UnifiedProcessModal extends Modal {
 	private saving = false;
 	private generation = 0;
 	private contentType: ProcessContentType = 'course';
+	private longTermPlans: LongTermPlan[] = [];
 	constructor(app: App, private category: ProcessCategory = 'learning') { super(app); if (category === 'creation') this.contentType = 'knowledge'; }
-	onOpen(): void { this.render(); }
+	onOpen(): void { this.render(); void scanLongTermPlans(this.app).then(plans => { this.longTermPlans = activeLongTermPlans(plans); this.render(); }); }
 	private render(): void {
 		const generation = ++this.generation;
 		const el = beginListModal(this, '新建进程');
@@ -58,6 +62,11 @@ export class UnifiedProcessModal extends Modal {
 		const dates = el.createDiv({ cls: 'ad-modal-row' });
 		textField(dates.createDiv({ cls: 'ad-modal-col' }), 'startDate', '开始日期（可选）', 'date');
 		textField(dates.createDiv({ cls: 'ad-modal-col' }), 'dueDate', '截止日期（可选）', 'date');
+		el.createEl('label', { cls: 'ad-modal-label', text: '关联长期计划（可选）' });
+		const longTermPlan = el.createEl('select', { cls: 'ad-modal-input', attr: { 'aria-label': '关联长期计划（可选）' } });
+		longTermPlan.createEl('option', { value: '', text: '不关联' });
+		for (const plan of this.longTermPlans) longTermPlan.createEl('option', { value: plan.id, text: `${plan.name} · ${plan.status}` });
+		longTermPlan.value = this.input.longTermPlanId || ''; longTermPlan.onchange = () => { this.input.longTermPlanId = longTermPlan.value || undefined; }; controls.push(longTermPlan);
 		if (learning) {
 			el.createEl('label', { cls: 'ad-modal-label', text: '培养能力（可选）' });
 			const abilityRow = el.createDiv({ cls: 'ad-modal-row mx-ability-row' });

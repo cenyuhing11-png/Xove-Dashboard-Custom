@@ -9,4 +9,5 @@ export const LEARNING_FOLDERS = { course: '课程', film: '电影', book: '书�
 export const PLAN_FOLDERS = { year: '02-年度', quarter: '03-季度', month: '04-月度', week: '05-周计划' } as const;
 export const JOURNAL_FOLDERS = { day: '01-日记', week: '02-周记', month: '03-月度复盘', year: '04-年度复盘' } as const;
 export const DIRECTION_ROOT = `${PLAN_ROOT}/01-人生方向`;
+export const LONG_TERM_PLAN_ROOT = `${PLAN_ROOT}/07-长期计划`;
 export const DIARY_FOLDER = `${JOURNAL_ROOT}/${JOURNAL_FOLDERS.day}`;

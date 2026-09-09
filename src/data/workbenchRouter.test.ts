@@ -38,8 +38,13 @@ test('LifeCompass is constructed once by DashboardView on open', () => assert.eq
 test('home renderer no longer owns a second compass', () => assert.doesNotMatch(home, /renderLifeCompass/));
 test('active navigation derives from the current route', () => assert.match(router, /section === 'timeTrace' \? 'plan' : section === 'process' \? 'all' : section === 'inbox' \? 'opportunity' : 'home'/));
 test('time trace uses the shared PlanWorkspaceRenderer', () => {
-	assert.match(dashboard, /new PlanWorkspaceRenderer\(this\.app, plugin\)/);
+	assert.match(dashboard, /new PlanWorkspaceRenderer\(this\.app, plugin,/);
 	assert.match(plan, /export class PlanWorkspaceRenderer extends Component/);
+});
+test('long-term planning remains an internal time-trace mode and deep links reuse the main workbench', () => {
+	assert.match(plan, /mode === 'longTermPlan'/); assert.match(dashboard, /openLongTermPlan[\s\S]*setSection\('timeTrace'\)/);
+	const renderer = plan.match(/export class PlanWorkspaceRenderer[\s\S]*?(?=\nexport class PlanView)/)?.[0] ?? '';
+	assert.ok(renderer); assert.doesNotMatch(renderer, /LONG_TERM_PLAN_VIEW|setViewState/);
 });
 test('legacy PlanView delegates to the shared renderer', () => {
 	assert.match(plan, /export class PlanView extends ItemView/);

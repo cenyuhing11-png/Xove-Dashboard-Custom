@@ -6,6 +6,7 @@ import { TaskEditModal } from './TaskEditModal';
 import { NewEmbeddedTaskModal, EmbeddedTaskListModal, renderEmbeddedRows } from './EmbeddedTaskModal';
 import { openProjects } from './ProjectView';
 import { UnifiedProcessModal } from './UnifiedProcessModal';
+import { PlanModal } from './PlanModal';
 import { groupEmbeddedForDisplay, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS } from '../data/embeddedTasks';
 import { scanProjects } from '../data/projectVault';
 import { TaskItem, ProjectInfo, TaskStatus, ProjectType, priorityWeight, NodeState, RepeatRule, serializeDailyNodesBlock, parseDailyNodesFromBody } from '../data/taskParser';
@@ -247,7 +248,10 @@ export class DashboardView extends ItemView {
 		this.dashboardStore = new DashboardStore(this.taskStore);
 		this.oppBoard = new OpportunityBoard(this);
 		this.projectBoard = new ProjectBoard(this);
-		this.planRenderer = new PlanWorkspaceRenderer(this.app, plugin);
+		this.planRenderer = new PlanWorkspaceRenderer(this.app, plugin, {
+			openProcess: process => { void openProcess(this.app, process); },
+			openGantt: process => { void this.openProcessGantt(process.sourceFile); },
+		});
 	}
 
 	refreshThemeButton(): void { this.shell?.refreshSettings(); }
@@ -264,7 +268,10 @@ export class DashboardView extends ItemView {
 		else if (action === 'quickJournal') this.plugin.openQuickJournal();
 		else if (action === 'task') new NewEmbeddedTaskModal(this.app, this.plugin.embeddedTasks).open();
 		else if (action === 'project') new UnifiedProcessModal(this.app).open();
+		else if (action === 'newPlan') { const state = this.planRenderer.getState(); new PlanModal(this.app, this.plugin, { year: state.selectedYear, month: state.selectedMonth }).open(); }
 	}
+	async openLongTermPlan(id: string): Promise<void> { await this.setSection('timeTrace'); await this.planRenderer.openLongTermPlan(id); }
+	private async openProcessGantt(sourceFile: string): Promise<void> { await this.setSection('process'); await this.processBoard?.openProcessGantt(sourceFile); }
 	getViewType(): string { return VIEW_TYPE; }
 	getDisplayText(): string { return '夏知之 · 梦序'; }
 	getIcon(): string { return 'layout-dashboard'; }
@@ -907,6 +914,7 @@ export class DashboardView extends ItemView {
 					items: () => processBoardItems(processes(scanLearning(this.app), scanProjects(this.app), this.plugin.embeddedTasks.all())),
 					open: item => { if ('process' in item) void openProcess(this.app, item.process); else void openProjects(this.app, item.project); },
 					changeStatus: (item, status) => requestProcessStatusChange(this.app, { sourceFile: item.key, processType: 'process' in item ? item.process.processType : 'project', projectId: 'project' in item ? item.project.id : item.process.processType === 'project' && !item.process.id.startsWith('project:') ? item.process.id : undefined }, status),
+					openLongTermPlan: id => { void this.openLongTermPlan(id); },
 				};
 				this.processBoard = new ProjectBoard(this.processSource);
 			} else this.processSource.boardEl = this.boardEl;

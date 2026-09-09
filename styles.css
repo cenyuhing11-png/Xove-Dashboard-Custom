@@ -1924,6 +1924,18 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-plan-weeks { flex: 2 1 0; min-height: 300px; padding-top: 5px; border-top: 1px solid var(--ad-line); }
 .mx-plan-weeks .po-kanban__col { flex: 0 0 210px; }
 .mx-plan-empty { min-height: 74px; padding: 18px 8px; text-align: center; }
+.mx-long-term-list { display: flex; flex-direction: column; gap: 5px; padding: 10px; }
+.mx-long-term-row__body { min-width: 0; flex: 1; }
+.mx-long-term-row__body .ad-modal-hint { margin: 2px 0 0; }
+.mx-long-term-summary { margin-bottom: 10px; }
+.mx-long-term-goal { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
+.mx-long-term-detail { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 12px; align-items: start; }
+.mx-long-term-related { display: flex; min-width: 0; flex-direction: column; gap: 10px; }
+.mx-long-term-stage { position: relative; display: flex; min-width: 0; align-items: flex-start; gap: 8px; padding: 5px 3px; color: var(--ad-text); font-size: 12px; line-height: 1.45; }
+.mx-long-term-stage > .mx-embedded-task-checkbox { margin-top: 1px; }
+.mx-process-long-term-field { margin: 7px 0; background: transparent; border-color: var(--ad-line); }
+.mx-process-long-term-field > :last-child { margin-left: auto; }
+.mx-process-long-term-link { display: block; max-width: 100%; margin-top: 4px; overflow: hidden; color: var(--ad-text-dim); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .mx-plan-calendar-days { grid-auto-rows: minmax(72px, 1fr); }
 .mx-plan-calendar-day-body { display: flex; flex: 1; min-height: 0; flex-direction: column; }
 .mx-calendar-task-marker { flex: 0 0 auto; padding: 0 3px; border-radius: 3px; background: var(--ad-s2); color: var(--ad-text-mute); font-size: 9px; font-weight: 600; line-height: 13px; }
@@ -1994,6 +2006,7 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
   .mx-plan-summary .po-kanban__col { min-width: 220px; }
   .mx-plan-calendar-days { min-width: 620px; }
   .mx-plan-workspace .po-cal { overflow-x: auto; }
+  .mx-long-term-detail { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* Gantt resized (after drag) */

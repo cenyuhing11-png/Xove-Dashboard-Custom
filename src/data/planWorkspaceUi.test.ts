@@ -54,7 +54,15 @@ test('selected day detail groups only populated learning creation and daily sect
 	assert.match(view, /if \(!groups\[category\]\.length\) continue/);
 	assert.match(view, /mx-day-task-section__title/);
 });
-test('calendar dates come only from Embedded Tasks, never process start or due dates', () => { assert.equal(view.includes('process.startDate'), false); assert.equal(view.includes('process.dueDate'), false); assert.match(view, /tasksOnDate\(this\.plugin\.embeddedTasks\.all\(\)/); });
+test('calendar dates come only from Embedded Tasks, never process start or due dates', () => {
+	const start = view.indexOf('\tprivate async renderCalendar');
+	const end = view.indexOf('\nexport class PlanView', start);
+	const calendar = start >= 0 && end > start ? view.slice(start, end) : '';
+	assert.ok(calendar);
+	assert.equal(calendar.includes('process.startDate'), false);
+	assert.equal(calendar.includes('process.dueDate'), false);
+	assert.match(calendar, /tasksOnDate\(this\.plugin\.embeddedTasks\.all\(\)/);
+});
 test('selected year month and all three modes are one shared view state', () => { for (const key of ['selectedYear', 'selectedMonth', 'mode', "'review'"]) assert.ok(view.includes(key)); });
 test('plan view does not reference data json', () => assert.equal(view.includes('data.json'), false));
 test('month selector remains three columns at every viewport width', () => {
@@ -63,10 +71,11 @@ test('month selector remains three columns at every viewport width', () => {
 	assert.match(css, /@container \(max-width: 720px\)[\s\S]*\.mx-plan-container/);
 });
 test('week board has no redundant section heading or quarter caption', () => { assert.equal(view.includes('本月周计划'), false); assert.equal(view.includes('当前选择 · Q'), false); });
-test('sidebar keeps time trace workspace name while right-side views use local titles', () => {
-	assert.match(view, /mx-time-trace-title', text: '时迹'/);
-	assert.match(view, /private renderBoard[\s\S]*mx-plan-title', text: '计划表'/);
-	assert.match(view, /private async renderCalendar[\s\S]*mx-plan-title', text: '日历'/);
+test('sidebar removes its duplicate title and exposes four settled time-trace view names', () => {
+	assert.doesNotMatch(view, /mx-time-trace-title', text: '时迹'/);
+	assert.match(view, /\[\['board', '周期计划'\], \['longTermPlan', '长期计划'\], \['calendar', '综合日历'\], \['review', '日记回顾'\]\]/);
+	assert.match(view, /private renderBoard[\s\S]*mx-plan-title', text: '周期计划'/);
+	assert.match(view, /private async renderCalendar[\s\S]*mx-plan-title', text: '综合日历'/);
 	assert.match(view, /private renderReview[\s\S]*mx-plan-title', text: '日记回顾'/);
 });
 test('month journals use an adaptive multiline cell while quick-note fallback stays compact', () => {
@@ -135,8 +144,8 @@ test('calendar task refresh subscription does not rebuild the outer view', () =>
 	assert.match(view, /embeddedTasks\.subscribe\(\(\) => \{ if \(this\.active && this\.mode === 'calendar'\) void this\.renderPlanContent\(\); \}\)/);
 	assert.equal(view.includes("embeddedTasks.subscribe(() => { if (this.mode === 'calendar') void this.mountView()"), false);
 });
-test('time trace sidebar has three equal view rows, no explanatory labels and a lightweight today action', () => {
-	assert.match(view, /\[\['board', '计划表'\], \['calendar', '日历'\], \['review', '日记回顾'\]\]/);
+test('time trace sidebar has four equal view rows, no explanatory labels and a lightweight today action', () => {
+	assert.match(view, /\[\['board', '周期计划'\], \['longTermPlan', '长期计划'\], \['calendar', '综合日历'\], \['review', '日记回顾'\]\]/);
 	assert.match(view, /po-sidebar__item\$\{this\.mode === mode \? ' is-active' : ''\}/);
 	assert.match(view, /po-sidebar__item mx-time-trace-today', text: '今天'/);
 	for (const old of ["text: '视图'", "text: '时间'", "text: '当前计划'"]) assert.equal(view.includes(old), false);

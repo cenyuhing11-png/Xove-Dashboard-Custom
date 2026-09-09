@@ -13,6 +13,7 @@ import { EmbeddedTaskStore } from './data/embeddedTaskVault';
 import { ProjectView, PROJECT_VIEW } from './views/ProjectView';
 import { PlanView, PLAN_VIEW } from './views/PlanView';
 import { UnifiedProcessModal } from './views/UnifiedProcessModal';
+import { PlanModal } from './views/PlanModal';
 import { NewEmbeddedTaskModal } from './views/EmbeddedTaskModal';
 import { TaskStore } from './data/taskStore';
 import type { WorkbenchShell, WorkbenchAction } from './components/workbench/WorkbenchShell';
@@ -407,6 +408,7 @@ export default class Dashboard extends Plugin {
 		if (action === 'project') { new UnifiedProcessModal(this.app).open(); return; }
 		if (action === 'task') { new NewEmbeddedTaskModal(this.app, this.embeddedTasks).open(); return; }
 		if (action === 'quickJournal') { this.openQuickJournal(); return; }
+		if (action === 'newPlan') { const now = new Date(); new PlanModal(this.app, this, { year: now.getFullYear(), month: now.getMonth() + 1 }).open(); return; }
 		// Normal top navigation is already inside DashboardView: route in-place and
 		// never replace its leaf with PLAN_VIEW / PROJECT_VIEW. A legacy restored
 		// tab is converted once to the main workbench as a compatibility bridge.
@@ -421,6 +423,12 @@ export default class Dashboard extends Plugin {
 		await this.app.workspace.revealLeaf(leaf);
 		this.app.workspace.setActiveLeaf(leaf, { focus: true });
 		if (leaf.view instanceof DashboardView) await leaf.view.navigateWorkbench(action);
+	}
+	async openLongTermPlan(id: string): Promise<void> {
+		let leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+		if (!leaf) { leaf = this.app.workspace.getLeaf('tab'); await leaf.setViewState({ type: VIEW_TYPE, active: true }); }
+		await this.app.workspace.revealLeaf(leaf); this.app.workspace.setActiveLeaf(leaf, { focus: true });
+		if (leaf.view instanceof DashboardView) await leaf.view.openLongTermPlan(id);
 	}
 
 	openQuickJournal(): void {

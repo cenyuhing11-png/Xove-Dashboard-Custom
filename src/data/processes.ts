@@ -14,6 +14,7 @@ export type ProcessStatus = ProjectStatus;
 export interface Process {
 	id: string; name: string; processType: ProcessType; category: ProcessCategory; contentType: CompatibleProcessContentType; status: ProcessStatus; rawStatus: string;
 	direction: string; startDate?: string; dueDate?: string; sourceFile: string;
+	longTermPlanId?: string;
 	taskTotal: number; taskCompleted: number; taskPending: number;
 	/** Task completion ratio only. null means no tasks, not 0% mastery. */
 	progress: number | null;
@@ -48,15 +49,15 @@ export function isKnowledgeProcessNote(note: LearningNote): boolean {
 export function processes(notes: readonly LearningNote[], projects: readonly MengxuProject[], tasks: readonly EmbeddedTask[]): Process[] {
 	const learning: Process[] = notes.filter(isLearningProcessNote).map(n => ({
 		id: `learning:${n.path}`, name: n.name, processType: 'learning', category: 'learning', contentType: n.kind === '学习主题' ? 'legacy-topic' : learningContentType(n.resourceType) ?? 'legacy-resource', status: learningProcessStatus(n.status), rawStatus: n.status,
-		direction: n.direction, sourceFile: n.path, ...dates(n.startDate, n.dueDate), ...counts('learning', n.path, tasks),
+		direction: n.direction, sourceFile: n.path, ...(n.longTermPlanId ? { longTermPlanId: n.longTermPlanId } : {}), ...dates(n.startDate, n.dueDate), ...counts('learning', n.path, tasks),
 	}));
 	const knowledge: Process[] = notes.filter(isKnowledgeProcessNote).map(n => ({
 		id: `creation:${n.path}`, name: n.name, processType: 'creation', category: 'creation', contentType: 'knowledge', status: learningProcessStatus(n.status), rawStatus: n.status,
-		direction: n.direction, sourceFile: n.path, ...dates(n.startDate, n.dueDate), ...counts('creation', n.path, tasks),
+		direction: n.direction, sourceFile: n.path, ...(n.longTermPlanId ? { longTermPlanId: n.longTermPlanId } : {}), ...dates(n.startDate, n.dueDate), ...counts('creation', n.path, tasks),
 	}));
 	const formal: Process[] = projects.filter(p => inRoot(p.path, PROJECT_ROOT)).map(p => ({
 		id: p.id || `project:${p.path}`, name: p.name, processType: 'project', category: 'creation', contentType: 'project', status: p.status, rawStatus: p.status,
-		direction: p.direction, sourceFile: p.path, ...dates(p.startDate, p.dueDate), ...counts('project', p.path, tasks),
+		direction: p.direction, sourceFile: p.path, ...(p.longTermPlanId ? { longTermPlanId: p.longTermPlanId } : {}), ...dates(p.startDate, p.dueDate), ...counts('project', p.path, tasks),
 	}));
 	return [...learning, ...knowledge, ...formal];
 }
