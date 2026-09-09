@@ -268,7 +268,7 @@ export class DashboardView extends ItemView {
 		else if (action === 'quickJournal') this.plugin.openQuickJournal();
 		else if (action === 'task') new NewEmbeddedTaskModal(this.app, this.plugin.embeddedTasks).open();
 		else if (action === 'project') new UnifiedProcessModal(this.app).open();
-		else if (action === 'newPlan') { const state = this.planRenderer.getState(); new PlanModal(this.app, this.plugin, { year: state.selectedYear, month: state.selectedMonth }).open(); }
+		else if (action === 'newPlan') { const state = this.planRenderer.getState(); new PlanModal(this.app, { year: state.selectedYear, month: state.selectedMonth }).open(); }
 	}
 	async openLongTermPlan(id: string): Promise<void> { await this.setSection('timeTrace'); await this.planRenderer.openLongTermPlan(id); }
 	private async openProcessGantt(sourceFile: string): Promise<void> { await this.setSection('process'); await this.processBoard?.openProcessGantt(sourceFile); }

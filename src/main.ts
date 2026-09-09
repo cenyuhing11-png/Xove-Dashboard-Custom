@@ -408,7 +408,7 @@ export default class Dashboard extends Plugin {
 		if (action === 'project') { new UnifiedProcessModal(this.app).open(); return; }
 		if (action === 'task') { new NewEmbeddedTaskModal(this.app, this.embeddedTasks).open(); return; }
 		if (action === 'quickJournal') { this.openQuickJournal(); return; }
-		if (action === 'newPlan') { const now = new Date(); new PlanModal(this.app, this, { year: now.getFullYear(), month: now.getMonth() + 1 }).open(); return; }
+		if (action === 'newPlan') { const now = new Date(); new PlanModal(this.app, { year: now.getFullYear(), month: now.getMonth() + 1 }).open(); return; }
 		// Normal top navigation is already inside DashboardView: route in-place and
 		// never replace its leaf with PLAN_VIEW / PROJECT_VIEW. A legacy restored
 		// tab is converted once to the main workbench as a compatibility bridge.

@@ -1,4 +1,4 @@
-import { Component, ItemView, Notice, TFile, WorkspaceLeaf } from 'obsidian';
+import { Component, ItemView, Menu, Notice, TFile, WorkspaceLeaf } from 'obsidian';
 import type { App, ViewStateResult } from 'obsidian';
 import type Dashboard from '../main';
 import type { EmbeddedTask } from '../data/embeddedTasks';
@@ -12,16 +12,16 @@ import { openDirection } from './DirectionView';
 import { scanLearning } from '../data/learningVault';
 import { scanProjects } from '../data/projectVault';
 import { processes } from '../data/processes';
-import { taskSourceTypeLabel } from '../data/processContentTypes';
+import { processContentTypeLabel, taskSourceTypeLabel } from '../data/processContentTypes';
 import { journalCalendarEntry, journalDateFromPath } from '../data/journal';
 import type { JournalCalendarEntry } from '../data/journal';
 import { renderEmbeddedTaskCheckbox } from '../components/tasks/EmbeddedTaskCheckbox';
-import { scanLongTermPlans, scanLinkedPeriodPlans, setProcessLongTermPlan } from '../data/longTermPlanVault';
-import { currentLongTermStage, longTermMonths, longTermPlansForMonth, longTermStageProgress, toggleLongTermStage } from '../data/longTermPlans';
+import { scanLongTermPlans, setProcessLongTermPlan, updateLongTermPlanMarkdown } from '../data/longTermPlanVault';
+import { appendLongTermStage, assignLongTermProcessToStage, currentLongTermStage, deleteLongTermStage, ensureLongTermStageIds, longTermMonths, longTermPlansForMonth, longTermStageProgress, normalizeLongTermProcessRef, removeLongTermProcessFromStages, toggleLongTermStage } from '../data/longTermPlans';
 import type { LongTermPlan } from '../data/longTermPlans';
 import type { Process } from '../data/processes';
 import { hasProcessSchedule } from '../data/processes';
-import { ProcessAssociationModal } from './LongTermPlanPickerModal';
+import { ConfirmActionModal, LongTermStageModal, StageProcessPickerModal } from './LongTermPlanPickerModal';
 import { renderTaskProgressPill } from './ProcessTaskProgress';
 import { ProcessTasksModal } from './ProcessTasksModal';
 
@@ -136,7 +136,7 @@ export class PlanWorkspaceRenderer extends Component {
 		this.renderSidebar(container, snapshot?.monthly.exists ?? false);
 		const main = container.createDiv({ cls: 'po-main' });
 		if (this.mode === 'board' && snapshot) this.renderBoard(main, snapshot);
-		else if (this.mode === 'longTermPlan') this.renderLongTermPlans(main, longTermPlans);
+		else if (this.mode === 'longTermPlan') await this.renderLongTermPlans(main, longTermPlans);
 		else if (this.mode === 'calendar') await this.renderCalendar(main, token);
 		else this.renderReview(main);
 	}
@@ -215,9 +215,12 @@ export class PlanWorkspaceRenderer extends Component {
 		main.createDiv({ cls: 'po-empty mx-plan-empty', text: '暂无回顾内容' });
 	}
 
-	private renderLongTermPlans(main: HTMLElement, plans: LongTermPlan[]): void {
+	private async renderLongTermPlans(main: HTMLElement, plans: LongTermPlan[]): Promise<void> {
 		const selected = plans.find(plan => plan.id === this.selectedLongTermPlanId);
-		if (selected) { this.renderLongTermDetail(main, selected); return; }
+		if (selected) {
+			if (selected.stages.some(stage => !stage.id)) { await updateLongTermPlanMarkdown(this.app, selected, content => ensureLongTermStageIds(content)); await this.renderPlanContent(); return; }
+			this.renderLongTermDetail(main, selected, plans); return;
+		}
 		this.selectedLongTermPlanId = '';
 		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar' }); toolbar.createSpan({ cls: 'mx-plan-title', text: '长期计划' });
 		toolbar.createSpan({ cls: 'mx-plan-context', text: `${this.selectedYear} 年 ${this.selectedMonth} 月` });
@@ -233,21 +236,47 @@ export class PlanWorkspaceRenderer extends Component {
 		}
 	}
 
-	private renderLongTermDetail(main: HTMLElement, plan: LongTermPlan): void {
+	private processForRef(allProcesses: Process[], ref: string): Process | undefined { const normalized = normalizeLongTermProcessRef(ref); return allProcesses.find(process => normalizeLongTermProcessRef(process.sourceFile) === normalized); }
+	private async assignProcessToStage(plan: LongTermPlan, stageId: string, process: Process): Promise<void> {
+		const assign = async () => { if (process.longTermPlanId !== plan.id) await setProcessLongTermPlan(this.app, process, plan.id); await updateLongTermPlanMarkdown(this.app, plan, content => assignLongTermProcessToStage(content, process.sourceFile, process.name, stageId)); await this.renderPlanContent(); };
+		if (process.longTermPlanId && process.longTermPlanId !== plan.id) { new ConfirmActionModal(this.app, '更改长期计划', `“${process.name}”已关联其他长期计划，是否更改为“${plan.name}”？`, '更改长期计划', assign).open(); return; }
+		await assign();
+	}
+	private renderStageProcess(parent: HTMLElement, process: Process, plan: LongTermPlan, stageId: string): void {
+		const row = parent.createDiv({ cls: 'wb-entry mx-long-term-process' }); const body = row.createDiv({ cls: 'mx-long-term-process__body' });
+		const name = body.createEl('button', { cls: 'mx-inline-action wb-entry__label', text: process.name }); name.onclick = () => this.navigation?.openProcess(process);
+		body.createDiv({ cls: 'ad-modal-hint', text: `${process.category === 'learning' ? '学习' : '创作'} · ${processContentTypeLabel(process.contentType, true)} · ${process.status}` });
+		body.createDiv({ cls: 'ad-modal-hint', text: process.startDate || process.dueDate ? `${process.startDate || '未设置'} — ${process.dueDate || '未设置'}` : '未排期' });
+		renderTaskProgressPill(row, process.name, process.sourceFile, process.taskTotal, process.taskCompleted, () => { this.quickTasks?.close(); this.quickTasks = new ProcessTasksModal(this.app, this.plugin.embeddedTasks, { name: process.name, processType: process.processType, sourceFile: process.sourceFile, category: process.category, contentType: process.contentType }, () => this.navigation?.openProcess(process)); this.quickTasks.open(); });
+		const actions = row.createEl('button', { cls: 'mx-inline-action', text: '管理', attr: { 'aria-label': `管理 ${process.name}` } });
+		actions.onclick = event => { const menu = new Menu(); for (const stage of plan.stages) if (stage.id !== stageId) menu.addItem(item => item.setTitle(`移到：${stage.text}`).onClick(() => { void updateLongTermPlanMarkdown(this.app, plan, content => assignLongTermProcessToStage(content, process.sourceFile, process.name, stage.id)).then(() => this.renderPlanContent()); }));
+			menu.addSeparator(); menu.addItem(item => item.setTitle('移出阶段').onClick(() => { void updateLongTermPlanMarkdown(this.app, plan, content => removeLongTermProcessFromStages(content, process.sourceFile)).then(() => this.renderPlanContent()); }));
+			menu.addItem(item => item.setTitle('取消长期计划关联').onClick(() => { void updateLongTermPlanMarkdown(this.app, plan, content => removeLongTermProcessFromStages(content, process.sourceFile)).then(() => setProcessLongTermPlan(this.app, process)).then(() => this.renderPlanContent()); })); menu.showAtMouseEvent(event); };
+		if (hasProcessSchedule({ startDate: process.startDate ?? null, endDate: process.dueDate ?? null })) { const schedule = body.createEl('button', { cls: 'mx-inline-action', text: '查看排期 →' }); schedule.onclick = () => this.navigation?.openGantt(process); }
+	}
+	private renderUnassignedProcess(parent: HTMLElement, process: Process, plan: LongTermPlan): void {
+		const row = parent.createDiv({ cls: 'wb-entry mx-long-term-process' }); const body = row.createDiv({ cls: 'mx-long-term-process__body' }); const name = body.createEl('button', { cls: 'mx-inline-action wb-entry__label', text: process.name }); name.onclick = () => this.navigation?.openProcess(process); body.createDiv({ cls: 'ad-modal-hint', text: `${process.category === 'learning' ? '学习' : '创作'} · ${processContentTypeLabel(process.contentType, true)} · ${process.status} · ${process.taskCompleted} / ${process.taskTotal}` });
+		const assign = row.createEl('button', { cls: 'mx-inline-action', text: '分配阶段' }); assign.onclick = event => { const menu = new Menu(); for (const stage of plan.stages) menu.addItem(item => item.setTitle(stage.text).onClick(() => { void updateLongTermPlanMarkdown(this.app, plan, content => assignLongTermProcessToStage(content, process.sourceFile, process.name, stage.id)).then(() => this.renderPlanContent()); })); menu.showAtMouseEvent(event); };
+		const unlink = row.createEl('button', { cls: 'mx-inline-action', text: '取消关联' }); unlink.onclick = () => { void updateLongTermPlanMarkdown(this.app, plan, content => removeLongTermProcessFromStages(content, process.sourceFile)).then(() => setProcessLongTermPlan(this.app, process)).then(() => this.renderPlanContent()); };
+	}
+	private renderLongTermDetail(main: HTMLElement, plan: LongTermPlan, plans: LongTermPlan[]): void {
 		const allProcesses = processes(scanLearning(this.app), scanProjects(this.app), this.plugin.embeddedTasks.all());
-		const linked = allProcesses.filter(process => process.longTermPlanId === plan.id); const linkedPlans = scanLinkedPeriodPlans(this.app).filter(item => item.longTermPlanIds.includes(plan.id));
+		const linked = allProcesses.filter(process => process.longTermPlanId === plan.id);
+		const mapped = plan.stages.flatMap(stage => stage.processRefs.map(ref => this.processForRef(allProcesses, ref))).filter((process): process is Process => !!process && process.longTermPlanId === plan.id);
+		const mappedPaths = new Set(mapped.map(process => normalizeLongTermProcessRef(process.sourceFile)));
 		const toolbar = main.createDiv({ cls: 'po-topbar' }); const back = toolbar.createEl('button', { cls: 'po-cal__seg-btn', text: '← 返回长期计划列表' }); back.onclick = () => { this.selectedLongTermPlanId=''; void this.renderPlanContent(); };
 		const summary = main.createDiv({ cls: 'ad-update-block mx-long-term-summary' }); summary.createEl('h1', { cls: 'ad-modal-title', text: plan.name });
 		const progress = longTermStageProgress(plan.stages); summary.createEl('p', { cls: 'ad-modal-hint', text: `${plan.startMonth.replace('-','.')} — ${plan.endMonth.replace('-','.')} · 预计 ${longTermMonths(plan.startMonth,plan.endMonth)} 个月 · ${plan.status} · 阶段进度 ${progress.completed} / ${progress.total}` });
-		const directions=[...new Set(linked.map(process=>process.direction).filter(Boolean))]; if(directions.length) summary.createEl('p',{cls:'ad-modal-hint',text:`涉及：${directions.join(' · ')}`});
-		summary.createEl('p',{cls:'ad-modal-desc mx-long-term-goal',text:plan.goal||'尚未填写长期目标'});
-		const layout=main.createDiv({cls:'mx-long-term-detail'}); const stages=layout.createDiv({cls:'ad-update-block mx-long-term-stages'}); stages.createEl('h2',{cls:'ad-modal-title',text:'阶段安排'});
+		const directions=[...new Set(mapped.map(process=>process.direction).filter(Boolean))]; if(directions.length) summary.createEl('p',{cls:'ad-modal-hint',text:`涉及：${directions.join(' · ')}`});
+		const narrative = main.createDiv({ cls: 'mx-long-term-narrative' }); for (const [title, value] of [['为什么做', plan.why || plan.goal], ['希望达到的状态', plan.desiredState], ['完成标准', plan.completionCriteria]] as const) { const section = narrative.createDiv({ cls: 'wb-section mx-long-term-narrative__section' }); section.createEl('h2', { cls: 'ad-modal-title', text: title }); section.createEl('p', { cls: 'ad-modal-desc', text: value || '尚未填写' }); }
+		const stages=main.createDiv({cls:'ad-update-block mx-long-term-stages'}); const stageHead=stages.createDiv({cls:'ad-card__head mx-detail-task-head'}); stageHead.createEl('h2',{cls:'ad-modal-title',text:'阶段推进'}); stageHead.createEl('button',{cls:'mx-inline-action',text:'＋ 添加阶段'}).onclick=()=>new LongTermStageModal(this.app,async name=>{await updateLongTermPlanMarkdown(this.app,plan,content=>appendLongTermStage(content,name,crypto.randomUUID()));await this.renderPlanContent();}).open();
 		if(!plan.stages.length) stages.createDiv({cls:'po-empty mx-plan-empty',text:'尚未添加阶段'});
-		for(const stage of plan.stages){const row=stages.createDiv({cls:'mx-long-term-stage'});const control=row.createEl('label',{cls:'mx-embedded-task-checkbox'});const check=control.createEl('input',{cls:'mx-embedded-task-check',attr:{type:'checkbox','aria-label':`${stage.completed?'取消完成':'完成'} ${stage.text}`}});check.checked=stage.completed;control.createSpan({cls:'po-check mx-embedded-task-check-visual',attr:{'aria-hidden':'true'}});row.createSpan({text:stage.text});check.onchange=()=>{const file=this.app.vault.getAbstractFileByPath(plan.path);if(!(file instanceof TFile))return;check.disabled=true;void this.app.vault.process(file,content=>toggleLongTermStage(content,stage.index,check.checked)).catch(error=>{check.checked=stage.completed;new Notice(String(error));}).finally(()=>{check.disabled=false;});};}
-		const right=layout.createDiv({cls:'mx-long-term-related'}); const processBlock=right.createDiv({cls:'ad-update-block'}); const processHead=processBlock.createDiv({cls:'ad-card__head mx-detail-task-head'}); processHead.createEl('h2',{cls:'ad-modal-title',text:'关联进程'}); processHead.createEl('button',{cls:'po-cal__seg-btn',text:'＋ 添加'}).onclick=()=>new ProcessAssociationModal(this.app,allProcesses,plan,async selected=>{const chosen=new Set(selected.map(item=>item.sourceFile));await Promise.all(allProcesses.filter(item=>item.longTermPlanId===plan.id||chosen.has(item.sourceFile)).map(item=>setProcessLongTermPlan(this.app,item,chosen.has(item.sourceFile)?plan.id:undefined)));await this.renderPlanContent();}).open();
-		if(!linked.length) processBlock.createDiv({cls:'po-empty mx-plan-empty',text:'暂无关联进程'});
-		for(const process of linked){const row=processBlock.createDiv({cls:'wb-entry'});const name=row.createEl('button',{cls:'mx-inline-action wb-entry__label',text:process.name});name.onclick=()=>this.navigation?.openProcess(process);row.createSpan({cls:'ad-modal-hint',text:`${process.category==='learning'?'学习':'创作'} · ${process.status}${process.startDate||process.dueDate?` · ${process.startDate||'未设置'} → ${process.dueDate||'未设置'}`:''}`});renderTaskProgressPill(row,process.name,process.sourceFile,process.taskTotal,process.taskCompleted,()=>{this.quickTasks?.close();this.quickTasks=new ProcessTasksModal(this.app,this.plugin.embeddedTasks,{name:process.name,processType:process.processType,sourceFile:process.sourceFile,category:process.category,contentType:process.contentType},()=>this.navigation?.openProcess(process));this.quickTasks.open();});if(hasProcessSchedule({startDate:process.startDate??null,endDate:process.dueDate??null})){const schedule=row.createEl('button',{cls:'mx-inline-action',text:'查看排期 →'});schedule.onclick=()=>this.navigation?.openGantt(process);}else row.createSpan({cls:'ad-modal-hint',text:'未排期'});}
-		const periodBlock=right.createDiv({cls:'ad-update-block'});periodBlock.createEl('h2',{cls:'ad-modal-title',text:'关联计划'});if(!linkedPlans.length)periodBlock.createDiv({cls:'po-empty mx-plan-empty',text:'暂无关联周期计划'});for(const item of linkedPlans){const row=periodBlock.createDiv({cls:'wb-entry wb-entry--button'});row.createSpan({cls:'wb-entry__label',text:item.name});row.createSpan({cls:'wb-entry__detail',text:item.period});row.onclick=()=>void this.openExisting(item.path);}
+		const assigned = new Set<string>();
+		for(const stage of plan.stages){const row=stages.createDiv({cls:'mx-long-term-stage-row'});const stagePane=row.createDiv({cls:'mx-long-term-stage-pane'});const title=stagePane.createDiv({cls:'mx-long-term-stage'});const control=title.createEl('label',{cls:'mx-embedded-task-checkbox'});const check=control.createEl('input',{cls:'mx-embedded-task-check',attr:{type:'checkbox','aria-label':`${stage.completed?'取消完成':'完成'} ${stage.text}`}});check.checked=stage.completed;control.createSpan({cls:'po-check mx-embedded-task-check-visual',attr:{'aria-hidden':'true'}});title.createSpan({text:`${String(stage.index+1).padStart(2,'0')}  ${stage.text}`});check.onchange=()=>{check.disabled=true;void updateLongTermPlanMarkdown(this.app,plan,content=>toggleLongTermStage(content,stage.id,check.checked)).catch(error=>{check.checked=stage.completed;new Notice(String(error));}).finally(()=>{check.disabled=false;});};
+			const refs=stage.processRefs.map(ref=>this.processForRef(allProcesses,ref)).filter((process):process is Process=>!!process&&process.longTermPlanId===plan.id); for(const process of refs)assigned.add(normalizeLongTermProcessRef(process.sourceFile));
+			const stageActions=stagePane.createDiv({cls:'mx-long-term-stage-actions'});stageActions.createEl('button',{cls:'mx-inline-action',text:'删除阶段'}).onclick=()=>{const remove=async()=>{await updateLongTermPlanMarkdown(this.app,plan,content=>deleteLongTermStage(content,stage.id));await this.renderPlanContent();};if(stage.processRefs.length)new ConfirmActionModal(this.app,'删除阶段',`该阶段包含 ${stage.processRefs.length} 个关联进程。删除后这些进程将移到“未分配阶段”。`,'删除并移到未分配',remove).open();else void remove();};
+			const processPane=row.createDiv({cls:'mx-long-term-stage-processes'}); const add=processPane.createEl('button',{cls:'mx-inline-action mx-long-term-add-process',text:'＋ 添加进程'});add.onclick=()=>{const candidates=allProcesses.filter(process=>process.longTermPlanId!==plan.id||!mappedPaths.has(normalizeLongTermProcessRef(process.sourceFile)));new StageProcessPickerModal(this.app,candidates,plans,plan.id,process=>this.assignProcessToStage(plan,stage.id,process)).open();};if(!refs.length)processPane.createDiv({cls:'po-empty mx-plan-empty',text:'暂无进程'});for(const process of refs)this.renderStageProcess(processPane,process,plan,stage.id);}
+		const unassigned=linked.filter(process=>!assigned.has(normalizeLongTermProcessRef(process.sourceFile))); const loose=main.createDiv({cls:'ad-update-block mx-long-term-unassigned'});loose.createEl('h2',{cls:'ad-modal-title',text:'未分配阶段'});if(!unassigned.length)loose.createDiv({cls:'po-empty mx-plan-empty',text:'暂无未分配进程'});for(const process of unassigned)this.renderUnassignedProcess(loose,process,plan);
 		const current=main.createEl('p',{cls:'ad-modal-hint',text:`当前阶段：${currentLongTermStage(plan.stages)}`});current.title='由第一条未完成阶段自动推导';
 	}
 

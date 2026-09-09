@@ -1928,11 +1928,20 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-long-term-row__body { min-width: 0; flex: 1; }
 .mx-long-term-row__body .ad-modal-hint { margin: 2px 0 0; }
 .mx-long-term-summary { margin-bottom: 10px; }
-.mx-long-term-goal { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
-.mx-long-term-detail { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 12px; align-items: start; }
-.mx-long-term-related { display: flex; min-width: 0; flex-direction: column; gap: 10px; }
+.mx-long-term-narrative { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+.mx-long-term-narrative__section { min-width: 0; padding: 10px 12px; }
+.mx-long-term-narrative__section .ad-modal-desc { margin: 5px 0 0; white-space: pre-wrap; }
+.mx-long-term-stage-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); border-top: 1px solid var(--background-modifier-border); }
+.mx-long-term-stage-pane { min-width: 0; padding: 9px 10px 9px 3px; }
+.mx-long-term-stage-processes { position: relative; min-width: 0; padding: 34px 3px 8px 10px; border-left: 1px solid var(--background-modifier-border); }
+.mx-long-term-add-process { position: absolute; top: 7px; right: 4px; }
+.mx-long-term-stage-actions { display: flex; gap: 8px; padding-left: 27px; }
 .mx-long-term-stage { position: relative; display: flex; min-width: 0; align-items: flex-start; gap: 8px; padding: 5px 3px; color: var(--ad-text); font-size: 12px; line-height: 1.45; }
 .mx-long-term-stage > .mx-embedded-task-checkbox { margin-top: 1px; }
+.mx-long-term-process { gap: 8px; padding: 6px 2px; }
+.mx-long-term-process__body { flex: 1; min-width: 0; }
+.mx-long-term-process__body .ad-modal-hint { margin: 1px 0; }
+.mx-long-term-unassigned { margin-top: 10px; }
 .mx-process-long-term-field { margin: 7px 0; background: transparent; border-color: var(--ad-line); }
 .mx-process-long-term-field > :last-child { margin-left: auto; }
 .mx-process-long-term-link { display: block; max-width: 100%; margin-top: 4px; overflow: hidden; color: var(--ad-text-dim); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
@@ -2006,7 +2015,9 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
   .mx-plan-summary .po-kanban__col { min-width: 220px; }
   .mx-plan-calendar-days { min-width: 620px; }
   .mx-plan-workspace .po-cal { overflow-x: auto; }
-  .mx-long-term-detail { grid-template-columns: minmax(0, 1fr); }
+  .mx-long-term-narrative { grid-template-columns: minmax(0, 1fr); }
+  .mx-long-term-stage-row { grid-template-columns: minmax(0, 1fr); }
+  .mx-long-term-stage-processes { border-top: 1px solid var(--background-modifier-border); border-left: 0; padding-left: 3px; }
 }
 
 /* Gantt resized (after drag) */

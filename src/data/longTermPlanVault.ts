@@ -1,7 +1,7 @@
 import { TFile, TFolder } from 'obsidian';
 import type { App } from 'obsidian';
-import { LONG_TERM_PLAN_ROOT, linkedPeriodPlan, longTermPlanNote } from './longTermPlans';
-import type { LinkedPeriodPlan, LongTermPlan } from './longTermPlans';
+import { LONG_TERM_PLAN_ROOT, longTermPlanNote } from './longTermPlans';
+import type { LongTermPlan } from './longTermPlans';
 import type { PlanFiles } from './planning';
 import type { Process } from './processes';
 import { writeFrontmatter } from './frontmatterWriter';
@@ -24,8 +24,9 @@ export function longTermPlanName(app: App, id: string): string {
 	}
 	return '';
 }
-export function scanLinkedPeriodPlans(app: App): LinkedPeriodPlan[] {
-	return app.vault.getMarkdownFiles().map(file => linkedPeriodPlan(file.path, app.metadataCache.getFileCache(file)?.frontmatter)).filter((value): value is LinkedPeriodPlan => !!value);
+export async function updateLongTermPlanMarkdown(app: App, plan: Pick<LongTermPlan, 'path'>, update: (markdown: string) => string): Promise<void> {
+	const file = app.vault.getAbstractFileByPath(plan.path); if (!(file instanceof TFile)) throw new Error('长期计划不存在');
+	await app.vault.process(file, update);
 }
 export async function setProcessLongTermPlan(app: App, process: Pick<Process, 'sourceFile'>, longTermPlanId?: string): Promise<void> {
 	const file = app.vault.getAbstractFileByPath(process.sourceFile);

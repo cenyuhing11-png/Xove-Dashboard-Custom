@@ -14,19 +14,37 @@ export class LongTermPlanPickerModal extends Modal {
 	onClose(): void { closeListModal(this); }
 }
 
-export class ProcessAssociationModal extends Modal {
-	constructor(app: App, private processes: Process[], private plan: LongTermPlan, private choose: (processes: Process[]) => void | Promise<void>) { super(app); }
+export class StageProcessPickerModal extends Modal {
+	constructor(app: App, private processes: Process[], private plans: LongTermPlan[], private currentPlanId: string, private choose: (process: Process) => void | Promise<void>) { super(app); }
 	onOpen(): void {
-		const el = beginListModal(this, '添加关联进程'); const selected = new Set<string>();
-		for (const process of this.processes.filter(process => !process.longTermPlanId || process.longTermPlanId === this.plan.id)) {
-			const label = el.createEl('label', { cls: 'ad-modal-check' });
-			const input = label.createEl('input', { cls: 'ad-modal-checkbox', attr: { type: 'checkbox' } }); input.checked = process.longTermPlanId === this.plan.id;
-			if (input.checked) selected.add(process.sourceFile);
-			label.createSpan({ cls: 'ad-modal-check-label', text: `${process.category === 'learning' ? '学习' : '创作'} · ${process.name}${process.direction ? ` · ${process.direction}` : ''}` });
-			input.onchange = () => { if (input.checked) selected.add(process.sourceFile); else selected.delete(process.sourceFile); };
+		const el = beginListModal(this, '添加进程');
+		if (!this.processes.length) el.createDiv({ cls: 'po-empty', text: '暂无可添加进程' });
+		for (const process of this.processes) {
+			const other = process.longTermPlanId && process.longTermPlanId !== this.currentPlanId;
+			const planName = other ? this.plans.find(plan => plan.id === process.longTermPlanId)?.name : '';
+			listEntry(el, process.name, `${process.category === 'learning' ? '学习' : '创作'}${process.direction ? ` · ${process.direction}` : ''}${planName ? ` · 当前属于 ${planName}` : process.longTermPlanId === this.currentPlanId ? ' · 当前长期计划' : ''}`, () => { void Promise.resolve(this.choose(process)).then(() => this.close()); });
 		}
+	}
+	onClose(): void { closeListModal(this); }
+}
+
+export class LongTermStageModal extends Modal {
+	constructor(app: App, private save: (name: string) => void | Promise<void>) { super(app); }
+	onOpen(): void {
+		const el = beginListModal(this, '添加阶段'); el.createEl('label', { cls: 'ad-modal-label', text: '阶段名称' });
+		const input = el.createEl('input', { cls: 'ad-modal-input', attr: { type: 'text', placeholder: '例如：基础准备' } });
 		const footer = el.createDiv({ cls: 'ad-modal-btns' }); footer.createEl('button', { cls: 'ad-modal-btn', text: '取消' }).onclick = () => this.close();
-		footer.createEl('button', { cls: 'ad-modal-btn ad-modal-btn--primary', text: '保存关联' }).onclick = () => { void Promise.resolve(this.choose(this.processes.filter(process => selected.has(process.sourceFile)))).then(() => this.close()); };
+		footer.createEl('button', { cls: 'ad-modal-btn ad-modal-btn--primary', text: '添加' }).onclick = () => { if (!input.value.trim()) return; void Promise.resolve(this.save(input.value.trim())).then(() => this.close()); };
+	}
+	onClose(): void { closeListModal(this); }
+}
+
+export class ConfirmActionModal extends Modal {
+	constructor(app: App, private titleText: string, private message: string, private confirmText: string, private confirm: () => void | Promise<void>) { super(app); }
+	onOpen(): void {
+		const el = beginListModal(this, this.titleText); el.createEl('p', { cls: 'ad-modal-desc', text: this.message });
+		const footer = el.createDiv({ cls: 'ad-modal-btns' }); footer.createEl('button', { cls: 'ad-modal-btn', text: '取消' }).onclick = () => this.close();
+		footer.createEl('button', { cls: 'ad-modal-btn ad-modal-btn--primary', text: this.confirmText }).onclick = () => { void Promise.resolve(this.confirm()).then(() => this.close()); };
 	}
 	onClose(): void { closeListModal(this); }
 }

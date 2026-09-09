@@ -28,16 +28,16 @@ export function planInfo(period: PlanPeriod, date = new Date()) {
 	return { period, key, name, parent, folder: `${PLAN_ROOT}/${PLAN_FOLDERS[period]}`, path: `${PLAN_ROOT}/${PLAN_FOLDERS[period]}/${name}.md` };
 }
 
-export function planTemplate(period: PlanPeriod, date = new Date(), longTermPlanIds: readonly string[] = []): string {
+export function planTemplate(period: PlanPeriod, date = new Date()): string {
 	const info = planInfo(period, date);
 	const title = period === 'month' ? `${date.getFullYear()}年${date.getMonth() + 1}月` : period === 'quarter' || period === 'week' ? info.name.replace('-', ' ') : info.name;
 	const sections: Record<PlanPeriod, string> = {
-		year: '## 年度核心突破\n\n-\n\n## 持续维护\n\n-\n\n## 年度成果标准\n\n-\n\n## 备注\n',
-		quarter: '## 当前季度主题\n\n-\n\n## 季度重点\n\n-\n-\n-\n\n## 持续维护\n\n-\n\n## 本季度想得到的结果\n\n-\n\n## 备注\n',
-		month: '## 本月重点\n\n-\n-\n-\n\n## 持续维护\n\n-\n\n## 本月想得到的结果\n\n-\n\n## 备注\n',
-		week: '## 本周重点\n\n-\n-\n-\n\n## 本周行动\n\n- [ ]\n\n## 持续维护\n\n-\n\n## 备注\n',
+		year: '## 这一年我想达到什么状态\n\n\n## 年度核心突破\n\n-\n-\n-\n\n## 这一年我不准备做什么\n\n\n## 年底希望看到的变化\n',
+		quarter: '## 这个季度我想达到什么状态\n\n\n## 当前季度主题\n\n\n## 季度重点\n\n-\n-\n-\n\n## 这个季度我不准备做什么\n\n\n## 季末希望看到的变化\n',
+		month: '## 这个月我想达到什么状态\n\n\n## 本月重点\n\n-\n-\n-\n\n## 这个月我不准备做什么\n\n\n## 月底希望看到的变化\n',
+		week: '## 这周我想推进什么\n\n\n## 本周重点\n\n-\n-\n-\n\n## 这周我不准备做什么\n\n\n## 周末希望看到的变化\n',
 	};
-	return `---\n类型: 计划\n周期: ${folders[period]}\n期间: ${info.key}\n状态: 进行中\n关联长期计划ID: ${JSON.stringify([...new Set(longTermPlanIds.filter(Boolean))])}\n${info.parent ? `上级计划: "[[${info.parent}]]"\n` : ''}---\n\n# ${title}\n\n${sections[period]}`;
+	return `---\n类型: 计划\n周期: ${folders[period]}\n期间: ${info.key}\n状态: 进行中\n${info.parent ? `上级计划: "[[${info.parent}]]"\n` : ''}---\n\n# ${title}\n\n${sections[period]}`;
 }
 
 function plainText(value: string): string {
@@ -105,7 +105,7 @@ export async function readPlan(files: PlanFiles, period: PlanPeriod, date = new 
 }
 
 /** Never modify an existing file; a concurrent creator wins safely. */
-export async function ensurePlan(files: PlanFiles, period: PlanPeriod, date = new Date(), longTermPlanIds: readonly string[] = []): Promise<string> {
+export async function ensurePlan(files: PlanFiles, period: PlanPeriod, date = new Date()): Promise<string> {
 	const info = planInfo(period, date);
-	return ensureSafeNote(files, info.path, [PLAN_ROOT, info.folder], planTemplate(period, date, longTermPlanIds));
+	return ensureSafeNote(files, info.path, [PLAN_ROOT, info.folder], planTemplate(period, date));
 }
