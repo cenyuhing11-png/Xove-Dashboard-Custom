@@ -283,7 +283,8 @@ export class PlanWorkspaceRenderer extends Component {
 		const summary = main.createDiv({ cls: 'ad-update-block mx-long-term-summary' }); summary.createEl('h1', { cls: 'ad-modal-title', text: plan.name });
 		const progress = longTermStageProgress(plan.stages); summary.createEl('p', { cls: 'ad-modal-hint', text: `${plan.startMonth.replace('-','.')} — ${plan.endMonth.replace('-','.')} · 预计 ${longTermMonths(plan.startMonth,plan.endMonth)} 个月 · ${plan.status} · 阶段进度 ${progress.completed} / ${progress.total}` });
 		const directions=[...new Set(mapped.map(process=>process.direction).filter(Boolean))]; if(directions.length) summary.createEl('p',{cls:'ad-modal-hint',text:`涉及：${directions.join(' · ')}`});
-		const narrative = main.createDiv({ cls: 'wb-section mx-long-term-narrative' });
+		const detailContent = main.createDiv({ cls: 'mx-long-term-detail-content' });
+		const narrative = detailContent.createDiv({ cls: 'wb-section mx-long-term-narrative' });
 		this.narrativeDisclosure.selectPlan(plan.id);
 		for (const [title, value] of [['为什么做', plan.why || plan.goal], ['希望达到的状态', plan.desiredState], ['完成标准', plan.completionCriteria]] as const) {
 			const section = narrative.createDiv({ cls: 'mx-long-term-narrative__section' });
@@ -302,7 +303,7 @@ export class PlanWorkspaceRenderer extends Component {
 				new LongTermNarrativeModal(this.app, title, original, async next => { await updateLongTermPlanMarkdown(this.app, plan, raw => updateNarrativeMarkdown(raw, title, next, original)); await this.renderPlanContent(); }).open();
 			})); menu.showAtMouseEvent(event); };
 		}
-		const stages=main.createDiv({cls:'ad-update-block mx-long-term-stages'}); const stageHead=stages.createDiv({cls:'ad-card__head mx-detail-task-head'}); stageHead.createEl('h2',{cls:'ad-modal-title',text:'阶段推进'}); stageHead.createEl('button',{cls:'mx-inline-action',text:'＋ 添加阶段'}).onclick=()=>new LongTermStageModal(this.app,async(name,note)=>{const stageId=crypto.randomUUID();await updateLongTermPlanMarkdown(this.app,plan,content=>updateLongTermStage(appendLongTermStage(content,name,stageId),stageId,name,note));await this.renderPlanContent();}).open();
+		const stages=detailContent.createDiv({cls:'ad-update-block mx-long-term-stages'}); const stageHead=stages.createDiv({cls:'ad-card__head mx-detail-task-head'}); stageHead.createEl('h2',{cls:'ad-modal-title',text:'阶段推进'}); stageHead.createEl('button',{cls:'mx-inline-action',text:'＋ 添加阶段'}).onclick=()=>new LongTermStageModal(this.app,async(name,note)=>{const stageId=crypto.randomUUID();await updateLongTermPlanMarkdown(this.app,plan,content=>updateLongTermStage(appendLongTermStage(content,name,stageId),stageId,name,note));await this.renderPlanContent();}).open();
 		if(!plan.stages.length) stages.createDiv({cls:'po-empty mx-plan-empty',text:'尚未添加阶段'});
 		const assigned = new Set<string>();
 		const currentStageId=plan.stages.find(stage=>!stage.completed)?.id;
@@ -316,9 +317,9 @@ export class PlanWorkspaceRenderer extends Component {
 			const details=row.createDiv({cls:'mx-long-term-stage-details'});details.hidden=!expanded;
 			toggle.onclick=()=>{const next=details.hidden;details.hidden=!next;if(meta)meta.hidden=next;row.toggleClass('is-expanded',next);toggle.textContent=next?'⌄':'›';toggle.setAttribute('aria-expanded',String(next));toggle.setAttribute('aria-label',`${next?'收起':'展开'}阶段 ${stage.text}`);if(next)this.expandedLongTermStageIds.add(stage.id);else this.expandedLongTermStageIds.delete(stage.id);};
 			if(stage.note){const note=details.createDiv({cls:'mx-long-term-stage-note'});this.renderLongTermMarkdown(note,stage.note,plan.path);}
-			const processPane=details.createDiv({cls:'mx-long-term-stage-processes'});const processHead=processPane.createDiv({cls:'mx-long-term-process-head'});processHead.createSpan({cls:'ad-modal-label',text:refs.length?`关联进程 · ${refs.length}`:'关联进程'});for(const process of refs)this.renderStageProcess(processPane,process,plan,stage.id);const add=processPane.createEl('button',{cls:'mx-inline-action mx-long-term-process-add',text:'＋ 添加进程'});add.onclick=()=>{const candidates=allProcesses.filter(process=>process.longTermPlanId!==plan.id||!mappedPaths.has(normalizeLongTermProcessRef(process.sourceFile)));new StageProcessPickerModal(this.app,candidates,plans,plan.id,process=>this.assignProcessToStage(plan,stage.id,process)).open();};
+			const processPane=details.createDiv({cls:'mx-long-term-stage-processes'});const processHead=processPane.createDiv({cls:'mx-long-term-process-head'});processHead.createSpan({cls:'ad-modal-label',text:'进程'});for(const process of refs)this.renderStageProcess(processPane,process,plan,stage.id);const add=processPane.createEl('button',{cls:'mx-inline-action mx-long-term-process-add',text:'＋ 添加进程'});add.onclick=()=>{const candidates=allProcesses.filter(process=>process.longTermPlanId!==plan.id||!mappedPaths.has(normalizeLongTermProcessRef(process.sourceFile)));new StageProcessPickerModal(this.app,candidates,plans,plan.id,process=>this.assignProcessToStage(plan,stage.id,process)).open();};
 		}
-		const unassigned=linked.filter(process=>!assigned.has(normalizeLongTermProcessRef(process.sourceFile)));if(unassigned.length){const loose=main.createDiv({cls:'ad-update-block mx-long-term-unassigned'});loose.createEl('h2',{cls:'ad-modal-title',text:'未分配'});for(const process of unassigned)this.renderUnassignedProcess(loose,process,plan);}
+		const unassigned=linked.filter(process=>!assigned.has(normalizeLongTermProcessRef(process.sourceFile)));if(unassigned.length){const loose=detailContent.createDiv({cls:'ad-update-block mx-long-term-unassigned'});loose.createEl('h2',{cls:'ad-modal-title',text:'未分配'});for(const process of unassigned)this.renderUnassignedProcess(loose,process,plan);}
 	}
 
 	private async readCalendarJournals(): Promise<Map<string, JournalCalendarEntry>> {

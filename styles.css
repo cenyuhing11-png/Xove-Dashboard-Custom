@@ -1928,6 +1928,11 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-long-term-row__body { min-width: 0; flex: 1; }
 .mx-long-term-row__body .ad-modal-hint { margin: 2px 0 0; }
 .mx-long-term-summary { margin-bottom: 10px; }
+.mx-long-term-detail-content { width: 100%; max-width: 1080px; min-width: 0; box-sizing: border-box; container-type: inline-size; }
+.mx-long-term-detail-content .mx-narrative-title,
+.mx-long-term-detail-content .mx-detail-task-head > .ad-modal-title { font-size: 16px; font-weight: 700; line-height: 1.45; }
+.mx-long-term-detail-content .mx-detail-task-head { justify-content: flex-start; }
+.mx-long-term-detail-content .mx-detail-task-head > .mx-inline-action { margin-left: auto; }
 .mx-long-term-narrative { display: block; margin-bottom: 10px; padding: 0 12px; }
 .mx-long-term-narrative.wb-section { border: 0; border-radius: 0; box-shadow: none; background: transparent; }
 .mx-long-term-narrative__section { min-width: 0; padding: 7px 0; }
@@ -1964,9 +1969,14 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-process-row__name { min-width: 0; }
 .mx-process-row .mx-process-row__name-link { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ad-text); font-weight: 600; text-decoration: none; cursor: pointer; }
 .mx-process-row__name-link:hover { text-decoration: underline; }
-.mx-process-row--inline { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 2px; border: 0; border-bottom: 1px solid var(--ad-hair); border-radius: 0; background: transparent; box-shadow: none; }
+.mx-process-row--inline { display: grid; grid-template-columns: minmax(0, 180px) repeat(5, max-content); grid-template-areas: "name meta date schedule progress menu"; justify-content: start; align-items: center; column-gap: var(--size-4-3, 12px); min-width: 0; padding: 6px 2px; border: 0; border-bottom: 1px solid var(--ad-hair); border-radius: 0; background: transparent; box-shadow: none; }
 .mx-process-row--inline:hover { background: var(--ad-h1); }
-.mx-process-row--inline .mx-process-row__name { flex: 1 1 150px; }
+.mx-process-row--inline .mx-process-row__name { grid-area: name; }
+.mx-process-row--inline .mx-process-row__meta { grid-area: meta; }
+.mx-process-row--inline .mx-process-row__date { grid-area: date; }
+.mx-process-row--inline .mx-process-row__schedule { grid-area: schedule; }
+.mx-process-row--inline .mx-process-row__progress { grid-area: progress; }
+.mx-process-row--inline .mx-process-row__menu { grid-area: menu; }
 .mx-process-row--inline .mx-process-row__meta,
 .mx-process-row--inline .mx-process-row__date { min-width: 0; overflow: hidden; color: var(--ad-text-dim); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .mx-process-row__schedule,
@@ -2063,7 +2073,7 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
   .mx-plan-calendar-days { min-width: 620px; }
   .mx-plan-workspace .po-cal { overflow-x: auto; }
   .mx-long-term-stage-details { padding-left: 3px; }
-  .mx-process-row--inline { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; grid-template-areas: "name meta meta meta" "date schedule progress menu"; gap: 3px 7px; }
+  .mx-process-row--inline { display: grid; grid-template-columns: minmax(0, max-content) auto auto auto; grid-template-areas: "name meta meta meta" "date schedule progress menu"; gap: 3px 7px; }
   .mx-process-row--inline .mx-process-row__name { grid-area: name; width: 100%; min-width: 0; }
   .mx-process-row--inline .mx-process-row__meta { grid-area: meta; max-width: 100%; text-align: right; }
   .mx-process-row--inline .mx-process-row__date { grid-area: date; }
