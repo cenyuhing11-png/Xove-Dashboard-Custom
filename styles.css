@@ -1953,6 +1953,7 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-long-term-stage-processes { max-width: 1080px; min-width: 0; padding-top: 0; box-sizing: border-box; }
 .mx-long-term-stage { position: relative; display: flex; min-width: 0; align-items: center; gap: 7px; padding: 3px; color: var(--ad-text); font-size: 12px; line-height: 1.45; }
 .mx-long-term-stage > .mx-embedded-task-checkbox { margin-top: 1px; }
+.mx-long-term-stage-disclosure { display: flex; flex: 1; min-width: 0; min-height: 0; align-items: center; gap: 7px; padding: 0; text-align: left; cursor: pointer; }
 .mx-long-term-stage__number { flex: 0 0 auto; color: var(--ad-text-dim); font-family: var(--ad-font-mono); font-size: 11px; font-weight: 500; line-height: 1.35; }
 .mx-long-term-stage__title { min-width: 0; overflow: hidden; color: var(--ad-text); font-size: 15px; font-weight: 650; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .mx-long-term-current { flex: 0 0 auto; min-height: 20px; padding: 2px 7px; color: var(--ad-text-mute); font-size: 10px; pointer-events: none; }
