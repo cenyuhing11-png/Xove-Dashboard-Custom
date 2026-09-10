@@ -1928,6 +1928,8 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-long-term-row__body { min-width: 0; flex: 1; }
 .mx-long-term-row__body .ad-modal-hint { margin: 2px 0 0; }
 .mx-long-term-summary { margin-bottom: 10px; }
+.mx-long-term-plan-menu { margin-left: auto; border: 0; background: transparent; box-shadow: none; }
+.mx-long-term-plan-menu::before, .mx-long-term-plan-menu::after { display: none; content: none; }
 .mx-long-term-detail-content { width: 100%; min-width: 0; box-sizing: border-box; container-type: inline-size; }
 .mx-long-term-detail-content .mx-narrative-title,
 .mx-long-term-detail-content .mx-detail-task-head > .ad-modal-title { font-size: 16px; font-weight: 700; line-height: 1.45; }

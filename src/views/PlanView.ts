@@ -17,7 +17,7 @@ import { journalCalendarEntry, journalDateFromPath } from '../data/journal';
 import type { JournalCalendarEntry } from '../data/journal';
 import { renderEmbeddedTaskCheckbox } from '../components/tasks/EmbeddedTaskCheckbox';
 import { scanLongTermPlans, setProcessLongTermPlan, updateLongTermPlanMarkdown } from '../data/longTermPlanVault';
-import { appendLongTermStage, assignLongTermProcessToStage, deleteLongTermStage, ensureLongTermStageIds, longTermMonths, longTermPlansForMonth, longTermStageProgress, moveLongTermStage, normalizeLongTermProcessRef, removeLongTermProcessFromStages, toggleLongTermStage, updateLongTermStage } from '../data/longTermPlans';
+import { appendLongTermStage, assignLongTermProcessToStage, deleteLongTermStage, ensureLongTermStageIds, longTermPlanDetailMetadata, longTermPlanListMetadata, longTermPlansForMonth, longTermStageProgress, moveLongTermStage, normalizeLongTermProcessRef, removeLongTermProcessFromStages, toggleLongTermStage, updateLongTermPlanDirections, updateLongTermStage } from '../data/longTermPlans';
 import type { LongTermPlan } from '../data/longTermPlans';
 import type { Process } from '../data/processes';
 import { hasProcessSchedule } from '../data/processes';
@@ -27,6 +27,7 @@ import { ProcessTasksModal } from './ProcessTasksModal';
 import { renderProcessRow } from './ProcessRow';
 import { NarrativeDisclosure, narrativeMarkdown, updateNarrativeMarkdown } from '../data/longTermNarrative';
 import { LongTermNarrativeModal } from './LongTermNarrativeModal';
+import { LongTermPlanDirectionModal } from './LongTermPlanDirectionModal';
 
 export const PLAN_VIEW = 'xove-dashboard-custom-plan-workspace';
 
@@ -243,7 +244,7 @@ export class PlanWorkspaceRenderer extends Component {
 		for (const plan of visible) {
 			const progress = longTermStageProgress(plan.stages); const row = list.createDiv({ cls: 'wb-entry wb-entry--button', attr: { role: 'button', tabindex: '0' } });
 			const body = row.createDiv({ cls: 'mx-long-term-row__body' }); body.createDiv({ cls: 'wb-entry__label', text: plan.name });
-			body.createDiv({ cls: 'ad-modal-hint', text: `${plan.startMonth.replace('-', '.')} — ${plan.endMonth.replace('-', '.')} · ${longTermMonths(plan.startMonth, plan.endMonth)}个月 · ${plan.status}` });
+			body.createDiv({ cls: 'ad-modal-hint', text: longTermPlanListMetadata(plan) });
 			row.createSpan({ cls: 'wb-entry__detail', text: `阶段 ${progress.completed} / ${progress.total}` }); row.createSpan({ cls: 'wb-entry__arrow', text: '→' });
 			const open = () => { this.selectedLongTermPlanId = plan.id; void this.renderPlanContent(); }; row.onclick = open; row.onkeydown = event => { if(event.key==='Enter'||event.key===' '){event.preventDefault();open();} };
 		}
@@ -285,10 +286,9 @@ export class PlanWorkspaceRenderer extends Component {
 		const linked = allProcesses.filter(process => process.longTermPlanId === plan.id);
 		const mapped = plan.stages.flatMap(stage => stage.processRefs.map(ref => this.processForRef(allProcesses, ref))).filter((process): process is Process => !!process && process.longTermPlanId === plan.id);
 		const mappedPaths = new Set(mapped.map(process => normalizeLongTermProcessRef(process.sourceFile)));
-		const toolbar = main.createDiv({ cls: 'po-topbar' }); const back = toolbar.createEl('button', { cls: 'po-cal__seg-btn', text: '← 返回长期计划列表' }); back.onclick = () => { this.selectedLongTermPlanId=''; void this.renderPlanContent(); };
+		const toolbar = main.createDiv({ cls: 'po-topbar' }); const back = toolbar.createEl('button', { cls: 'po-cal__seg-btn', text: '← 返回长期计划列表' }); back.onclick = () => { this.selectedLongTermPlanId=''; void this.renderPlanContent(); }; const planMenu = toolbar.createEl('button', { cls: 'mx-inline-action mx-detail-menu mx-long-term-plan-menu', text: '···', attr: { 'aria-label': `管理长期计划 ${plan.name}` } }); planMenu.onclick = event => { const menu = new Menu(); menu.addItem(item => item.setTitle('编辑长期计划').onClick(() => new LongTermPlanDirectionModal(this.app, plan.directions, async directions => { await updateLongTermPlanMarkdown(this.app, plan, raw => updateLongTermPlanDirections(raw, directions)); await this.renderPlanContent(); }).open())); menu.showAtMouseEvent(event); };
 		const summary = main.createDiv({ cls: 'ad-update-block mx-long-term-summary' }); summary.createEl('h1', { cls: 'ad-modal-title', text: plan.name });
-		const progress = longTermStageProgress(plan.stages); summary.createEl('p', { cls: 'ad-modal-hint', text: `${plan.startMonth.replace('-','.')} — ${plan.endMonth.replace('-','.')} · 预计 ${longTermMonths(plan.startMonth,plan.endMonth)} 个月 · ${plan.status} · 阶段进度 ${progress.completed} / ${progress.total}` });
-		const directions=[...new Set(mapped.map(process=>process.direction).filter(Boolean))]; if(directions.length) summary.createEl('p',{cls:'ad-modal-hint',text:`涉及：${directions.join(' · ')}`});
+		summary.createEl('p', { cls: 'ad-modal-hint', text: longTermPlanDetailMetadata(plan) });
 		const detailContent = main.createDiv({ cls: 'mx-long-term-detail-content' });
 		const narrative = detailContent.createDiv({ cls: 'wb-section mx-long-term-narrative' });
 		this.narrativeDisclosure.selectPlan(plan.id);

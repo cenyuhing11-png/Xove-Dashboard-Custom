@@ -9,6 +9,7 @@ import { scanProjects } from '../data/projectVault';
 import { projectPath } from '../data/projects';
 import { todayStr } from '../data/taskLogic';
 import { beginListModal, closeListModal } from './viewPrimitives';
+import { renderLongTermDirectionPicker } from './LongTermPlanDirectionModal';
 
 type PlanCreateType = PlanPeriod | 'long';
 const LABELS: Array<[PlanCreateType, string]> = [['year','年计划'],['quarter','季计划'],['month','月计划'],['week','周计划'],['long','长计划']];
@@ -16,7 +17,7 @@ function isoWeekDate(year: number, week: number): Date {
 	const jan4 = new Date(year, 0, 4, 12); const monday = new Date(jan4); monday.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7) + (week - 1) * 7); return monday;
 }
 export class PlanModal extends Modal {
-	private type: PlanCreateType = 'year'; private saving = false;
+	private type: PlanCreateType = 'year'; private saving = false; private directions: string[] = [];
 	constructor(app: App, private selection: { year: number; month: number }) { super(app); }
 	onOpen(): void { this.render(); }
 	private render(): void {
@@ -26,8 +27,8 @@ export class PlanModal extends Modal {
 		const fields: Record<string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement> = {};
 		const field = (key:string,label:string,type='text') => { el.createEl('label',{cls:'ad-modal-label',text:label}); const input = type === 'textarea' ? el.createEl('textarea',{cls:'ad-modal-input',attr:{rows:'3','aria-label':label}}) : el.createEl('input',{cls:'ad-modal-input',attr:{type,'aria-label':label}}); fields[key]=input; return input; };
 		if (this.type === 'long') {
-			field('name','名称'); const start=field('start','开始月份','month'); start.value=`${this.selection.year}-${String(this.selection.month).padStart(2,'0')}`; const end=field('end','结束月份','month'); end.value=start.value;
-			el.createEl('label',{cls:'ad-modal-label',text:'状态'}); const status=el.createEl('select',{cls:'ad-modal-input'}); fields.status=status; for(const value of ['计划中','进行中','暂停','已完成','归档']) status.createEl('option',{value,text:value});
+			field('name','名称'); renderLongTermDirectionPicker(el, this.directions, directions => { this.directions = directions; }); const start=field('start','开始月份','month'); start.value=`${this.selection.year}-${String(this.selection.month).padStart(2,'0')}`; const end=field('end','结束月份','month'); end.value=start.value;
+			el.createEl('label',{cls:'ad-modal-label',text:'状态'}); const status=el.createEl('select',{cls:'ad-modal-input'}); fields.status=status; for(const value of ['计划中','进行中','暂停','已完成','归档']) status.createEl('option',{value,text:value}); status.value='计划中';
 		} else {
 			if (this.type === 'year') { const value=field('year','年份','number'); value.value=String(this.selection.year); }
 			if (this.type === 'quarter') { const year=field('year','年份','number'); year.value=String(this.selection.year); el.createEl('label',{cls:'ad-modal-label',text:'季度'}); const quarter=el.createEl('select',{cls:'ad-modal-input'}); fields.quarter=quarter; for(let q=1;q<=4;q++) quarter.createEl('option',{value:String(q),text:`Q${q}`}); quarter.value=String(Math.floor((this.selection.month-1)/3)+1); }
@@ -46,7 +47,7 @@ export class PlanModal extends Modal {
 				else {
 					const sameProject=scanProjects(this.app).find(project=>project.path===projectPath(name).path);
 					if(sameProject) throw new Error('检测到同名创作项目。请先确认是否需要将其转为长期计划。');
-					const input:NewLongTermPlan={name,status:fields.status!.value as NewLongTermPlan['status'],startMonth:fields.start!.value,endMonth:fields.end!.value};
+					const input:NewLongTermPlan={name,status:fields.status!.value as NewLongTermPlan['status'],startMonth:fields.start!.value,endMonth:fields.end!.value,directions:[...this.directions]};
 					const id=crypto.randomUUID(); path=await createLongTermPlan(files,input,id,todayStr());
 				}
 			} else {
