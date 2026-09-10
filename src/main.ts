@@ -24,6 +24,7 @@ import { journalLayoutLivePreviewExtension } from './components/journal/JournalL
 import { QuickJournalService } from './data/quickJournal';
 import { quickJournalFiles } from './data/quickJournalVault';
 import { QuickJournalModal } from './views/QuickJournalModal';
+import type { Process } from './data/processes';
 
 /** 番茄钟运行时状态（与主页卡片共享，状态栏实时显示） */
 export interface PomoState {
@@ -68,7 +69,7 @@ export default class Dashboard extends Plugin {
 		this.registerEditorExtension(journalLayoutLivePreviewExtension());
 
 		this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
-		this.registerView(DIRECTION_VIEW, (leaf) => new DirectionView(leaf));
+		this.registerView(DIRECTION_VIEW, (leaf) => new DirectionView(leaf, this));
 		this.registerView(PROJECT_VIEW, (leaf) => new ProjectView(leaf, this.embeddedTasks, () => this.settings.theme, this));
 		this.registerView(PLAN_VIEW, (leaf) => new PlanView(leaf, this));
 
@@ -442,6 +443,15 @@ export default class Dashboard extends Plugin {
 		await this.app.workspace.revealLeaf(leaf);
 		this.app.workspace.setActiveLeaf(leaf, { focus: true });
 		if (leaf.view instanceof DashboardView) await leaf.view.openDirection(name);
+	}
+	async locateWorkbenchProcess(process: Process, sourceLeaf?: WorkspaceLeaf): Promise<void> {
+		let leaf = sourceLeaf?.view instanceof DashboardView ? sourceLeaf : this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+		if (!leaf) {
+			leaf = sourceLeaf ?? this.app.workspace.getLeaf('tab');
+			await leaf.setViewState({ type: VIEW_TYPE, active: true });
+		}
+		await this.app.workspace.revealLeaf(leaf); this.app.workspace.setActiveLeaf(leaf, { focus: true });
+		if (leaf.view instanceof DashboardView) await leaf.view.locateProcess(process);
 	}
 
 	openQuickJournal(): void {

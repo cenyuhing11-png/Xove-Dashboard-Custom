@@ -23,6 +23,7 @@ import { UI_TEXT } from '../constants';
 import { renderWorkbenchHome } from '../components/workbench/WorkbenchHome';
 import { renderLifeCompass } from '../components/workbench/LifeCompass';
 import { processes } from '../data/processes';
+import type { Process } from '../data/processes';
 import { taskSourceTypeLabel } from '../data/processContentTypes';
 import { openProcess } from './ProjectView';
 import { calcHeatmapStats, getVaultNoteCounts } from '../utils/vaultOverview';
@@ -256,7 +257,13 @@ export class DashboardView extends ItemView {
 			openGantt: process => { void this.openProcessGantt(process.sourceFile); },
 			locateProcess: async process => { await this.setSection('process'); await this.processBoard?.locateProcess(process.sourceFile); },
 		});
-		this.directionRenderer = new DirectionDetailRenderer(this.app);
+		this.directionRenderer = new DirectionDetailRenderer(this.app, {
+			component: this,
+			tasks: plugin.embeddedTasks,
+			back: () => this.setSection('home'),
+			openLongTermPlan: id => this.openLongTermPlan(id),
+			locateProcess: process => this.locateProcess(process),
+		});
 	}
 
 	refreshThemeButton(): void { this.shell?.refreshSettings(); }
@@ -276,6 +283,7 @@ export class DashboardView extends ItemView {
 		else if (action === 'newPlan') { const state = this.planRenderer.getState(); new PlanModal(this.app, { year: state.selectedYear, month: state.selectedMonth }).open(); }
 	}
 	async openLongTermPlan(id: string): Promise<void> { await this.setSection('timeTrace'); await this.planRenderer.openLongTermPlan(id); }
+	async locateProcess(process: Process): Promise<void> { await this.setSection('process'); await this.processBoard?.locateProcess(process.sourceFile); }
 	async openDirection(name: string): Promise<void> {
 		try {
 			const info = directionInfo(name);

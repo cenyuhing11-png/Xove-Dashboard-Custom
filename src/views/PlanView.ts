@@ -16,7 +16,7 @@ import { journalCalendarEntry, journalDateFromPath } from '../data/journal';
 import type { JournalCalendarEntry } from '../data/journal';
 import { renderEmbeddedTaskCheckbox } from '../components/tasks/EmbeddedTaskCheckbox';
 import { scanLongTermPlans, setProcessLongTermPlan, updateLongTermPlanMarkdown } from '../data/longTermPlanVault';
-import { appendLongTermStage, assignLongTermProcessToStage, deleteLongTermStage, ensureLongTermStageIds, longTermPlanDetailMetadata, longTermPlanListMetadata, longTermPlansForMonth, longTermStageProgress, moveLongTermStage, normalizeLongTermProcessRef, removeLongTermProcessFromStages, toggleLongTermStage, updateLongTermPlanDirections, updateLongTermStage } from '../data/longTermPlans';
+import { appendLongTermStage, assignLongTermProcessToStage, deleteLongTermStage, ensureLongTermStageIds, longTermPlanDetailMetadata, longTermPlansForMonth, moveLongTermStage, normalizeLongTermProcessRef, removeLongTermProcessFromStages, toggleLongTermStage, updateLongTermPlanDirections, updateLongTermStage } from '../data/longTermPlans';
 import type { LongTermPlan } from '../data/longTermPlans';
 import type { Process } from '../data/processes';
 import { hasProcessSchedule } from '../data/processes';
@@ -27,6 +27,7 @@ import { renderProcessRow } from './ProcessRow';
 import { NarrativeDisclosure, narrativeMarkdown, updateNarrativeMarkdown } from '../data/longTermNarrative';
 import { LongTermNarrativeModal } from './LongTermNarrativeModal';
 import { LongTermPlanDirectionModal } from './LongTermPlanDirectionModal';
+import { renderLongTermPlanSummaryRow } from './LongTermPlanRow';
 
 export const PLAN_VIEW = 'xove-dashboard-custom-plan-workspace';
 
@@ -241,11 +242,7 @@ export class PlanWorkspaceRenderer extends Component {
 		const list = main.createDiv({ cls: 'po-tasklist mx-long-term-list' });
 		if (!visible.length) { list.createDiv({ cls: 'po-empty mx-plan-empty', text: '该月份暂无长期计划' }); return; }
 		for (const plan of visible) {
-			const progress = longTermStageProgress(plan.stages); const row = list.createDiv({ cls: 'wb-entry wb-entry--button', attr: { role: 'button', tabindex: '0' } });
-			const body = row.createDiv({ cls: 'mx-long-term-row__body' }); body.createDiv({ cls: 'wb-entry__label', text: plan.name });
-			body.createDiv({ cls: 'ad-modal-hint', text: longTermPlanListMetadata(plan) });
-			row.createSpan({ cls: 'wb-entry__detail', text: `阶段 ${progress.completed} / ${progress.total}` }); row.createSpan({ cls: 'wb-entry__arrow', text: '→' });
-			const open = () => { this.selectedLongTermPlanId = plan.id; void this.renderPlanContent(); }; row.onclick = open; row.onkeydown = event => { if(event.key==='Enter'||event.key===' '){event.preventDefault();open();} };
+			renderLongTermPlanSummaryRow(list, plan, () => { this.selectedLongTermPlanId = plan.id; void this.renderPlanContent(); });
 		}
 	}
 

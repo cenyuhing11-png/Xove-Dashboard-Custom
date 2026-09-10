@@ -11,6 +11,7 @@ const directionModal=readFileSync(new URL('../views/LongTermPlanDirectionModal.t
 const longTermData=readFileSync(new URL('./longTermPlans.ts',import.meta.url),'utf8');
 const shell=readFileSync(new URL('../components/workbench/WorkbenchShell.ts',import.meta.url),'utf8');
 const dashboard=readFileSync(new URL('../views/DashboardView.ts',import.meta.url),'utf8');
+const planRow=readFileSync(new URL('../views/LongTermPlanRow.ts',import.meta.url),'utf8');
 const css=readFileSync(new URL('../../styles.css',import.meta.url),'utf8');
 test('top-level navigation keeps 时迹 and adds 新建计划 after 新建进程',()=>{assert.match(shell,/label: '时迹'/);assert.ok(shell.indexOf("action: 'newPlan'")>shell.indexOf("action: 'project'"));});
 test('new-plan modal option names are exactly year quarter month week and long plan',()=>assert.match(modal,/\[\['year','年计划'\],\['quarter','季计划'\],\['month','月计划'\],\['week','周计划'\],\['long','长计划'\]\]/));
@@ -18,7 +19,7 @@ test('long plan creation presents month semantics and established five statuses'
 test('long-plan create reuses the compact multi-direction picker',()=>{assert.match(modal,/renderLongTermDirectionPicker\(el, this\.directions/);assert.match(modal,/directions:\[\.\.\.this\.directions\]/);assert.match(directionModal,/ad-prio-group mx-long-term-directions/);});
 test('direction selector options reuse the existing compass-backed projectDirections source',()=>{assert.match(directionModal,/projectDirections\(\)/);assert.doesNotMatch(directionModal,/\['设计'|'设计',\s*'AI'/);});
 test('long-plan edit reuses the same picker and writes only the direction field',()=>{assert.match(directionModal,/编辑长期计划/);assert.match(directionModal,/renderLongTermDirectionPicker/);assert.match(plan,/new LongTermPlanDirectionModal/);assert.match(plan,/updateLongTermPlanDirections/);});
-test('list and detail both use the shared one-line direction-first metadata formatters',()=>{assert.match(plan,/longTermPlanListMetadata\(plan\)/);assert.match(plan,/longTermPlanDetailMetadata\(plan\)/);assert.equal((plan.match(/longTermPlanListMetadata\(plan\)/g)??[]).length,1);assert.equal((plan.match(/longTermPlanDetailMetadata\(plan\)/g)??[]).length,1);});
+test('list and detail both use the shared one-line direction-first metadata formatters',()=>{assert.match(planRow,/longTermPlanListMetadata\(plan\)/);assert.match(plan,/longTermPlanDetailMetadata\(plan\)/);assert.equal((planRow.match(/longTermPlanListMetadata\(plan\)/g)??[]).length,1);assert.equal((plan.match(/longTermPlanDetailMetadata\(plan\)/g)??[]).length,1);});
 test('detail no longer infers plan directions from linked processes or creates a direction row',()=>{assert.doesNotMatch(plan,/mapped\.map\(process=>process\.direction\)|涉及：/);});
 test('process direction remains its original single select',()=>{assert.match(processModal,/createEl\('select'.*aria-label': '方向（可选）'/);assert.doesNotMatch(processModal,/renderLongTermDirectionPicker|directions:/);});
 test('long-plan direction editing leaves process ownership and stage references unchanged',()=>{const edit=plan.slice(plan.indexOf('const planMenu'),plan.indexOf('const summary'));assert.match(edit,/updateLongTermPlanDirections/);assert.doesNotMatch(edit,/setProcessLongTermPlan|assignLongTermProcessToStage|updateLongTermStage/);});

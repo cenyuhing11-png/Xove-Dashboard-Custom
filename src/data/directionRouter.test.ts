@@ -52,9 +52,9 @@ test('existing direction notes reuse the idempotent ensure implementation', () =
 test('legacy direction content is extracted into one shared renderer', () => {
 	assert.match(directionView, /export class DirectionDetailRenderer/);
 	assert.match(directionView, /this\.renderer\.render\(this\.contentEl, this\.direction\)/);
-	assert.match(dashboard, /new DirectionDetailRenderer\(this\.app\)/);
+	assert.match(dashboard, /new DirectionDetailRenderer\(this\.app, \{/);
 });
-test('explicit edit direction note still opens the real source Markdown', () => assert.match(directionView, /编辑方向笔记 →[\s\S]*openLearningFile\(this\.app, info\.path\)/));
+test('explicit edit direction note still opens the real source Markdown', () => { assert.match(directionView, /编辑方向笔记/); assert.match(directionView, /openSource\(info\.path\)/); assert.match(directionView, /openLearningFile\(this\.app, path\)/); });
 test('switching direction cancels stale rendering without rebuilding shell', () => {
 	assert.match(router, /previous === 'direction'\) this\.directionRenderer\.cancel\(\)/);
 	assert.doesNotMatch(router, /new WorkbenchShell|renderLifeCompass|containerEl\.empty/);
