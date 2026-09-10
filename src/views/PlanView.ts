@@ -59,6 +59,7 @@ export class PlanWorkspaceRenderer extends Component {
 	private generation = 0;
 	private active = false;
 	private sectionDisposers: Array<() => void> = [];
+	private miniCalendarDisposer?: () => void;
 	private selectedLongTermPlanId = '';
 	private expandedLongTermPlanId = '';
 	private expandedLongTermStageIds = new Set<string>();
@@ -106,6 +107,7 @@ export class PlanWorkspaceRenderer extends Component {
 	}
 	deactivate(): void {
 		this.active = false;
+		this.miniCalendarDisposer?.(); this.miniCalendarDisposer = undefined;
 		this.quickTasks?.close(); this.quickTasks = undefined;
 		this.generation++;
 		this.workspaceEl = undefined;
@@ -145,6 +147,7 @@ export class PlanWorkspaceRenderer extends Component {
 	private async renderPlanContent(): Promise<void> {
 		const container = this.workspaceEl;
 		if (!container) return;
+		this.miniCalendarDisposer?.(); this.miniCalendarDisposer = undefined;
 		const token = ++this.generation;
 		const { year, month } = this.timeState.visible;
 		const snapshot = this.mode === 'board'
@@ -182,7 +185,7 @@ export class PlanWorkspaceRenderer extends Component {
 			item.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectMode(); } });
 		}
 		list.createDiv({ cls: 'mx-time-trace-divider', attr: { 'aria-hidden': 'true' } });
-		renderTimeTraceMiniCalendar(list, { state: this.timeState, hasMarker: this.markerResolver(), onChange: state => this.setTimeState(state) });
+		this.miniCalendarDisposer = renderTimeTraceMiniCalendar(list, { state: this.timeState, hasMarker: this.markerResolver(), onChange: state => this.setTimeState(state) });
 	}
 
 	private renderPlanCard(column: HTMLElement, card: PlanWorkspaceCard, focused = false): void {

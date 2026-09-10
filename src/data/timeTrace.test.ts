@@ -18,6 +18,7 @@ import {
 	selectWeek,
 	selectYear,
 	shiftVisibleMonth,
+	yearPickerPage,
 } from './timeTrace.ts';
 import type { TimeTraceState } from './timeTrace.ts';
 
@@ -75,10 +76,29 @@ test('year selection creates only year focus', () => {
 	assert.ok(focusMatchesYear(state.focus, 2026));
 });
 
+test('picker year selection preserves the visible month and selects year precision', () => {
+	const state = selectYear({ ...september, focus: { kind: 'day', date: '2026-09-10' } }, 2024);
+	assert.deepEqual(state, { visible: { year: 2024, month: 9 }, focus: { kind: 'year', year: 2024 } });
+});
+
 test('month selection creates only month focus', () => {
 	const state = selectMonth(september);
 	assert.deepEqual(state.focus, { kind: 'month', year: 2026, month: 9 });
 	assert.ok(focusMatchesMonth(state.focus, 2026, 9));
+});
+
+test('picker month selection preserves the visible year and selects month precision', () => {
+	const state = selectMonth({ ...september, focus: { kind: 'week', isoYear: 2026, isoWeek: 37, anchorDate: '2026-09-07' } }, 3);
+	assert.deepEqual(state, { visible: { year: 2026, month: 3 }, focus: { kind: 'month', year: 2026, month: 3 } });
+});
+
+test('year picker exposes twelve years with its anchor near the centre', () => {
+	assert.deepEqual(yearPickerPage(2026), [2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032]);
+});
+
+test('year picker paging moves in non-overlapping twelve-year groups', () => {
+	assert.deepEqual(yearPickerPage(2026, -1), [2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020]);
+	assert.deepEqual(yearPickerPage(2026, 1), [2033, 2034, 2035, 2036, 2037, 2038, 2039, 2040, 2041, 2042, 2043, 2044]);
 });
 
 test('week selection stores ISO year week and Monday anchor', () => {

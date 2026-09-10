@@ -191,9 +191,51 @@ test('mini calendar uses restrained markers and existing arrow primitives', () =
 });
 test('year and month are separate interactive scope buttons', () => {
 	assert.match(miniCalendar, /text: `\$\{state\.visible\.year\} 年`/);
-	assert.match(miniCalendar, /year\.onclick = \(\) => options\.onChange\(selectYear\(state\)\)/);
+	assert.match(miniCalendar, /year\.onclick = event => \{ event\.stopPropagation\(\); openPicker\('year'\); \}/);
 	assert.match(miniCalendar, /text: `\$\{state\.visible\.month\} 月`/);
-	assert.match(miniCalendar, /month\.onclick = \(\) => options\.onChange\(selectMonth\(state\)\)/);
+	assert.match(miniCalendar, /month\.onclick = event => \{ event\.stopPropagation\(\); openPicker\('month'\); \}/);
+});
+test('year and month pickers are one mutually exclusive compact overlay', () => {
+	assert.match(miniCalendar, /let pickerKind: 'year' \| 'month' \| undefined/);
+	assert.match(miniCalendar, /if \(pickerKind === kind\) \{ closePicker\(\); return; \}[\s\S]*closePicker\(\); pickerKind = kind/);
+	assert.equal((miniCalendar.match(/mx-mini-calendar-picker is-/g) ?? []).length, 1);
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	assert.match(css, /\.mx-mini-calendar-picker \{[^}]*position: absolute[^}]*width: 212px[^}]*background: var\(--ad-s1\)/);
+	assert.match(css, /\.mx-mini-calendar-picker-grid \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+});
+test('picker lifecycle supports outside click Escape and shared section cleanup', () => {
+	assert.match(miniCalendar, /document\.addEventListener\('pointerdown', onOutsidePointer, true\)/);
+	assert.match(miniCalendar, /event\.key !== 'Escape'[\s\S]*closePicker\(\)/);
+	assert.match(miniCalendar, /return closePicker/);
+	assert.match(view, /private miniCalendarDisposer\?: \(\) => void/);
+	assert.match(view, /private async renderPlanContent[\s\S]*this\.miniCalendarDisposer\?\.\(\); this\.miniCalendarDisposer = undefined;[\s\S]*container\.empty\(\)/);
+	assert.match(view, /deactivate\(\): void \{[\s\S]*this\.miniCalendarDisposer\?\.\(\)/);
+});
+test('opening and closing a picker never changes shared time focus', () => {
+	const open = miniCalendar.match(/const openPicker = \(kind: 'year' \| 'month'\)[\s\S]*?\n\t};/)?.[0] ?? '';
+	const close = miniCalendar.match(/const closePicker = \(\): void => \{[\s\S]*?\n\t};/)?.[0] ?? '';
+	assert.doesNotMatch(open, /options\.onChange|selectYear|selectMonth/);
+	assert.doesNotMatch(close, /options\.onChange|selectYear|selectMonth/);
+});
+test('year picker pages by twelve and preserves month when choosing a year', () => {
+	assert.match(miniCalendar, /yearPickerPage\(state\.visible\.year, pageOffset\)/);
+	assert.match(miniCalendar, /renderYearPicker\(pageOffset - 1\)/);
+	assert.match(miniCalendar, /renderYearPicker\(pageOffset \+ 1\)/);
+	assert.match(miniCalendar, /options\.onChange\(selectYear\(state, value\)\)/);
+});
+test('month picker renders all twelve months and preserves year when choosing a month', () => {
+	assert.match(miniCalendar, /for \(let value = 1; value <= 12; value\+\+\)/);
+	assert.match(miniCalendar, /options\.onChange\(selectMonth\(state, value\)\)/);
+});
+test('picker selected and real-current cues are visually separate and neutral', () => {
+	assert.match(miniCalendar, /selected \? ' is-selected'/);
+	assert.match(miniCalendar, /currentYear \? ' is-current'/);
+	assert.match(miniCalendar, /currentMonth \? ' is-current'/);
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	assert.match(css, /\.mx-mini-calendar-picker-option\.is-selected \{[^}]*border-color: var\(--ad-line-s\)[^}]*background: var\(--ad-s2\)/);
+	assert.match(css, /\.mx-mini-calendar-picker-option\.is-current::after \{[^}]*width: 3px[^}]*background: var\(--ad-text-mute\)/);
+	const pickerCss = css.match(/\.mx-mini-calendar-picker-option\.is-selected \{[^}]*\}/)?.[0] ?? '';
+	assert.equal(pickerCss.includes('--ad-accent'), false);
 });
 test('year month week and day selected states all derive from the discriminated focus', () => {
 	for (const helper of ['focusMatchesYear', 'focusMatchesMonth', 'focusMatchesWeek', 'focusMatchesDay']) assert.ok(miniCalendar.includes(helper));

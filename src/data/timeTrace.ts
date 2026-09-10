@@ -10,6 +10,7 @@ export type TimeFocus =
 export interface TimeTraceState { visible: VisibleMonth; focus: TimeFocus }
 export interface MiniCalendarDay { date: Date; key: string; inMonth: boolean }
 export interface MiniCalendarWeek { isoYear: number; isoWeek: number; anchorDate: string; days: MiniCalendarDay[] }
+export const YEAR_PICKER_PAGE_SIZE = 12;
 export type TimeTraceMarkerMode = 'cycle' | 'longTerm' | 'calendar' | 'review';
 export interface TimeTraceMarkerSources {
 	planExists(period: 'year' | 'month' | 'week', date: Date): boolean;
@@ -30,8 +31,17 @@ export function shiftVisibleMonth(state: TimeTraceState, offset: number): TimeTr
 	const date = new Date(state.visible.year, state.visible.month - 1 + offset, 1, 12);
 	return { visible: visibleMonth(date), focus: state.focus };
 }
-export function selectYear(state: TimeTraceState): TimeTraceState { return { visible: state.visible, focus: { kind: 'year', year: state.visible.year } }; }
-export function selectMonth(state: TimeTraceState): TimeTraceState { return { visible: state.visible, focus: { kind: 'month', ...state.visible } }; }
+export function selectYear(state: TimeTraceState, year = state.visible.year): TimeTraceState {
+	return { visible: { year, month: state.visible.month }, focus: { kind: 'year', year } };
+}
+export function selectMonth(state: TimeTraceState, month = state.visible.month): TimeTraceState {
+	return { visible: { year: state.visible.year, month }, focus: { kind: 'month', year: state.visible.year, month } };
+}
+/** A stable twelve-year page with the anchor year near its centre. */
+export function yearPickerPage(anchorYear: number, pageOffset = 0): number[] {
+	const start = anchorYear - 5 + pageOffset * YEAR_PICKER_PAGE_SIZE;
+	return Array.from({ length: YEAR_PICKER_PAGE_SIZE }, (_, index) => start + index);
+}
 export function selectWeek(state: TimeTraceState, date: Date): TimeTraceState {
 	const anchor = atNoon(date); anchor.setDate(anchor.getDate() - ((anchor.getDay() + 6) % 7));
 	const iso = isoWeek(anchor);
