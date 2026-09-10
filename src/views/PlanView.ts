@@ -4,15 +4,15 @@ import type Dashboard from '../main';
 import type { EmbeddedTask } from '../data/embeddedTasks';
 import { TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, groupEmbeddedForDisplay, taskDisplayMarker, taskSourceSubtitle } from '../data/embeddedTasks';
 import type { PlanWorkspaceCard, PlanWorkspaceMode, PlanCalendarMode } from '../data/planWorkspace';
-import { dateKey, incompleteTaskCountOnDate, localPlanSelection, readPlanWorkspace, taskCalendarSourceLabel, tasksOnDate } from '../data/planWorkspace';
-import { planInfo } from '../data/planning';
+import { dateKey, incompleteTaskCountOnDate, readPlanWorkspace, taskCalendarSourceLabel, tasksOnDate } from '../data/planWorkspace';
+import { isoWeek, planInfo } from '../data/planning';
 import { WorkbenchShell } from '../components/workbench/WorkbenchShell';
 import { renderLifeCompass } from '../components/workbench/LifeCompass';
 import { scanLearning } from '../data/learningVault';
 import { scanProjects } from '../data/projectVault';
 import { processes } from '../data/processes';
 import { processContentTypeLabel, taskSourceTypeLabel } from '../data/processContentTypes';
-import { journalCalendarEntry, journalDateFromPath } from '../data/journal';
+import { journalCalendarEntry, journalDateFromPath, journalInfo } from '../data/journal';
 import type { JournalCalendarEntry } from '../data/journal';
 import { renderEmbeddedTaskCheckbox } from '../components/tasks/EmbeddedTaskCheckbox';
 import { scanLongTermPlans, setProcessLongTermPlan, updateLongTermPlanMarkdown } from '../data/longTermPlanVault';
@@ -28,6 +28,9 @@ import { NarrativeDisclosure, narrativeMarkdown, updateNarrativeMarkdown } from 
 import { LongTermNarrativeModal } from './LongTermNarrativeModal';
 import { LongTermPlanDirectionModal } from './LongTermPlanDirectionModal';
 import { renderLongTermPlanSummaryRow } from './LongTermPlanRow';
+import { renderTimeTraceMiniCalendar } from '../components/timeTrace/TimeTraceMiniCalendar';
+import { focusDate, focusLabel, focusMatchesWeek, focusMonth, hasTimeTraceMarker, initialTimeTraceState, parseDateKey, selectDay, selectMonth, selectToday, selectWeek, shiftVisibleMonth } from '../data/timeTrace';
+import type { TimeFocus, TimeTraceState } from '../data/timeTrace';
 
 export const PLAN_VIEW = 'xove-dashboard-custom-plan-workspace';
 
@@ -44,17 +47,13 @@ function dayLabel(date: Date): string { return `${date.getMonth() + 1}/${date.ge
 function monthTitle(year: number, month: number): string { return `${year} 年 ${month} 月`; }
 function sameDay(a: Date, b: Date): boolean { return dateKey(a) === dateKey(b); }
 function compactProcessDate(value?: string | null): string { return /^\d{4}-\d{2}-\d{2}$/.test(value ?? '') ? value!.slice(5).replace('-', '.') : '—'; }
-type TimeScope = 'year' | 'month';
 
 /** Reusable time-trace content. The legacy PlanView and the main workbench router
  * mount this same renderer, so the business UI has a single implementation. */
 export class PlanWorkspaceRenderer extends Component {
-	private selectedYear = localPlanSelection().year;
-	private selectedMonth = localPlanSelection().month;
-	private longTermScope: TimeScope = 'year';
+	private timeState: TimeTraceState = initialTimeTraceState();
 	private mode: PlanWorkspaceMode = 'board';
 	private calendarMode: PlanCalendarMode = 'month';
-	private selectedDate = new Date(this.selectedYear, this.selectedMonth - 1, new Date().getDate(), 12);
 	private sourceLabels = new Map<string, string>();
 	private workspaceEl?: HTMLElement;
 	private generation = 0;
@@ -67,16 +66,17 @@ export class PlanWorkspaceRenderer extends Component {
 	private narrativeDisclosure = new NarrativeDisclosure();
 
 	constructor(public readonly app: App, private plugin: Dashboard, private navigation?: { openProcess(process: Process): void; openGantt(process: Process): void; locateProcess?(process: Process): void }) { super(); }
-	getState() { return { selectedYear: this.selectedYear, selectedMonth: this.selectedMonth, mode: this.mode, calendarMode: this.calendarMode, selectedDate: dateKey(this.selectedDate), selectedLongTermPlanId: this.selectedLongTermPlanId }; }
+	getState() { return { selectedYear: this.timeState.visible.year, selectedMonth: this.timeState.visible.month, mode: this.mode, calendarMode: this.calendarMode, selectedDate: dateKey(focusDate(this.timeState)), selectedLongTermPlanId: this.selectedLongTermPlanId }; }
 	async setState(state: Record<string, unknown>): Promise<void> {
-		if (Number.isInteger(state.selectedYear) && Number(state.selectedYear) > 0) this.selectedYear = Number(state.selectedYear);
-		if (Number.isInteger(state.selectedMonth) && Number(state.selectedMonth) >= 1 && Number(state.selectedMonth) <= 12) this.selectedMonth = Number(state.selectedMonth);
+		const year = Number.isInteger(state.selectedYear) && Number(state.selectedYear) > 0 ? Number(state.selectedYear) : this.timeState.visible.year;
+		const month = Number.isInteger(state.selectedMonth) && Number(state.selectedMonth) >= 1 && Number(state.selectedMonth) <= 12 ? Number(state.selectedMonth) : this.timeState.visible.month;
+		this.timeState = { ...this.timeState, visible: { year, month } };
 		if (state.mode === 'board' || state.mode === 'longTermPlan' || state.mode === 'calendar' || state.mode === 'review') this.mode = state.mode;
 		if (typeof state.selectedLongTermPlanId === 'string') this.selectedLongTermPlanId = state.selectedLongTermPlanId;
 		if (state.calendarMode === 'month' || state.calendarMode === 'week') this.calendarMode = state.calendarMode;
 		if (typeof state.selectedDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(state.selectedDate)) {
-			const [year, month, day] = state.selectedDate.split('-').map(Number);
-			this.selectedDate = new Date(year!, month! - 1, day, 12);
+			const selected = parseDateKey(state.selectedDate);
+			if (selected) this.timeState = selectDay(this.timeState, selected);
 		}
 		if (this.workspaceEl) await this.renderPlanContent();
 	}
@@ -126,13 +126,14 @@ export class PlanWorkspaceRenderer extends Component {
 		await this.app.workspace.getLeaf('tab').openFile(file);
 	}
 
-	private setSelection(year: number, month: number, day = 1): void {
-		this.selectedYear = year; this.selectedMonth = month;
-		this.selectedDate = new Date(year, month - 1, Math.min(day, new Date(year, month, 0).getDate()), 12);
+	private setTimeState(state: TimeTraceState): void {
+		this.timeState = state;
+		if (state.focus.kind === 'month') this.calendarMode = 'month';
+		if (state.focus.kind === 'week') this.calendarMode = 'week';
 		void this.renderPlanContent();
 	}
-	private selectLongTermYear(): void { this.longTermScope = 'year'; void this.renderPlanContent(); }
-	private selectMonth(year: number, month: number): void { if (this.mode === 'longTermPlan') this.longTermScope = 'month'; this.setSelection(year, month); }
+	private setDayFocus(date: Date): void { this.setTimeState(selectDay(this.timeState, date)); }
+	private calendarDate(): Date { return focusDate(this.timeState); }
 	async openLongTermPlan(id: string): Promise<void> { this.mode = 'longTermPlan'; this.selectedLongTermPlanId = id; if (this.workspaceEl) await this.renderPlanContent(); }
 	private wireDisclosure(primary: HTMLButtonElement, chevron: HTMLButtonElement, toggleExpanded: () => void, syncExpanded: () => void): void {
 		const activate = (event: MouseEvent) => { event.stopPropagation(); toggleExpanded(); syncExpanded(); };
@@ -145,13 +146,14 @@ export class PlanWorkspaceRenderer extends Component {
 		const container = this.workspaceEl;
 		if (!container) return;
 		const token = ++this.generation;
+		const { year, month } = this.timeState.visible;
 		const snapshot = this.mode === 'board'
-			? await readPlanWorkspace(this.planFiles(), this.selectedYear, this.selectedMonth)
+			? await readPlanWorkspace(this.planFiles(), year, month)
 			: undefined;
 		const longTermPlans = this.mode === 'longTermPlan' ? await scanLongTermPlans(this.app) : [];
 		if (token !== this.generation || container !== this.workspaceEl) return;
 		container.empty();
-		this.renderSidebar(container, snapshot?.monthly.exists ?? false);
+		this.renderSidebar(container);
 		const main = container.createDiv({ cls: 'po-main' });
 		if (this.mode === 'board' && snapshot) this.renderBoard(main, snapshot);
 		else if (this.mode === 'longTermPlan') await this.renderLongTermPlans(main, longTermPlans);
@@ -159,7 +161,18 @@ export class PlanWorkspaceRenderer extends Component {
 		else this.renderReview(main);
 	}
 
-	private renderSidebar(container: HTMLElement, _selectedMonthExists: boolean): void {
+	private markerResolver(): (focus: TimeFocus) => boolean {
+		const dailyDates = new Set(this.app.vault.getMarkdownFiles().map(file => journalDateFromPath(file.path)).filter((date): date is string => !!date));
+		const exists = (path: string) => this.app.vault.getAbstractFileByPath(path) instanceof TFile;
+		const mode = this.mode === 'board' ? 'cycle' : this.mode === 'longTermPlan' ? 'longTerm' : this.mode;
+		return focus => hasTimeTraceMarker(mode, focus, {
+			planExists: (period, date) => exists(planInfo(period, date).path),
+			journalExists: (period, date) => exists(journalInfo(period, date).path),
+			dailyJournalExists: date => dailyDates.has(date),
+		});
+	}
+
+	private renderSidebar(container: HTMLElement): void {
 		const side = container.createDiv({ cls: 'po-sidebar' });
 		const list = side.createDiv({ cls: 'po-sidebar__list' });
 		for (const [mode, label] of [['board', '周期计划'], ['longTermPlan', '长期计划'], ['calendar', '综合日历'], ['review', '日记回顾']] as const) {
@@ -169,34 +182,11 @@ export class PlanWorkspaceRenderer extends Component {
 			item.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectMode(); } });
 		}
 		list.createDiv({ cls: 'mx-time-trace-divider', attr: { 'aria-hidden': 'true' } });
-
-		const now = localPlanSelection();
-		const current = list.createDiv({ cls: 'po-sidebar__item mx-time-trace-today', text: '今天', attr: { role: 'button', tabindex: '0' } });
-		const selectCurrent = () => { if (this.mode === 'longTermPlan') this.longTermScope = 'year'; this.setSelection(now.year, now.month, new Date().getDate()); };
-		current.addEventListener('click', selectCurrent);
-		current.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectCurrent(); } });
-		const yearBar = list.createDiv({ cls: 'mx-plan-year' });
-		const prev = yearBar.createEl('button', { cls: 'po-cal__btn', text: '‹', attr: { 'aria-label': '上一年' } });
-		if (this.mode === 'longTermPlan') {
-			const year = yearBar.createEl('button', { cls: `mx-plan-year-select${this.longTermScope === 'year' ? ' is-active' : ''}`, text: `${this.selectedYear}`, attr: { 'aria-label': `查看 ${this.selectedYear} 年全年长期计划`, 'aria-pressed': String(this.longTermScope === 'year') } });
-			year.addEventListener('click', () => this.selectLongTermYear());
-		} else yearBar.createSpan({ text: `${this.selectedYear}` });
-		const next = yearBar.createEl('button', { cls: 'po-cal__btn', text: '›', attr: { 'aria-label': '下一年' } });
-		prev.addEventListener('click', () => this.setSelection(this.selectedYear - 1, this.selectedMonth));
-		next.addEventListener('click', () => this.setSelection(this.selectedYear + 1, this.selectedMonth));
-
-		const grid = list.createDiv({ cls: 'mx-plan-months' });
-		for (let month = 1; month <= 12; month++) {
-			const exists = !!this.app.vault.getAbstractFileByPath(planInfo('month', new Date(this.selectedYear, month - 1, 1, 12)).path);
-			const monthSelected = month === this.selectedMonth && (this.mode !== 'longTermPlan' || this.longTermScope === 'month');
-			const button = grid.createEl('button', { cls: `po-chip${monthSelected ? ' is-active' : ''}`, attr: { 'aria-label': `${month} 月${exists ? '，已有月度计划' : ''}`, 'aria-pressed': String(monthSelected) } });
-			button.createSpan({ text: `${month}月` });
-			if (exists) button.createSpan({ cls: 'mx-plan-month-dot' });
-			button.addEventListener('click', () => this.selectMonth(this.selectedYear, month));
-		}
+		renderTimeTraceMiniCalendar(list, { state: this.timeState, hasMarker: this.markerResolver(), onChange: state => this.setTimeState(state) });
 	}
 
-	private renderPlanCard(column: HTMLElement, card: PlanWorkspaceCard): void {
+	private renderPlanCard(column: HTMLElement, card: PlanWorkspaceCard, focused = false): void {
+		column.toggleClass('is-time-focus', focused);
 		const head = column.createDiv({ cls: 'po-kanban__hd' });
 		head.createSpan({ text: card.title });
 		head.createSpan({ cls: 'po-kanban__count', text: String(card.entries.length) });
@@ -209,16 +199,19 @@ export class PlanWorkspaceRenderer extends Component {
 	}
 
 	private renderBoard(main: HTMLElement, snapshot: Awaited<ReturnType<typeof readPlanWorkspace>>): void {
+		const { year, month } = this.timeState.visible;
 		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar' });
 		toolbar.createSpan({ cls: 'mx-plan-title', text: '周期计划' });
-		toolbar.createSpan({ cls: 'mx-plan-context', text: `${monthTitle(this.selectedYear, this.selectedMonth)} · Q${snapshot.quarter}` });
+		toolbar.createSpan({ cls: 'mx-plan-context', text: `${monthTitle(year, month)} · Q${snapshot.quarter}` });
 		const top = main.createDiv({ cls: 'po-kanban mx-plan-summary' });
 		for (const card of [snapshot.annual, snapshot.quarterly, snapshot.monthly]) {
-			const column = top.createDiv({ cls: 'po-kanban__col' }); this.renderPlanCard(column, card);
+			const column = top.createDiv({ cls: 'po-kanban__col' }); this.renderPlanCard(column, card, card.period === this.timeState.focus.kind);
 		}
 		const weeks = main.createDiv({ cls: 'po-kanban mx-plan-weeks' });
 		for (const week of snapshot.weeks) {
-			const column = weeks.createDiv({ cls: 'po-kanban__col' });
+			const focusIso = this.timeState.focus.kind === 'day' ? isoWeek(focusDate(this.timeState)) : undefined;
+			const focused = focusMatchesWeek(this.timeState.focus, week.isoYear, week.week) || (!!focusIso && focusIso.year === week.isoYear && focusIso.week === week.week);
+			const column = weeks.createDiv({ cls: `po-kanban__col${focused ? ' is-time-focus' : ''}` });
 			const head = column.createDiv({ cls: 'po-kanban__hd' });
 			head.createSpan({ text: week.title });
 			head.createSpan({ cls: 'po-kanban__count', text: `${dayLabel(week.start)}–${dayLabel(week.end)}` });
@@ -234,7 +227,7 @@ export class PlanWorkspaceRenderer extends Component {
 	private renderReview(main: HTMLElement): void {
 		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar' });
 		toolbar.createSpan({ cls: 'mx-plan-title', text: '日记回顾' });
-		main.createDiv({ cls: 'po-empty mx-plan-empty', text: '暂无回顾内容' });
+		main.createDiv({ cls: 'po-empty mx-plan-empty', text: `已选择：${focusLabel(this.timeState.focus)}` });
 	}
 
 	private async renderLongTermPlans(main: HTMLElement, plans: LongTermPlan[]): Promise<void> {
@@ -244,11 +237,13 @@ export class PlanWorkspaceRenderer extends Component {
 			this.renderLongTermDetail(main, selected, plans); return;
 		}
 		this.selectedLongTermPlanId = '';
+		const focus = this.timeState.focus;
+		const month = focusMonth(this.timeState);
 		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar' }); toolbar.createSpan({ cls: 'mx-plan-title', text: '长期计划' });
-		toolbar.createSpan({ cls: 'mx-plan-context', text: this.longTermScope === 'year' ? `${this.selectedYear} 年` : `${this.selectedYear} 年 ${this.selectedMonth} 月` });
-		const visible = this.longTermScope === 'year' ? longTermPlansForYear(plans, this.selectedYear) : longTermPlansForMonth(plans, this.selectedYear, this.selectedMonth);
+		toolbar.createSpan({ cls: 'mx-plan-context', text: focus.kind === 'year' ? `${focus.year} 年` : `${month.year} 年 ${month.month} 月` });
+		const visible = focus.kind === 'year' ? longTermPlansForYear(plans, focus.year) : longTermPlansForMonth(plans, month.year, month.month);
 		const list = main.createDiv({ cls: 'po-tasklist mx-long-term-list' });
-		if (!visible.length) { list.createDiv({ cls: 'po-empty mx-plan-empty', text: this.longTermScope === 'year' ? `${this.selectedYear} 年暂无长期计划` : `${this.selectedYear} 年 ${this.selectedMonth} 月暂无长期计划` }); return; }
+		if (!visible.length) { list.createDiv({ cls: 'po-empty mx-plan-empty', text: focus.kind === 'year' ? `${focus.year} 年暂无长期计划` : `${month.year} 年 ${month.month} 月暂无长期计划` }); return; }
 		for (const plan of visible) {
 			renderLongTermPlanSummaryRow(list, plan, () => { this.selectedLongTermPlanId = plan.id; void this.renderPlanContent(); });
 		}
@@ -345,6 +340,7 @@ export class PlanWorkspaceRenderer extends Component {
 	}
 
 	private async renderCalendar(main: HTMLElement, token: number): Promise<void> {
+		const { year, month } = this.timeState.visible;
 		const tasks = this.plugin.embeddedTasks.all();
 		this.sourceLabels = new Map(processes(scanLearning(this.app), scanProjects(this.app), tasks).map(process => [process.sourceFile, taskSourceTypeLabel(process.contentType)]));
 		const journals = await this.readCalendarJournals();
@@ -355,53 +351,55 @@ export class PlanWorkspaceRenderer extends Component {
 		const seg = bar.createDiv({ cls: 'po-cal__seg' });
 		for (const [mode, label] of [['month', '月'], ['week', '周']] as const) {
 			const btn = seg.createEl('button', { cls: `po-cal__seg-btn${this.calendarMode === mode ? ' is-active' : ''}`, text: label });
-			btn.addEventListener('click', () => { this.calendarMode = mode; void this.renderPlanContent(); });
+			btn.addEventListener('click', () => { this.calendarMode = mode; this.setTimeState(mode === 'month' ? selectMonth(this.timeState) : selectWeek(this.timeState, this.calendarDate())); });
 		}
-		bar.createSpan({ cls: 'po-cal__ttl', text: this.calendarMode === 'month' ? monthTitle(this.selectedYear, this.selectedMonth) : this.weekTitle() });
+		bar.createSpan({ cls: 'po-cal__ttl', text: this.calendarMode === 'month' ? monthTitle(year, month) : this.weekTitle() });
 		const nav = bar.createDiv({ cls: 'po-cal__nav' });
 		const prev = nav.createEl('button', { cls: 'po-cal__btn', text: '‹' });
 		const today = nav.createEl('button', { cls: 'po-cal__btn', text: '今天' });
 		const next = nav.createEl('button', { cls: 'po-cal__btn', text: '›' });
-		prev.addEventListener('click', () => this.moveCalendar(-1)); today.addEventListener('click', () => { const n = new Date(); this.setSelection(n.getFullYear(), n.getMonth() + 1, n.getDate()); }); next.addEventListener('click', () => this.moveCalendar(1));
+		prev.addEventListener('click', () => this.moveCalendar(-1)); today.addEventListener('click', () => this.setTimeState(selectToday(this.timeState))); next.addEventListener('click', () => this.moveCalendar(1));
 		if (this.calendarMode === 'month') this.renderCalendarMonth(root, journals, tasks); else this.renderCalendarWeek(root, journals);
-		this.renderDayDetail(root, journals.get(dateKey(this.selectedDate)));
+		const selectedDate = this.calendarDate();
+		this.renderDayDetail(root, selectedDate, journals.get(dateKey(selectedDate)));
 	}
 
 	private moveCalendar(direction: -1 | 1): void {
 		if (this.calendarMode === 'month') {
-			const next = new Date(this.selectedYear, this.selectedMonth - 1 + direction, 1, 12); this.setSelection(next.getFullYear(), next.getMonth() + 1);
+			this.setTimeState(shiftVisibleMonth(this.timeState, direction));
 		} else {
-			const next = new Date(this.selectedDate); next.setDate(next.getDate() + direction * 7); this.setSelection(next.getFullYear(), next.getMonth() + 1, next.getDate());
+			const next = this.calendarDate(); next.setDate(next.getDate() + direction * 7); this.setTimeState(selectWeek({ ...this.timeState, visible: { year: next.getFullYear(), month: next.getMonth() + 1 } }, next));
 		}
 	}
 
 	private weekDates(): Date[] {
-		const start = new Date(this.selectedDate); start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+		const start = this.calendarDate(); start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
 		return Array.from({ length: 7 }, (_, index) => { const date = new Date(start); date.setDate(start.getDate() + index); return date; });
 	}
 	private weekTitle(): string { const dates = this.weekDates(); return `${dayLabel(dates[0]!)}–${dayLabel(dates[6]!)}`; }
 
 	private renderCalendarMonth(root: HTMLElement, journals: Map<string, JournalCalendarEntry>, tasks: EmbeddedTask[]): void {
+		const { year, month } = this.timeState.visible;
 		const weekdays = root.createDiv({ cls: 'po-cal__weekdays' });
 		for (const name of ['一', '二', '三', '四', '五', '六', '日']) weekdays.createSpan({ text: name });
 		const days = root.createDiv({ cls: 'po-cal__days mx-plan-calendar-days' });
-		const first = new Date(this.selectedYear, this.selectedMonth - 1, 1, 12);
+		const first = new Date(year, month - 1, 1, 12);
 		const cursor = new Date(first); cursor.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
 		const today = new Date();
 		for (let index = 0; index < 42; index++) {
 			const date = new Date(cursor); date.setDate(cursor.getDate() + index);
 			const key = dateKey(date); const journal = journals.get(key); const incompleteCount = incompleteTaskCountOnDate(tasks, key);
 			let cls = 'po-cal__day';
-			if (date.getMonth() !== this.selectedMonth - 1) cls += ' is-out';
+			if (date.getFullYear() !== year || date.getMonth() !== month - 1) cls += ' is-out';
 			if (date.getDay() === 0 || date.getDay() === 6) cls += ' is-weekend';
 			if (sameDay(date, today)) cls += ' is-today';
-			if (sameDay(date, this.selectedDate)) cls += ' is-sel';
+			if (this.timeState.focus.kind === 'day' && this.timeState.focus.date === key) cls += ' is-sel';
 			if (incompleteCount > 0) cls += ' has-incomplete-tasks';
 			const day = days.createDiv({ cls }); day.createSpan({ cls: `po-cal__day-num${sameDay(date, today) ? ' is-today' : ''}`, text: String(date.getDate()) });
 			const body = day.createDiv({ cls: 'po-cal__day-body mx-plan-calendar-day-body' }); body.createDiv({ cls: 'po-cal__slot' });
 			if (journal) this.renderCalendarJournal(body, journal, 'month');
 			if (incompleteCount > 0) day.createSpan({ cls: 'mx-plan-calendar-incomplete', text: `☐ ${incompleteCount}`, attr: { 'aria-label': `${incompleteCount} 项未完成任务` } });
-			day.addEventListener('click', () => { this.setSelection(date.getFullYear(), date.getMonth() + 1, date.getDate()); });
+			day.addEventListener('click', () => this.setDayFocus(date));
 		}
 	}
 
@@ -412,18 +410,18 @@ export class PlanWorkspaceRenderer extends Component {
 		const today = new Date();
 		for (const date of this.weekDates()) {
 			const key = dateKey(date); const tasks = tasksOnDate(this.plugin.embeddedTasks.all(), key); const journal = journals.get(key);
-			const col = cols.createDiv({ cls: `po-cal__wcol${sameDay(date, today) ? ' is-today' : ''}${sameDay(date, this.selectedDate) ? ' is-sel' : ''}` });
+			const col = cols.createDiv({ cls: `po-cal__wcol${sameDay(date, today) ? ' is-today' : ''}${this.timeState.focus.kind === 'day' && this.timeState.focus.date === key ? ' is-sel' : ''}` });
 			const head = col.createDiv({ cls: 'po-cal__wcol-hd' }); head.createSpan({ cls: 'po-cal__wcol-day', text: String(date.getDate()) }); head.createSpan({ cls: 'po-cal__wcol-name', text: `${date.getMonth() + 1}月` });
 			if (journal) this.renderCalendarJournal(col, journal);
 			for (const task of tasks) this.renderCalendarChip(col, task);
-			col.addEventListener('click', () => { this.setSelection(date.getFullYear(), date.getMonth() + 1, date.getDate()); });
+			col.addEventListener('click', () => this.setDayFocus(date));
 		}
 	}
 
-	private renderDayDetail(root: HTMLElement, journal?: JournalCalendarEntry): void {
+	private renderDayDetail(root: HTMLElement, selectedDate: Date, journal?: JournalCalendarEntry): void {
 		const detail = root.createDiv({ cls: 'po-cal__det' });
-		const tasks = tasksOnDate(this.plugin.embeddedTasks.all(), dateKey(this.selectedDate));
-		detail.createDiv({ cls: 'po-cal__det-ttl', text: `${this.selectedDate.getMonth() + 1} 月 ${this.selectedDate.getDate()} 日 · ${tasks.length} 项任务` });
+		const tasks = tasksOnDate(this.plugin.embeddedTasks.all(), dateKey(selectedDate));
+		detail.createDiv({ cls: 'po-cal__det-ttl', text: `${selectedDate.getMonth() + 1} 月 ${selectedDate.getDate()} 日 · ${tasks.length} 项任务` });
 		if (!tasks.length && !journal) { detail.createDiv({ cls: 'po-cal__det-empty', text: '当日暂无任务或日记' }); return; }
 		const layout = detail.createDiv({ cls: `mx-day-detail-layout${tasks.length && journal ? ' is-split' : ''}` });
 		if (tasks.length) {
@@ -446,7 +444,7 @@ export class PlanWorkspaceRenderer extends Component {
 			attr: { title: journal.title },
 		});
 		if (mode === 'month' && journal.titleSource !== 'quick-note') this.fitMonthJournalTitle(row);
-		row.addEventListener('click', event => { event.stopPropagation(); const [year, month, day] = journal.date.split('-').map(Number); this.setSelection(year!, month!, day!); });
+		row.addEventListener('click', event => { event.stopPropagation(); const date = parseDateKey(journal.date); if (date) this.setDayFocus(date); });
 	}
 
 	private fitMonthJournalTitle(row: HTMLElement): void {

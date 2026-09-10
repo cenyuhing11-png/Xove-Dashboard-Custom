@@ -15,6 +15,8 @@ const embeddedTaskModal = readFileSync(new URL('../views/EmbeddedTaskModal.ts', 
 const embeddedTasks = readFileSync(new URL('./embeddedTasks.ts', import.meta.url), 'utf8');
 const dashboardView = readFileSync(new URL('../views/DashboardView.ts', import.meta.url), 'utf8');
 const projectView = readFileSync(new URL('../views/ProjectView.ts', import.meta.url), 'utf8');
+const miniCalendar = readFileSync(new URL('../components/timeTrace/TimeTraceMiniCalendar.ts', import.meta.url), 'utf8');
+const timeTrace = readFileSync(new URL('./timeTrace.ts', import.meta.url), 'utf8');
 
 test('global navigation names time trace directly after home', () => assert.match(shell, /label: '首页'[\s\S]*label: '时迹'[\s\S]*label: '进程'/));
 test('plan has a dedicated top-level view', () => assert.match(view, /PLAN_VIEW = 'xove-dashboard-custom-plan-workspace'/));
@@ -71,11 +73,15 @@ test('calendar dates come only from Embedded Tasks, never process start or due d
 	assert.equal(calendar.includes('process.dueDate'), false);
 	assert.match(calendar, /tasksOnDate\(this\.plugin\.embeddedTasks\.all\(\)/);
 });
-test('selected year month and all three modes are one shared view state', () => { for (const key of ['selectedYear', 'selectedMonth', 'mode', "'review'"]) assert.ok(view.includes(key)); });
+test('all four time-trace sections read one shared time state', () => {
+	for (const key of ['timeState', "'board'", "'longTermPlan'", "'calendar'", "'review'"]) assert.ok(view.includes(key));
+	assert.equal((view.match(/private timeState:/g) ?? []).length, 1);
+});
 test('plan view does not reference data json', () => assert.equal(view.includes('data.json'), false));
-test('month selector remains three columns at every viewport width', () => {
+test('sidebar uses a compact eight-column mini calendar at every viewport width', () => {
 	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
-	assert.match(css, /\.mx-plan-months\s*\{[^}]*repeat\(3,/); assert.equal(css.includes('.mx-plan-months { grid-template-columns: repeat(6'), false);
+	assert.match(css, /\.mx-mini-calendar-grid\s*\{[^}]*grid-template-columns:\s*28px repeat\(7, minmax\(0, 1fr\)\)/);
+	assert.doesNotMatch(css, /\.mx-plan-months|\.mx-plan-year|\.mx-plan-month-dot/);
 	assert.match(css, /@container \(max-width: 720px\)[\s\S]*\.mx-plan-container/);
 });
 test('week cards use one non-wrapping flex strip that fills wide space and scrolls when narrow', () => {
@@ -153,8 +159,8 @@ test('journal detail opens its exact source file without a scroll hack', () => {
 	assert.equal(view.includes('scrollIntoView'), false);
 });
 test('selected day changes refresh only the mounted plan content', () => {
-	assert.match(view, /private setSelection[\s\S]*?void this\.renderPlanContent\(\);\n\t}/);
-	assert.doesNotMatch(view, /private setSelection[\s\S]*?void this\.mountView\(\);\n\t}/);
+	assert.match(view, /private setTimeState[\s\S]*?void this\.renderPlanContent\(\);\n\t}/);
+	assert.doesNotMatch(view, /private setTimeState[\s\S]*?void this\.mountView\(\);\n\t}/);
 });
 test('calendar navigation keeps the WorkbenchShell mounted', () => {
 	const contentRender = view.match(/private async renderPlanContent\(\)[\s\S]*?\n\t}\n\n\tprivate renderSidebar/)?.[0] ?? '';
@@ -165,7 +171,7 @@ test('calendar navigation keeps the WorkbenchShell mounted', () => {
 });
 test('plan view mode switches patch content instead of rebuilding the shell', () => {
 	assert.match(view, /this\.mode = mode; void this\.renderPlanContent\(\)/);
-	assert.match(view, /this\.calendarMode = mode; void this\.renderPlanContent\(\)/);
+	assert.match(view, /this\.calendarMode = mode; this\.setTimeState\(mode === 'month'/);
 });
 test('calendar task refresh subscription does not rebuild the outer view', () => {
 	assert.match(view, /embeddedTasks\.subscribe\(\(\) => \{ if \(this\.active && this\.mode === 'calendar'\) void this\.renderPlanContent\(\); \}\)/);
@@ -174,90 +180,95 @@ test('calendar task refresh subscription does not rebuild the outer view', () =>
 test('time trace sidebar has four equal view rows, no explanatory labels and a lightweight today action', () => {
 	assert.match(view, /\[\['board', '周期计划'\], \['longTermPlan', '长期计划'\], \['calendar', '综合日历'\], \['review', '日记回顾'\]\]/);
 	assert.match(view, /po-sidebar__item\$\{this\.mode === mode \? ' is-active' : ''\}/);
-	assert.match(view, /po-sidebar__item mx-time-trace-today', text: '今天'/);
+	assert.match(miniCalendar, /po-sidebar__item mx-time-trace-today', text: '今天'/);
 	for (const old of ["text: '视图'", "text: '时间'", "text: '当前计划'"]) assert.equal(view.includes(old), false);
 });
-test('plan sidebar dots are restrained and month controls keep author primitives', () => {
+test('mini calendar uses restrained markers and existing arrow primitives', () => {
 	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
-	assert.match(css, /\.mx-plan-month-dot\s*\{[^}]*width:\s*3px;[^}]*box-shadow:\s*none/);
-	assert.match(view, /const monthSelected = month === this\.selectedMonth && \(this\.mode !== 'longTermPlan' \|\| this\.longTermScope === 'month'\)/);
-	assert.match(view, /cls: 'po-cal__btn'/);
+	assert.match(css, /\.mx-mini-calendar-marker\s*\{[^}]*width:\s*3px;[^}]*background:\s*var\(--ad-text-mute\)/);
+	assert.match(miniCalendar, /cls: 'po-cal__btn'/);
+	assert.doesNotMatch(css, /\.mx-plan-month-dot/);
 });
-test('long-term time selector starts in year scope without changing the concrete month state', () => {
-	assert.match(view, /type TimeScope = 'year' \| 'month'/);
-	assert.match(view, /private selectedMonth = localPlanSelection\(\)\.month;[\s\S]*private longTermScope: TimeScope = 'year'/);
-	assert.match(view, /readPlanWorkspace\(this\.planFiles\(\), this\.selectedYear, this\.selectedMonth\)/);
+test('year and month are separate interactive scope buttons', () => {
+	assert.match(miniCalendar, /text: `\$\{state\.visible\.year\} 年`/);
+	assert.match(miniCalendar, /year\.onclick = \(\) => options\.onChange\(selectYear\(state\)\)/);
+	assert.match(miniCalendar, /text: `\$\{state\.visible\.month\} 月`/);
+	assert.match(miniCalendar, /month\.onclick = \(\) => options\.onChange\(selectMonth\(state\)\)/);
 });
-test('long-term year and month selected states are mutually exclusive', () => {
-	assert.match(view, /mx-plan-year-select\$\{this\.longTermScope === 'year' \? ' is-active' : ''\}/);
-	assert.match(view, /month === this\.selectedMonth && \(this\.mode !== 'longTermPlan' \|\| this\.longTermScope === 'month'\)/);
-	assert.match(view, /aria-pressed': String\(this\.longTermScope === 'year'\)/);
-	assert.match(view, /aria-pressed': String\(monthSelected\)/);
+test('year month week and day selected states all derive from the discriminated focus', () => {
+	for (const helper of ['focusMatchesYear', 'focusMatchesMonth', 'focusMatchesWeek', 'focusMatchesDay']) assert.ok(miniCalendar.includes(helper));
+	assert.match(miniCalendar, /aria-pressed': String\(selected\)/);
 });
-test('the year target is interactive only for long-term plans', () => {
-	assert.match(view, /if \(this\.mode === 'longTermPlan'\) \{[\s\S]*mx-plan-year-select[\s\S]*selectLongTermYear\(\)[\s\S]*\} else yearBar\.createSpan/);
-	assert.match(view, /private selectLongTermYear\(\): void \{ this\.longTermScope = 'year'/);
+test('one shared mini calendar renderer is mounted once by the sidebar', () => {
+	assert.equal((view.match(/renderTimeTraceMiniCalendar\(list/g) ?? []).length, 1);
+	assert.match(view, /state: this\.timeState[\s\S]*hasMarker: this\.markerResolver\(\)[\s\S]*onChange: state => this\.setTimeState\(state\)/);
 });
-test('month selection switches only long-term plans to month scope', () => {
-	assert.match(view, /private selectMonth\(year: number, month: number\): void \{ if \(this\.mode === 'longTermPlan'\) this\.longTermScope = 'month'; this\.setSelection\(year, month\); \}/);
-	assert.match(view, /button\.addEventListener\('click', \(\) => this\.selectMonth\(this\.selectedYear, month\)\)/);
+test('month arrows move only the visible month and preserve focus', () => {
+	assert.match(miniCalendar, /shiftVisibleMonth\(state, -1\)/);
+	assert.match(miniCalendar, /shiftVisibleMonth\(state, 1\)/);
 });
-test('year arrows retain the active long-term scope and month', () => {
-	const sidebar = view.match(/private renderSidebar[\s\S]*?(?=\n\tprivate renderPlanCard)/)?.[0] ?? '';
-	assert.match(sidebar, /prev\.addEventListener\('click', \(\) => this\.setSelection\(this\.selectedYear - 1, this\.selectedMonth\)\)/);
-	assert.match(sidebar, /next\.addEventListener\('click', \(\) => this\.setSelection\(this\.selectedYear \+ 1, this\.selectedMonth\)\)/);
-	assert.doesNotMatch(sidebar, /(?:prev|next)\.addEventListener[^\n]*longTermScope\s*=/);
+test('today and adjacent calendar dates select a day and update shared state', () => {
+	assert.match(miniCalendar, /selectToday\(state, today\)/);
+	assert.match(miniCalendar, /selectDay\(state, day\.date\)/);
 });
-test('month dot still means a monthly plan exists and is independent of selection', () => {
-	assert.match(view, /const exists = !!this\.app\.vault\.getAbstractFileByPath\(planInfo\('month'/);
-	assert.match(view, /if \(exists\) button\.createSpan\(\{ cls: 'mx-plan-month-dot' \}\)/);
-	assert.doesNotMatch(view, /if \((?:monthSelected|month === now\.month)\) button\.createSpan\(\{ cls: 'mx-plan-month-dot'/);
+test('week controls expose ISO week labels and select the represented Monday', () => {
+	assert.match(miniCalendar, /`W\$\{String\(week\.isoWeek\)\.padStart\(2, '0'\)\}`/);
+	assert.match(miniCalendar, /selectWeek\(state, week\.days\[0\]!\.date\)/);
 });
-test('long-term header and filtering follow the selected scope', () => {
-	assert.match(view, /text: this\.longTermScope === 'year' \? `\$\{this\.selectedYear\} 年` : `\$\{this\.selectedYear\} 年 \$\{this\.selectedMonth\} 月`/);
-	assert.match(view, /this\.longTermScope === 'year' \? longTermPlansForYear\(plans, this\.selectedYear\) : longTermPlansForMonth\(plans, this\.selectedYear, this\.selectedMonth\)/);
+test('long-term plans use year precision only for year focus and anchor month otherwise', () => {
+	assert.match(view, /focus\.kind === 'year' \? longTermPlansForYear\(plans, focus\.year\) : longTermPlansForMonth\(plans, month\.year, month\.month\)/);
+	assert.match(view, /const month = focusMonth\(this\.timeState\)/);
 });
-test('long-term empty state names the selected year or month without a large new card', () => {
-	assert.match(view, /`\$\{this\.selectedYear\} 年暂无长期计划` : `\$\{this\.selectedYear\} 年 \$\{this\.selectedMonth\} 月暂无长期计划`/);
+test('long-term empty state reflects year or month precision without a large new card', () => {
+	assert.match(view, /focus\.kind === 'year' \? `\$\{focus\.year\} 年暂无长期计划` : `\$\{month\.year\} 年 \$\{month\.month\} 月暂无长期计划`/);
 	assert.match(view, /cls: 'po-empty mx-plan-empty'/);
 });
-test('today selects the current year for long-term plans and keeps existing behavior elsewhere', () => {
-	assert.match(view, /if \(this\.mode === 'longTermPlan'\) this\.longTermScope = 'year'; this\.setSelection\(now\.year, now\.month, new Date\(\)\.getDate\(\)\)/);
-	const selectCurrent = view.match(/const selectCurrent = \(\) => \{[^\n]+\}/)?.[0] ?? '';
-	assert.doesNotMatch(selectCurrent, /this\.mode\s*=(?!=)/);
+test('period plans use visible month while week and day focus locate the matching week card', () => {
+	assert.match(view, /readPlanWorkspace\(this\.planFiles\(\), year, month\)/);
+	assert.match(view, /focusMatchesWeek\(this\.timeState\.focus, week\.isoYear, week\.week\)/);
+	assert.match(view, /this\.timeState\.focus\.kind === 'day' \? isoWeek\(focusDate\(this\.timeState\)\)/);
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	assert.match(css, /\.po-kanban__col\.is-time-focus\s*\{[^}]*border-color:\s*var\(--ad-text-mute\)/);
 });
-test('route-local long-term scope survives mode switches without new persistence', () => {
+test('shared time focus survives section switches without persistence', () => {
 	const modeSwitch = view.match(/const selectMode = \(\) => \{[^\n]+\}/)?.[0] ?? '';
 	const deactivate = view.match(/deactivate\(\): void \{[\s\S]*?\n\t\}/)?.[0] ?? '';
-	assert.doesNotMatch(modeSwitch, /longTermScope/);
-	assert.doesNotMatch(deactivate, /longTermScope/);
+	assert.doesNotMatch(modeSwitch, /timeState\s*=/);
+	assert.doesNotMatch(deactivate, /timeState\s*=/);
 	assert.doesNotMatch(view, /localStorage|saveData\(|loadData\(/);
 });
-test('period plan and calendar paths still receive a concrete selected month', () => {
-	assert.match(view, /readPlanWorkspace\(this\.planFiles\(\), this\.selectedYear, this\.selectedMonth\)/);
-	assert.match(view, /new Date\(this\.selectedYear, this\.selectedMonth - 1/);
-	assert.doesNotMatch(view, /selectedMonth\s*=\s*null/);
-});
-test('long-term scope work leaves the shared row renderer intact', () => {
+test('shared time focus leaves the long-term row renderer intact', () => {
 	assert.match(view, /renderLongTermPlanSummaryRow\(list, plan,/);
-	assert.doesNotMatch(view, /renderLongTermPlanSummaryRow\([^\n]*longTermScope/);
+	assert.doesNotMatch(view, /renderLongTermPlanSummaryRow\([^\n]*timeState/);
 });
-test('year selection uses compact inherited styling without changing the month grid', () => {
+test('mini calendar selection today and markers remain visually distinct and neutral', () => {
 	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
-	assert.match(css, /\.mx-plan-year-select \{[^}]*background: transparent;[^}]*font: inherit/);
-	assert.match(css, /\.mx-plan-year-select\.is-active \{[^}]*background: var\(--ad-s2\)/);
-	assert.match(css, /\.mx-plan-months \{[^}]*grid-template-columns: repeat\(3,/);
+	assert.match(css, /button\.mx-mini-calendar-day\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*none/);
+	assert.match(css, /\.mx-mini-calendar-day\.is-today\s*\{[^}]*border-color: var\(--ad-text-mute\)/);
+	assert.match(css, /\.mx-mini-calendar-day\.is-selected\s*\{[^}]*background: var\(--ad-s2\)/);
+	assert.match(css, /\.mx-mini-calendar-marker\s*\{[^}]*background: var\(--ad-text-mute\)/);
 });
-test('journal review is a safe local content render with the shared year and month controls still mounted', () => {
+test('journal review is a safe selected-period placeholder with the shared calendar still mounted', () => {
 	assert.match(view, /else this\.renderReview\(main\)/);
-	assert.match(view, /private renderReview[\s\S]*text: '日记回顾'[\s\S]*text: '暂无回顾内容'/);
+	assert.match(view, /private renderReview[\s\S]*text: '日记回顾'[\s\S]*`已选择：\$\{focusLabel\(this\.timeState\.focus\)\}`/);
 	assert.equal(view.includes('最近日记'), false); assert.equal(view.includes('过去的今天'), false);
 });
-test('today uses local calendar values and preserves the active view mode', () => {
-	assert.match(view, /const now = localPlanSelection\(\)/);
-	assert.match(view, /setSelection\(now\.year, now\.month, new Date\(\)\.getDate\(\)\)/);
-	const selectCurrent = view.match(/const selectCurrent = \(\) => \{[^\n]+\}/)?.[0] ?? '';
-	assert.doesNotMatch(selectCurrent, /this\.mode\s*=(?!=)/);
+test('marker semantics remain section-specific and read only', () => {
+	const resolver = view.match(/private markerResolver[\s\S]*?(?=\n\tprivate renderSidebar)/)?.[0] ?? '';
+	assert.match(resolver, /hasTimeTraceMarker\(mode, focus/);
+	assert.match(resolver, /planExists: \(period, date\) => exists\(planInfo\(period, date\)\.path\)/);
+	assert.match(resolver, /journalExists: \(period, date\) => exists\(journalInfo\(period, date\)\.path\)/);
+	assert.match(resolver, /dailyJournalExists: date => dailyDates\.has\(date\)/);
+	assert.match(timeTrace, /mode === 'longTerm'\) return false/);
+	assert.match(timeTrace, /focus\.kind === 'day'[\s\S]*mode === 'calendar' \|\| mode === 'review'/);
+	assert.doesNotMatch(resolver, /vault\.create|vault\.modify|ensurePlan/);
+});
+test('calendar reuses month week and day modes without adding a year mode', () => {
+	const calendar = view.match(/private async renderCalendar[\s\S]*?(?=\n\tprivate moveCalendar)/)?.[0] ?? '';
+	assert.match(calendar, /mode === 'month' \? selectMonth\(this\.timeState\) : selectWeek\(this\.timeState, this\.calendarDate\(\)\)/);
+	assert.match(view, /day\.addEventListener\('click', \(\) => this\.setDayFocus\(date\)\)/);
+	assert.match(calendar, /\[\['month', '月'\], \['week', '周'\]\]/);
+	assert.equal(calendar.includes("['year', '年']"), false);
 });
 test('time trace rename leaves technical PlanView and identifiers intact', () => {
 	assert.ok(view.includes('class PlanView'));
@@ -364,10 +375,11 @@ test('time trace and ProjectBoard share the same 720px outer stack threshold', (
 	assert.doesNotMatch(css, /@container \(max-width: 1100px\)[\s\S]*\.mx-plan-container/);
 	assert.doesNotMatch(css, /@media \(max-width: 1400px\)[\s\S]*\.mx-plan-container/);
 });
-test('the independent 720px selected-day split and month 3x4 layout remain intact', () => {
+test('the independent 720px selected-day split and compact mini calendar remain intact', () => {
 	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
 	assert.match(css, /@container \(max-width: 720px\)[\s\S]*\.mx-day-detail-layout\.is-split\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
-	assert.match(css, /\.mx-plan-months\s*\{[^}]*grid-template-columns:\s*repeat\(3,/);
+	assert.match(css, /\.mx-mini-calendar-grid\s*\{[^}]*grid-template-columns:\s*28px repeat\(7, minmax\(0, 1fr\)\)/);
+	assert.doesNotMatch(css, /\.mx-plan-months/);
 });
 test('every Embedded Task summary surface reaches the one shared checkbox renderer', () => {
 	const dashboard = readFileSync(new URL('../views/DashboardView.ts', import.meta.url), 'utf8');
