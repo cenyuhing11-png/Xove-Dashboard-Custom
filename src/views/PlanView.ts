@@ -12,8 +12,10 @@ import { scanLearning } from '../data/learningVault';
 import { scanProjects } from '../data/projectVault';
 import { processes } from '../data/processes';
 import { processContentTypeLabel, taskSourceTypeLabel } from '../data/processContentTypes';
-import { journalCalendarEntry, journalDateFromPath, journalInfo } from '../data/journal';
+import { JOURNAL_ROOT, journalCalendarEntry, journalDateFromPath, journalInfo, readJournalTitle } from '../data/journal';
 import type { JournalCalendarEntry } from '../data/journal';
+import { dayReviewSections, journalReviewTarget, markdownReviewSections } from '../data/journalReview';
+import type { JournalReviewMode, MarkdownReviewSection } from '../data/journalReview';
 import { renderEmbeddedTaskCheckbox } from '../components/tasks/EmbeddedTaskCheckbox';
 import { scanLongTermPlans, setProcessLongTermPlan, updateLongTermPlanMarkdown } from '../data/longTermPlanVault';
 import { appendLongTermStage, assignLongTermProcessToStage, deleteLongTermStage, ensureLongTermStageIds, longTermPlanDetailMetadata, longTermPlansForMonth, longTermPlansForYear, moveLongTermStage, normalizeLongTermProcessRef, removeLongTermProcessFromStages, toggleLongTermStage, updateLongTermPlanDirections, updateLongTermStage } from '../data/longTermPlans';
@@ -29,7 +31,7 @@ import { LongTermNarrativeModal } from './LongTermNarrativeModal';
 import { LongTermPlanDirectionModal } from './LongTermPlanDirectionModal';
 import { renderLongTermPlanSummaryRow } from './LongTermPlanRow';
 import { renderTimeTraceMiniCalendar } from '../components/timeTrace/TimeTraceMiniCalendar';
-import { focusDate, focusLabel, focusMatchesWeek, focusMonth, hasTimeTraceMarker, initialTimeTraceState, parseDateKey, selectDay, selectMonth, selectToday, selectWeek, shiftVisibleMonth } from '../data/timeTrace';
+import { focusDate, focusMatchesWeek, focusMonth, hasTimeTraceMarker, initialTimeTraceState, parseDateKey, selectDay, selectMonth, selectToday, selectWeek, shiftVisibleMonth } from '../data/timeTrace';
 import type { TimeFocus, TimeTraceState } from '../data/timeTrace';
 
 export const PLAN_VIEW = 'xove-dashboard-custom-plan-workspace';
@@ -54,6 +56,7 @@ export class PlanWorkspaceRenderer extends Component {
 	private timeState: TimeTraceState = initialTimeTraceState();
 	private mode: PlanWorkspaceMode = 'board';
 	private calendarMode: PlanCalendarMode = 'month';
+	private reviewMode: JournalReviewMode = 'review';
 	private sourceLabels = new Map<string, string>();
 	private workspaceEl?: HTMLElement;
 	private generation = 0;
@@ -67,7 +70,7 @@ export class PlanWorkspaceRenderer extends Component {
 	private narrativeDisclosure = new NarrativeDisclosure();
 
 	constructor(public readonly app: App, private plugin: Dashboard, private navigation?: { openProcess(process: Process): void; openGantt(process: Process): void; locateProcess?(process: Process): void }) { super(); }
-	getState() { return { selectedYear: this.timeState.visible.year, selectedMonth: this.timeState.visible.month, mode: this.mode, calendarMode: this.calendarMode, selectedDate: dateKey(focusDate(this.timeState)), selectedLongTermPlanId: this.selectedLongTermPlanId }; }
+	getState() { return { selectedYear: this.timeState.visible.year, selectedMonth: this.timeState.visible.month, mode: this.mode, calendarMode: this.calendarMode, reviewMode: this.reviewMode, selectedDate: dateKey(focusDate(this.timeState)), selectedLongTermPlanId: this.selectedLongTermPlanId }; }
 	async setState(state: Record<string, unknown>): Promise<void> {
 		const year = Number.isInteger(state.selectedYear) && Number(state.selectedYear) > 0 ? Number(state.selectedYear) : this.timeState.visible.year;
 		const month = Number.isInteger(state.selectedMonth) && Number(state.selectedMonth) >= 1 && Number(state.selectedMonth) <= 12 ? Number(state.selectedMonth) : this.timeState.visible.month;
@@ -75,6 +78,7 @@ export class PlanWorkspaceRenderer extends Component {
 		if (state.mode === 'board' || state.mode === 'longTermPlan' || state.mode === 'calendar' || state.mode === 'review') this.mode = state.mode;
 		if (typeof state.selectedLongTermPlanId === 'string') this.selectedLongTermPlanId = state.selectedLongTermPlanId;
 		if (state.calendarMode === 'month' || state.calendarMode === 'week') this.calendarMode = state.calendarMode;
+		if (state.reviewMode === 'review' || state.reviewMode === 'compare') this.reviewMode = state.reviewMode;
 		if (typeof state.selectedDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(state.selectedDate)) {
 			const selected = parseDateKey(state.selectedDate);
 			if (selected) this.timeState = selectDay(this.timeState, selected);
@@ -92,9 +96,9 @@ export class PlanWorkspaceRenderer extends Component {
 		this.sectionDisposers.push(() => this.app.vault.offref(createRef));
 		this.sectionDisposers.push(() => this.app.vault.offref(deleteRef));
 		this.sectionDisposers.push(() => this.app.vault.offref(renameRef));
-		const modifyRef = this.app.vault.on('modify', file => { if (this.active && (file.path.startsWith('05-计划/') || (this.mode === 'calendar' && !!journalDateFromPath(file.path)))) void this.renderPlanContent(); });
+		const modifyRef = this.app.vault.on('modify', file => { if (this.active && (file.path.startsWith('05-计划/') || ((this.mode === 'calendar' || this.mode === 'review') && file.path.startsWith(`${JOURNAL_ROOT}/`)))) void this.renderPlanContent(); });
 		this.sectionDisposers.push(() => this.app.vault.offref(modifyRef));
-		const metadataRef = this.app.metadataCache.on('changed', file => { if (this.active && this.mode === 'calendar' && !!journalDateFromPath(file.path)) void this.renderPlanContent(); });
+		const metadataRef = this.app.metadataCache.on('changed', file => { if (this.active && (this.mode === 'calendar' || this.mode === 'review') && file.path.startsWith(`${JOURNAL_ROOT}/`)) void this.renderPlanContent(); });
 		this.sectionDisposers.push(() => this.app.metadataCache.offref(metadataRef));
 		this.sectionDisposers.push(this.plugin.embeddedTasks.subscribe(() => { if (this.active && this.mode === 'calendar') void this.renderPlanContent(); }));
 	}
@@ -161,7 +165,7 @@ export class PlanWorkspaceRenderer extends Component {
 		if (this.mode === 'board' && snapshot) this.renderBoard(main, snapshot);
 		else if (this.mode === 'longTermPlan') await this.renderLongTermPlans(main, longTermPlans);
 		else if (this.mode === 'calendar') await this.renderCalendar(main, token);
-		else this.renderReview(main);
+		else await this.renderReview(main, token);
 	}
 
 	private markerResolver(): (focus: TimeFocus) => boolean {
@@ -227,10 +231,84 @@ export class PlanWorkspaceRenderer extends Component {
 		}
 	}
 
-	private renderReview(main: HTMLElement): void {
-		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar' });
+	private existingFile(paths: readonly string[]): TFile | undefined {
+		for (const path of paths) {
+			const file = this.app.vault.getAbstractFileByPath(path);
+			if (file instanceof TFile) return file;
+		}
+		return undefined;
+	}
+
+	private openSource(file: TFile): void {
+		void this.app.workspace.getLeaf('tab').openFile(file);
+	}
+
+	private async renderReviewSections(parent: HTMLElement, file: TFile, sections: MarkdownReviewSection[]): Promise<void> {
+		for (const section of sections) {
+			const block = parent.createDiv({ cls: 'mx-journal-review-section' });
+			block.createEl('h3', { cls: 'ad-modal-title', text: section.title });
+			if (!section.markdown) {
+				block.createDiv({ cls: 'ad-modal-hint', text: '暂无内容' });
+				continue;
+			}
+			const content = block.createDiv({ cls: 'mx-long-term-markdown mx-journal-review-markdown markdown-rendered' });
+			await MarkdownRenderer.render(this.app, section.markdown, content, file.path, this);
+		}
+	}
+
+	private async renderReviewDocument(parent: HTMLElement, label: string, file: TFile | undefined, emptyText: string, dayOnly = false, showHeader = true): Promise<void> {
+		if (showHeader) {
+			const head = parent.createDiv({ cls: 'mx-journal-review-document-head' });
+			head.createEl('h2', { cls: 'ad-modal-title', text: label });
+			if (file) {
+				const open = head.createEl('button', { cls: 'mx-inline-action', text: '打开原文 →', attr: { type: 'button' } });
+				open.onclick = () => this.openSource(file);
+			}
+		}
+		if (!file) { parent.createDiv({ cls: 'po-empty mx-journal-review-empty', text: emptyText }); return; }
+		try {
+			const markdown = await this.app.vault.cachedRead(file);
+			const sections = dayOnly ? dayReviewSections(markdown) : markdownReviewSections(markdown);
+			if (!sections.length) { parent.createDiv({ cls: 'po-empty mx-journal-review-empty', text: '暂无可显示内容' }); return; }
+			await this.renderReviewSections(parent, file, sections);
+		} catch {
+			parent.createDiv({ cls: 'po-empty mx-journal-review-empty', text: '暂时无法读取原文' });
+		}
+	}
+
+	private async renderReview(main: HTMLElement, token: number): Promise<void> {
+		const target = journalReviewTarget(this.timeState.focus);
+		const reviewFile = this.existingFile(target.reviewPaths);
+		const planFile = target.planPath ? this.existingFile([target.planPath]) : undefined;
+		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar mx-journal-review-toolbar' });
 		toolbar.createSpan({ cls: 'mx-plan-title', text: '日记回顾' });
-		main.createDiv({ cls: 'po-empty mx-plan-empty', text: `已选择：${focusLabel(this.timeState.focus)}` });
+		if (target.kind !== 'day') {
+			const modes = toolbar.createDiv({ cls: 'po-cal__seg mx-journal-review-modes' });
+			for (const [mode, label] of [['review', '复盘'], ['compare', '计划 ↔ 复盘']] as const) {
+				const button = modes.createEl('button', { cls: `po-cal__seg-btn${this.reviewMode === mode ? ' is-active' : ''}`, text: label });
+				button.onclick = () => { this.reviewMode = mode; void this.renderPlanContent(); };
+			}
+		}
+		if (reviewFile) {
+			const edit = toolbar.createEl('button', { cls: 'mx-inline-action mx-journal-review-edit', text: '编辑原文', attr: { type: 'button' } });
+			edit.onclick = () => this.openSource(reviewFile);
+		}
+
+		const content = main.createDiv({ cls: 'mx-journal-review-content' });
+		const record = content.createDiv({ cls: 'mx-journal-review-record-head' });
+		record.createEl('h1', { cls: 'ad-modal-title', text: target.primary });
+		const dayTitle = target.kind === 'day' && reviewFile ? readJournalTitle(this.app, reviewFile) : '';
+		if (dayTitle) record.createDiv({ cls: 'mx-journal-review-record-title', text: dayTitle });
+		if (target.secondary) record.createDiv({ cls: 'ad-modal-hint', text: target.secondary });
+		if (token !== this.generation || !main.isConnected) return;
+
+		if (target.kind !== 'day' && this.reviewMode === 'compare') {
+			const compare = content.createDiv({ cls: 'mx-journal-review-compare' });
+			await this.renderReviewDocument(compare.createDiv({ cls: 'mx-journal-review-pane is-plan' }), target.planLabel ?? '计划', planFile, `尚未创建${target.planLabel ?? '对应计划'}`);
+			await this.renderReviewDocument(compare.createDiv({ cls: 'mx-journal-review-pane is-review' }), target.reviewLabel, reviewFile, `尚未创建${target.reviewLabel}`);
+			return;
+		}
+		await this.renderReviewDocument(content.createDiv({ cls: 'mx-journal-review-pane is-reading' }), target.reviewLabel, reviewFile, `尚未创建${target.reviewLabel}`, target.kind === 'day', false);
 	}
 
 	private async renderLongTermPlans(main: HTMLElement, plans: LongTermPlan[]): Promise<void> {

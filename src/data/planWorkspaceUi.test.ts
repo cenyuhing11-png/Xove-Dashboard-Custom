@@ -94,12 +94,12 @@ test('week cards use one non-wrapping flex strip that fills wide space and scrol
 	assert.match(card, /min-width: 180px/);
 });
 test('five-week and six-week boards share the same natural flex-fill renderer', () => {
-	const board = view.match(/private renderBoard[\s\S]*?(?=\n\tprivate renderReview)/)?.[0] ?? '';
+	const board = view.match(/private renderBoard[\s\S]*?(?=\n\tprivate existingFile)/)?.[0] ?? '';
 	assert.match(board, /for \(const week of snapshot\.weeks\)/);
 	assert.doesNotMatch(board, /weeks\.length\s*===\s*[56]|grid-template-columns|flexBasis/);
 });
 test('annual quarter and month cards keep their established three-column summary', () => {
-	const board = view.match(/private renderBoard[\s\S]*?(?=\n\tprivate renderReview)/)?.[0] ?? '';
+	const board = view.match(/private renderBoard[\s\S]*?(?=\n\tprivate existingFile)/)?.[0] ?? '';
 	assert.match(board, /for \(const card of \[snapshot\.annual, snapshot\.quarterly, snapshot\.monthly\]\)/);
 	assert.match(board, /mx-plan-summary/);
 });
@@ -109,7 +109,7 @@ test('sidebar removes its duplicate title and exposes four settled time-trace vi
 	assert.match(view, /\[\['board', '周期计划'\], \['longTermPlan', '长期计划'\], \['calendar', '综合日历'\], \['review', '日记回顾'\]\]/);
 	assert.match(view, /private renderBoard[\s\S]*mx-plan-title', text: '周期计划'/);
 	assert.match(view, /private async renderCalendar[\s\S]*mx-plan-title', text: '综合日历'/);
-	assert.match(view, /private renderReview[\s\S]*mx-plan-title', text: '日记回顾'/);
+	assert.match(view, /private async renderReview[\s\S]*mx-plan-title', text: '日记回顾'/);
 });
 test('month journals use an adaptive multiline cell while quick-note fallback stays compact', () => {
 	const month = view.match(/private renderCalendarMonth[\s\S]*?(?=\n\tprivate renderCalendarWeek)/)?.[0] ?? '';
@@ -290,9 +290,9 @@ test('mini calendar selection today and markers remain visually distinct and neu
 	assert.match(css, /\.mx-mini-calendar-day\.is-selected\s*\{[^}]*background: var\(--ad-s2\)/);
 	assert.match(css, /\.mx-mini-calendar-marker\s*\{[^}]*background: var\(--ad-text-mute\)/);
 });
-test('journal review is a safe selected-period placeholder with the shared calendar still mounted', () => {
-	assert.match(view, /else this\.renderReview\(main\)/);
-	assert.match(view, /private renderReview[\s\S]*text: '日记回顾'[\s\S]*`已选择：\$\{focusLabel\(this\.timeState\.focus\)\}`/);
+test('journal review reads the selected period while the shared calendar stays mounted', () => {
+	assert.match(view, /else await this\.renderReview\(main, token\)/);
+	assert.match(view, /private async renderReview[\s\S]*journalReviewTarget\(this\.timeState\.focus\)[\s\S]*text: '日记回顾'/);
 	assert.equal(view.includes('最近日记'), false); assert.equal(view.includes('过去的今天'), false);
 });
 test('marker semantics remain section-specific and read only', () => {
@@ -490,7 +490,7 @@ test('live preview title debounce and composition guards protect Chinese input',
 	assert.match(journalLivePreview, /ignoreEvent\(\): boolean \{ return true; \}/);
 });
 test('journal metadata changes refresh the mounted calendar without rebuilding the shell', () => {
-	assert.match(view, /metadataCache\.on\('changed', file => \{ if \(this\.active && this\.mode === 'calendar' && !!journalDateFromPath\(file\.path\)\) void this\.renderPlanContent\(\); \}\)/);
+	assert.match(view, /metadataCache\.on\('changed', file => \{ if \(this\.active && \(this\.mode === 'calendar' \|\| this\.mode === 'review'\) && file\.path\.startsWith\(`\$\{JOURNAL_ROOT\}\/`\)\) void this\.renderPlanContent\(\); \}\)/);
 	assert.match(view, /sectionDisposers\.push\(\(\) => this\.app\.metadataCache\.offref\(metadataRef\)\)/);
 });
 test('quick-note fallback is not duplicated in day detail metadata', () => {

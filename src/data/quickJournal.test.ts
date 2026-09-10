@@ -148,5 +148,5 @@ test('command and both shell dispatch paths open the same Modal without a new Vi
 test('time trace continues refreshing journal rows through existing create and modify listeners', () => {
 	const plan = readFileSync(new URL('../views/PlanView.ts', import.meta.url), 'utf8');
 	assert.match(plan, /vault\.on\('create', refresh\)/);
-	assert.match(plan, /vault\.on\('modify', file => \{ if \(this\.active && \(file\.path\.startsWith\('05-计划\/'\) \|\| \(this\.mode === 'calendar' && !!journalDateFromPath\(file\.path\)\)\)\) void this\.renderPlanContent\(\); \}\)/);
+	assert.match(plan, /vault\.on\('modify', file => \{ if \(this\.active && \(file\.path\.startsWith\('05-计划\/'\) \|\| \(\(this\.mode === 'calendar' \|\| this\.mode === 'review'\) && file\.path\.startsWith\(`\$\{JOURNAL_ROOT\}\/`\)\)\)\) void this\.renderPlanContent\(\); \}\)/);
 });

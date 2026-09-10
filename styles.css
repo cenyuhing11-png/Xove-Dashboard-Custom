@@ -1955,6 +1955,27 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-plan-weeks .po-kanban__col { flex: 1 0 180px; min-width: 180px; }
 .mx-plan-container .po-kanban__col.is-time-focus { border-color: var(--ad-text-mute); background: var(--ad-h1); }
 .mx-plan-empty { min-height: 74px; padding: 18px 8px; text-align: center; }
+.mx-journal-review-toolbar { gap: 8px; }
+.mx-journal-review-modes { margin-left: 8px; }
+.mx-journal-review-edit { margin-left: auto; }
+.mx-journal-review-content { width: 100%; max-width: 1080px; min-width: 0; margin: 0 auto; padding: 4px 12px 28px; box-sizing: border-box; }
+.mx-journal-review-record-head { padding: 10px 0 12px; border-bottom: 1px solid var(--ad-line); }
+.mx-journal-review-record-head > .ad-modal-title { margin: 0; font-size: 18px; line-height: 1.45; }
+.mx-journal-review-record-title { margin-top: 3px; color: var(--ad-text); font-size: 13px; font-weight: 600; }
+.mx-journal-review-record-head > .ad-modal-hint { margin: 3px 0 0; }
+.mx-journal-review-document-head { display: flex; align-items: center; gap: 8px; padding: 12px 0 6px; }
+.mx-journal-review-document-head > .ad-modal-title { margin: 0; font-size: 14px; }
+.mx-journal-review-document-head > .mx-inline-action { margin-left: auto; }
+.mx-journal-review-section { min-width: 0; padding: 10px 0; }
+.mx-journal-review-section + .mx-journal-review-section { border-top: 1px solid var(--ad-line); }
+.mx-journal-review-section > .ad-modal-title { margin: 0 0 6px; font-size: 13px; }
+.mx-journal-review-section > .ad-modal-hint { margin: 0; }
+.mx-journal-review-markdown { padding: 0; }
+.mx-journal-review-empty { min-height: 96px; padding: 24px 8px; }
+.mx-journal-review-compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-width: 0; }
+.mx-journal-review-pane { min-width: 0; }
+.mx-journal-review-pane.is-plan { padding-right: 16px; }
+.mx-journal-review-pane.is-review { padding-left: 16px; border-left: 1px solid var(--ad-line); }
 .mx-long-term-list { display: flex; flex-direction: column; gap: 5px; padding: 10px; }
 .mx-long-term-row__body { min-width: 0; flex: 1; }
 .mx-long-term-row__body .ad-modal-hint { margin: 2px 0 0; }
@@ -2123,6 +2144,12 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 @container (max-width: 720px) {
   .mx-plan-container { flex-direction: column; min-height: 0; }
   .mx-plan-container .po-sidebar { width: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--ad-line); }
+  .mx-journal-review-toolbar { flex-wrap: wrap; }
+  .mx-journal-review-modes { order: 3; width: 100%; margin-left: 0; }
+  .mx-journal-review-content { padding-right: 8px; padding-left: 8px; }
+  .mx-journal-review-compare { grid-template-columns: minmax(0, 1fr); }
+  .mx-journal-review-pane.is-plan { padding-right: 0; }
+  .mx-journal-review-pane.is-review { padding-top: 8px; padding-left: 0; border-top: 1px solid var(--ad-line); border-left: 0; }
   .mx-plan-summary .po-kanban__col { min-width: 220px; }
   .mx-plan-calendar-days { min-width: 620px; }
   .mx-plan-workspace .po-cal { overflow-x: auto; }
