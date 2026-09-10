@@ -76,7 +76,7 @@ test('all topics list includes inactive and unlinked', () => { const a=topic('�
 test('empty detail datasets safe', () => { assert.deepEqual(directionTopics([],'设计'),[]); assert.deepEqual(directionResources([],'设计'),[]); });
 test('new learning templates direction remains optional', () => { for(const k of ['学习主题','学习资源'] as const) assert.ok(learningTemplate(k,'笔记').includes('方向: ""')); });
 test('homepage current learning is a summary, not a second navigation', () => { const s=readFileSync(new URL('../components/workbench/LearningCard.ts',import.meta.url),'utf8'); assert.ok(!s.includes('查看学习主题')); assert.ok(!s.includes('学习队列')); assert.ok(!s.includes('能力地图')); });
-test('direction detail reads long-term abilities only from the direction Markdown section',()=>{const s=readFileSync(new URL('../views/DirectionView.ts',import.meta.url),'utf8');assert.ok(s.includes('directionAbilities(markdown)'));assert.equal(s.includes('abilityNotes('),false);});
+test('direction detail reads long-term abilities only from the direction Markdown section',()=>{const s=readFileSync(new URL('./directionOverview.ts',import.meta.url),'utf8');assert.ok(s.includes('directionAbilities(markdown)'));assert.equal(s.includes('abilityNotes('),false);});
 test('all ten compass names click correct direction; badges are inert', () => {
 	const nodes:any[]=[]; const clicked:string[]=[];
 	const make=(tag:string,opts:any={})=>{ const n:any={tag,...opts,createEl:make,createSpan:(o:any)=>make('span',o),createDiv:(o:any)=>make('div',o)}; nodes.push(n); return n; };

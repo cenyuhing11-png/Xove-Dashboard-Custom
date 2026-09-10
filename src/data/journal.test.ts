@@ -111,6 +111,13 @@ test('calendar journal reads quick-note count and first daily paragraph without 
 	assert.equal(content, before);
 });
 
+test('calendar counts a multiline quick note as one entry', () => {
+	const content = '## 随时记\n\n- 09:18 第一条\n  第一条续行\n\n- 14:32 第二条\n';
+	const entry = journalCalendarEntry('04-日记与复盘/01-日记/2026-09-08.md', content, {});
+	assert.equal(entry?.quickNoteCount, 2);
+	assert.equal(entry?.title, '随时记 · 2条');
+});
+
 test('calendar journal ignores headings inside frontmatter and code fences', () => {
 	const content = '---\n说明: "# 假标题"\n---\n\n```md\n# 代码标题\n## 随时记\n- 假记录\n```\n\n# 真实标题';
 	const entry = journalCalendarEntry('04-日记与复盘/01-日记/2026-09-08.md', content, {});

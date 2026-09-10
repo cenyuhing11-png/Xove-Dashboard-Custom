@@ -1,4 +1,4 @@
-import { ItemView, Menu, TFile, TFolder, WorkspaceLeaf } from 'obsidian';
+import { ItemView, Menu, Notice, TFile, TFolder, WorkspaceLeaf } from 'obsidian';
 import { MOCK_DATA, DashboardData } from '../data/mockData';
 import { CountdownSettings } from '../settings';
 import { CountdownModal, defaultEventName } from './CountdownModal';
@@ -6,6 +6,7 @@ import { TaskEditModal } from './TaskEditModal';
 import { NewEmbeddedTaskModal, EmbeddedTaskListModal, renderEmbeddedRows } from './EmbeddedTaskModal';
 import { openProjects } from './ProjectView';
 import { UnifiedProcessModal } from './UnifiedProcessModal';
+import { PlanModal } from './PlanModal';
 import { groupEmbeddedForDisplay, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS } from '../data/embeddedTasks';
 import { scanProjects } from '../data/projectVault';
 import { TaskItem, ProjectInfo, TaskStatus, ProjectType, priorityWeight, NodeState, RepeatRule, serializeDailyNodesBlock, parseDailyNodesFromBody } from '../data/taskParser';
@@ -22,6 +23,7 @@ import { UI_TEXT } from '../constants';
 import { renderWorkbenchHome } from '../components/workbench/WorkbenchHome';
 import { renderLifeCompass } from '../components/workbench/LifeCompass';
 import { processes } from '../data/processes';
+import type { Process } from '../data/processes';
 import { taskSourceTypeLabel } from '../data/processContentTypes';
 import { openProcess } from './ProjectView';
 import { calcHeatmapStats, getVaultNoteCounts } from '../utils/vaultOverview';
@@ -34,7 +36,8 @@ import { learningFiles, scanLearning } from '../data/learningVault';
 import { ensureJournal, journalStates } from '../data/journal';
 import type { JournalKind } from '../data/journal';
 import { JournalHistoryModal } from './JournalHistoryModal';
-import { openDirection } from './DirectionView';
+import { DirectionDetailRenderer } from './DirectionView';
+import { directionInfo, ensureDirection } from '../data/compass';
 import { DIARY_FOLDER, PROJECT_ROOT } from '../data/vaultPaths';
 import { PlanWorkspaceRenderer } from './PlanView';
 import { processBoardItems } from '../data/processes';
@@ -44,7 +47,7 @@ import type Dashboard from '../main';
 import { injectSvg } from '../icons';
 
 export const VIEW_TYPE = 'xove-dashboard-custom-view';
-export type WorkbenchSection = 'home' | 'timeTrace' | 'process' | 'inbox';
+export type WorkbenchSection = 'home' | 'timeTrace' | 'process' | 'inbox' | 'direction';
 
 /** 首页模块描述符：id 对应 settings.homeModules，render 为对应渲染函数 */
 interface HomeModule {
@@ -165,8 +168,10 @@ export class DashboardView extends ItemView {
 	private shell?: WorkbenchShell;
 	private lifeCompass?: HTMLElement;
 	private currentSection: WorkbenchSection = 'home';
+	private selectedDirection: string | null = null;
 	private sectionScroll = new Map<WorkbenchSection, number>();
 	private planRenderer: PlanWorkspaceRenderer;
+	private directionRenderer: DirectionDetailRenderer;
 	private processBoard?: ProjectBoard;
 	private processSource?: ProjectBoardSource;
 
@@ -247,7 +252,18 @@ export class DashboardView extends ItemView {
 		this.dashboardStore = new DashboardStore(this.taskStore);
 		this.oppBoard = new OpportunityBoard(this);
 		this.projectBoard = new ProjectBoard(this);
-		this.planRenderer = new PlanWorkspaceRenderer(this.app, plugin);
+		this.planRenderer = new PlanWorkspaceRenderer(this.app, plugin, {
+			openProcess: process => { void openProcess(this.app, process); },
+			openGantt: process => { void this.openProcessGantt(process.sourceFile); },
+			locateProcess: async process => { await this.setSection('process'); await this.processBoard?.locateProcess(process.sourceFile); },
+		});
+		this.directionRenderer = new DirectionDetailRenderer(this.app, {
+			component: this,
+			tasks: plugin.embeddedTasks,
+			back: () => this.setSection('home'),
+			openLongTermPlan: id => this.openLongTermPlan(id),
+			locateProcess: process => this.locateProcess(process),
+		});
 	}
 
 	refreshThemeButton(): void { this.shell?.refreshSettings(); }
@@ -261,9 +277,26 @@ export class DashboardView extends ItemView {
 		else if (action === 'plan') await this.setSection('timeTrace');
 		else if (action === 'all') await this.setSection('process');
 		else if (action === 'diary') await this.createDiary();
+		else if (action === 'quickJournal') this.plugin.openQuickJournal();
 		else if (action === 'task') new NewEmbeddedTaskModal(this.app, this.plugin.embeddedTasks).open();
 		else if (action === 'project') new UnifiedProcessModal(this.app).open();
+		else if (action === 'newPlan') { const state = this.planRenderer.getState(); new PlanModal(this.app, { year: state.selectedYear, month: state.selectedMonth }).open(); }
 	}
+	async openLongTermPlan(id: string): Promise<void> { await this.setSection('timeTrace'); await this.planRenderer.openLongTermPlan(id); }
+	async locateProcess(process: Process): Promise<void> { await this.setSection('process'); await this.processBoard?.locateProcess(process.sourceFile); }
+	async openDirection(name: string): Promise<void> {
+		try {
+			const info = directionInfo(name);
+			await ensureDirection(learningFiles(this.app), info.name);
+			this.selectedDirection = info.name;
+			await this.setSection('direction');
+		} catch (error) {
+			this.selectedDirection = null;
+			await this.setSection('home');
+			new Notice(`无法打开方向：${error instanceof Error ? error.message : '请检查权限'}`);
+		}
+	}
+	private async openProcessGantt(sourceFile: string): Promise<void> { await this.setSection('process'); await this.processBoard?.openProcessGantt(sourceFile); }
 	getViewType(): string { return VIEW_TYPE; }
 	getDisplayText(): string { return '夏知之 · 梦序'; }
 	getIcon(): string { return 'layout-dashboard'; }
@@ -285,7 +318,7 @@ export class DashboardView extends ItemView {
 		const d = MOCK_DATA;
 		this.shell = new WorkbenchShell(this.plugin, this.dashboardEl, action => this.navigateWorkbench(action), 'home', root => this.renderParseIssues(root));
 		this.addChild(this.shell);
-		this.lifeCompass = renderLifeCompass(this.dashboardEl, name => { void openDirection(this.app, name); });
+		this.lifeCompass = renderLifeCompass(this.dashboardEl, name => { void this.openDirection(name); });
 		this.addChild(this.planRenderer);
 		this.renderBoard(this.dashboardEl, d);
 
@@ -297,6 +330,8 @@ export class DashboardView extends ItemView {
 				void this.processBoard?.refresh();
 			} else if (this.currentSection === 'inbox') {
 				this.oppBoard.scheduleRefresh();
+			} else if (this.currentSection === 'direction') {
+				void this.renderDirectionSection();
 			} else if (this.currentSection === 'home') {
 				if (this.homeMode === 'classic') this.scheduleHeatmapRefresh();
 				this.dashboardStore.requestRefresh();
@@ -322,6 +357,8 @@ export class DashboardView extends ItemView {
 					void this.updatePulse();
 					this.oppBoard.scheduleRefresh();
 				}
+			} else if (this.currentSection === 'direction') {
+				void this.renderDirectionSection();
 			} else if (this.currentSection === 'home') {
 				// Home: ignore edits to unrelated files. Only task files (markdown under
 				// the projects folder) affect the home cards, so this saves a full rescan
@@ -336,8 +373,9 @@ export class DashboardView extends ItemView {
 			void this.refreshHomeCards();
 		});
 		let planDay = todayStr();
-		this.registerEvent(this.app.metadataCache.on('changed', () => { void this.renderWorkbenchDashboard(); }));
-		this.registerEvent(this.app.metadataCache.on('resolved', () => { void this.renderWorkbenchDashboard(); }));
+		const refreshMetadata = () => { if (this.currentSection === 'direction') void this.renderDirectionSection(); else void this.renderWorkbenchDashboard(); };
+		this.registerEvent(this.app.metadataCache.on('changed', refreshMetadata));
+		this.registerEvent(this.app.metadataCache.on('resolved', refreshMetadata));
 		this.registerInterval(window.setInterval(() => {
 			if (planDay === todayStr()) return;
 			planDay = todayStr();
@@ -359,6 +397,7 @@ export class DashboardView extends ItemView {
 
 	async onClose(): Promise<void> {
 		this.planRenderer.deactivate();
+		this.directionRenderer.cancel();
 		this.removeChild(this.planRenderer);
 		this.lifeCompass?.remove(); this.lifeCompass = undefined;
 		this.processBoard?.closeTaskPreview();
@@ -879,17 +918,22 @@ export class DashboardView extends ItemView {
 	/** Switch only the workbench content area; the shell and compass stay mounted. */
 	async setSection(section: WorkbenchSection): Promise<void> {
 		if (!this.boardEl) return;
+		if (section === 'direction') {
+			try { if (!this.selectedDirection) throw new Error('未选择人生方向'); directionInfo(this.selectedDirection); }
+			catch { this.selectedDirection = null; section = 'home'; }
+		}
 		const previous = this.currentSection;
 		this.sectionScroll.set(previous, this.contentEl.scrollTop);
 		if (previous === 'timeTrace') this.planRenderer.deactivate();
 		if (previous === 'process') { this.processBoard?.closeTaskPreview(); this.processBoard?.dispose(); }
 		if (previous === 'inbox') this.oppBoard.dispose();
+		if (previous === 'direction') this.directionRenderer.cancel();
 
 		this.exitEditMode();
 		this.currentSection = section;
 		this.shell?.setActive(section === 'timeTrace' ? 'plan' : section === 'process' ? 'all' : section === 'inbox' ? 'opportunity' : 'home');
 		this.boardEl.empty();
-		for (const cls of ['ad-board', 'wb-home', 'po-board', 'op-board', 'mx-plan-workspace', 'mx-project-overview']) this.boardEl.removeClass(cls);
+		for (const cls of ['ad-board', 'wb-home', 'po-board', 'op-board', 'mx-plan-workspace', 'mx-project-overview', 'mx-direction', 'ad-modal']) this.boardEl.removeClass(cls);
 
 		if (section === 'home') {
 			this.boardEl.addClass('ad-board', 'wb-home');
@@ -906,16 +950,25 @@ export class DashboardView extends ItemView {
 					items: () => processBoardItems(processes(scanLearning(this.app), scanProjects(this.app), this.plugin.embeddedTasks.all())),
 					open: item => { if ('process' in item) void openProcess(this.app, item.process); else void openProjects(this.app, item.project); },
 					changeStatus: (item, status) => requestProcessStatusChange(this.app, { sourceFile: item.key, processType: 'process' in item ? item.process.processType : 'project', projectId: 'project' in item ? item.project.id : item.process.processType === 'project' && !item.process.id.startsWith('project:') ? item.process.id : undefined }, status),
+					openLongTermPlan: id => { void this.openLongTermPlan(id); },
 				};
 				this.processBoard = new ProjectBoard(this.processSource);
 			} else this.processSource.boardEl = this.boardEl;
 			await this.processBoard!.show();
+		} else if (section === 'direction') {
+			this.boardEl.addClass('mx-direction', 'ad-modal');
+			await this.renderDirectionSection();
 		} else {
 			await this.oppBoard.show(true);
 		}
 		requestAnimationFrame(() => {
 			if (this.currentSection === section) this.contentEl.scrollTop = this.sectionScroll.get(section) ?? 0;
 		});
+	}
+
+	private async renderDirectionSection(): Promise<void> {
+		if (!this.boardEl || this.currentSection !== 'direction' || !this.selectedDirection) return;
+		await this.directionRenderer.render(this.boardEl, this.selectedDirection);
 	}
 
 	private async showDashboard(): Promise<void> {

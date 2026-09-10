@@ -24,6 +24,8 @@ class Element {
 	createDiv(opts: any = {}): Element { return this.createEl('div', opts); }
 	addClass(cls: string): void { this.classes.add(cls); }
 	removeClass(cls: string): void { this.classes.delete(cls); }
+	toggleClass(cls: string, active: boolean): void { if (active) this.classes.add(cls); else this.classes.delete(cls); }
+	setAttribute(name: string, value: string): void { this.attr[name] = value; }
 	setText(text: string): void { this.text = text; }
 	closest(): Element { return this; }
 	empty(): void { this.children = []; }
@@ -59,7 +61,7 @@ function parseYaml(source: string): Record<string, unknown> {
 	return result;
 }
 const code = buildSync({
-	stdin: { contents: "export { NewEmbeddedTaskModal } from './src/views/EmbeddedTaskModal'; export { UnifiedProcessModal } from './src/views/UnifiedProcessModal'; export { DirectionAbilityModal } from './src/views/DirectionAbilityModal';", resolveDir: fileURLToPath(new URL('../../', import.meta.url)) },
+	stdin: { contents: "export { NewEmbeddedTaskModal } from './src/views/EmbeddedTaskModal'; export { UnifiedProcessModal } from './src/views/UnifiedProcessModal'; export { DirectionAbilityModal } from './src/views/DirectionAbilityModal'; export { PlanModal } from './src/views/PlanModal'; export { LongTermPlanDirectionModal } from './src/views/LongTermPlanDirectionModal';", resolveDir: fileURLToPath(new URL('../../', import.meta.url)) },
 	bundle: true, platform: 'node', format: 'cjs', write: false, external: ['obsidian'],
 }).outputFiles[0]!.text;
 
@@ -94,7 +96,7 @@ function fixture() {
 		assert.equal(id, 'obsidian'); return { Modal, ItemView: class {}, TFile: File, TFolder: Folder, parseYaml, Notice: class { constructor(text: string) { notices.push(text); } } };
 	} });
 	const store = new EmbeddedTaskIndex({ paths: () => [...files.keys()], read: async p => files.get(p)!, process: async (p, update) => { files.set(p, update(files.get(p)!)); }, ensureDaily: async () => {} }, randomUUID);
-	return { files, dirs, app, store, notices, opened, project, learning, Task: module.exports.NewEmbeddedTaskModal, Project: (class extends module.exports.UnifiedProcessModal { constructor(app:any) { super(app, 'creation'); } onOpen(){ super.onOpen(); button(this as any, '项目与成果').onclick(); } }) as any, Unified: module.exports.UnifiedProcessModal, Ability: module.exports.DirectionAbilityModal, openedModal: () => openedModals.at(-1) };
+	return { files, dirs, app, store, notices, opened, project, learning, Task: module.exports.NewEmbeddedTaskModal, Project: (class extends module.exports.UnifiedProcessModal { constructor(app:any) { super(app, 'creation'); } onOpen(){ super.onOpen(); button(this as any, '项目与成果').onclick(); } }) as any, Unified: module.exports.UnifiedProcessModal, Ability: module.exports.DirectionAbilityModal, Plan: module.exports.PlanModal, LongTermDirection: module.exports.LongTermPlanDirectionModal, openedModal: () => openedModals.at(-1) };
 }
 function control(modal: Modal, label: string): Element { const el = modal.contentEl.all().find(e => e.attr['aria-label'] === label); assert.ok(el, label); return el; }
 function set(modal: Modal, label: string, value: string): void { const el = control(modal, label); el.value = value; el.oninput(); el.onchange(); }
@@ -291,4 +293,18 @@ test('Homepage and theme list have no duplicate process creation while resource 
 });
 test('Compact Quick Task Preview gains no creation button or UnifiedProcessModal dependency',()=>{
 	const source=readFileSync(new URL('../views/ProcessTasksModal.ts',import.meta.url),'utf8');for(const text of ['新增任务','新建任务','UnifiedProcessModal'])assert.equal(source.includes(text),false);assert.ok(source.includes('打开完整详情 →'));
+});
+test('Long-plan creation supports selecting and cancelling multiple compass directions',async()=>{
+	const f=fixture(),m=new f.Plan(f.app,{year:2026,month:9});m.onOpen();button(m,'长计划').onclick();
+	for(const value of ['设计','AI','3D'])button(m,value).onclick();button(m,'AI').onclick();
+	set(m,'名称','多方向计划');button(m,'创建计划').onclick();await flush();await flush();const raw=f.files.get('05-计划/07-长期计划/多方向计划.md');assert.ok(raw,`未创建长期计划：${f.notices.join('；')}`);
+	assert.match(raw,/方向:\n  - 设计\n  - 3D\n开始月份:/);assert.equal(raw.includes('  - AI\n'),false);
+});
+test('Long-plan edit modal echoes multiple directions and saves additions and removals',async()=>{
+	const f=fixture();let saved:string[]=[];const m=new f.LongTermDirection(f.app,['设计','AI'],(directions:string[])=>{saved=directions;});m.onOpen();
+	assert.equal(button(m,'设计').attr['aria-pressed'],'true');assert.equal(button(m,'AI').attr['aria-pressed'],'true');assert.equal(button(m,'3D').attr['aria-pressed'],'false');
+	button(m,'AI').onclick();button(m,'3D').onclick();await button(m,'保存').onclick();assert.deepEqual(Array.from(saved),['设计','3D']);assert.equal(m.closed,true);
+});
+test('Long-plan edit modal allows clearing every optional direction',async()=>{
+	const f=fixture();let saved=['unexpected'];const m=new f.LongTermDirection(f.app,['设计'],(directions:string[])=>{saved=directions;});m.onOpen();button(m,'设计').onclick();await button(m,'保存').onclick();assert.deepEqual(Array.from(saved),[]);
 });

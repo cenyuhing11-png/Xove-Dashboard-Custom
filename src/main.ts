@@ -13,12 +13,18 @@ import { EmbeddedTaskStore } from './data/embeddedTaskVault';
 import { ProjectView, PROJECT_VIEW } from './views/ProjectView';
 import { PlanView, PLAN_VIEW } from './views/PlanView';
 import { UnifiedProcessModal } from './views/UnifiedProcessModal';
+import { PlanModal } from './views/PlanModal';
 import { NewEmbeddedTaskModal } from './views/EmbeddedTaskModal';
 import { TaskStore } from './data/taskStore';
 import type { WorkbenchShell, WorkbenchAction } from './components/workbench/WorkbenchShell';
 import { mountJournalTaskSummary } from './components/journal/JournalTaskSummary';
 import { journalTitleLivePreviewExtension } from './components/journal/JournalTitleLivePreview';
 import { journalTaskLivePreviewExtension } from './components/journal/JournalTaskLivePreview';
+import { journalLayoutLivePreviewExtension } from './components/journal/JournalLayoutLivePreview';
+import { QuickJournalService } from './data/quickJournal';
+import { quickJournalFiles } from './data/quickJournalVault';
+import { QuickJournalModal } from './views/QuickJournalModal';
+import type { Process } from './data/processes';
 
 /** 番茄钟运行时状态（与主页卡片共享，状态栏实时显示） */
 export interface PomoState {
@@ -36,6 +42,7 @@ export default class Dashboard extends Plugin {
 	settings!: DashboardSettings;
 	embeddedTasks!: EmbeddedTaskStore;
 	shellTaskStore!: TaskStore;
+	quickJournal!: QuickJournalService;
 	readonly pageShells = new Set<WorkbenchShell>();
 
 	/** 番茄钟运行时状态（主页卡片与状态栏共用同一数据源） */
@@ -55,12 +62,14 @@ export default class Dashboard extends Plugin {
 		await this.loadSettings();
 		this.embeddedTasks = new EmbeddedTaskStore(this.app, this);
 		this.shellTaskStore = new TaskStore(this.app, () => this.settings);
+		this.quickJournal = new QuickJournalService(quickJournalFiles(this.app));
 		this.registerMarkdownPostProcessor((el, ctx) => mountJournalTaskSummary(el, ctx, this.app, this.embeddedTasks));
 		this.registerEditorExtension(journalTitleLivePreviewExtension(this.app));
 		this.registerEditorExtension(journalTaskLivePreviewExtension(this.app, this.embeddedTasks));
+		this.registerEditorExtension(journalLayoutLivePreviewExtension());
 
 		this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
-		this.registerView(DIRECTION_VIEW, (leaf) => new DirectionView(leaf));
+		this.registerView(DIRECTION_VIEW, (leaf) => new DirectionView(leaf, this));
 		this.registerView(PROJECT_VIEW, (leaf) => new ProjectView(leaf, this.embeddedTasks, () => this.settings.theme, this));
 		this.registerView(PLAN_VIEW, (leaf) => new PlanView(leaf, this));
 
@@ -74,6 +83,11 @@ export default class Dashboard extends Plugin {
 			callback: () => {
 				void this.activateView();
 			},
+		});
+		this.addCommand({
+			id: 'quick-journal',
+			name: '梦序：随时记',
+			callback: () => this.openQuickJournal(),
 		});
 
 		this.addSettingTab(new DashboardSettingTab(this.app, this));
@@ -394,6 +408,8 @@ export default class Dashboard extends Plugin {
 	async navigateWorkbench(action: WorkbenchAction, sourceLeaf?: WorkspaceLeaf): Promise<void> {
 		if (action === 'project') { new UnifiedProcessModal(this.app).open(); return; }
 		if (action === 'task') { new NewEmbeddedTaskModal(this.app, this.embeddedTasks).open(); return; }
+		if (action === 'quickJournal') { this.openQuickJournal(); return; }
+		if (action === 'newPlan') { const now = new Date(); new PlanModal(this.app, { year: now.getFullYear(), month: now.getMonth() + 1 }).open(); return; }
 		// Normal top navigation is already inside DashboardView: route in-place and
 		// never replace its leaf with PLAN_VIEW / PROJECT_VIEW. A legacy restored
 		// tab is converted once to the main workbench as a compatibility bridge.
@@ -408,6 +424,38 @@ export default class Dashboard extends Plugin {
 		await this.app.workspace.revealLeaf(leaf);
 		this.app.workspace.setActiveLeaf(leaf, { focus: true });
 		if (leaf.view instanceof DashboardView) await leaf.view.navigateWorkbench(action);
+	}
+	async openLongTermPlan(id: string): Promise<void> {
+		let leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+		if (!leaf) { leaf = this.app.workspace.getLeaf('tab'); await leaf.setViewState({ type: VIEW_TYPE, active: true }); }
+		await this.app.workspace.revealLeaf(leaf); this.app.workspace.setActiveLeaf(leaf, { focus: true });
+		if (leaf.view instanceof DashboardView) await leaf.view.openLongTermPlan(id);
+	}
+	async openWorkbenchDirection(name: string, sourceLeaf?: WorkspaceLeaf): Promise<void> {
+		let leaf = sourceLeaf?.view instanceof DashboardView ? sourceLeaf : this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+		if (!leaf) {
+			leaf = sourceLeaf
+				?? this.app.workspace.getLeavesOfType(PLAN_VIEW)[0]
+				?? this.app.workspace.getLeavesOfType(PROJECT_VIEW)[0]
+				?? this.app.workspace.getLeaf('tab');
+			await leaf.setViewState({ type: VIEW_TYPE, active: true });
+		}
+		await this.app.workspace.revealLeaf(leaf);
+		this.app.workspace.setActiveLeaf(leaf, { focus: true });
+		if (leaf.view instanceof DashboardView) await leaf.view.openDirection(name);
+	}
+	async locateWorkbenchProcess(process: Process, sourceLeaf?: WorkspaceLeaf): Promise<void> {
+		let leaf = sourceLeaf?.view instanceof DashboardView ? sourceLeaf : this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+		if (!leaf) {
+			leaf = sourceLeaf ?? this.app.workspace.getLeaf('tab');
+			await leaf.setViewState({ type: VIEW_TYPE, active: true });
+		}
+		await this.app.workspace.revealLeaf(leaf); this.app.workspace.setActiveLeaf(leaf, { focus: true });
+		if (leaf.view instanceof DashboardView) await leaf.view.locateProcess(process);
+	}
+
+	openQuickJournal(): void {
+		new QuickJournalModal(this.app, this.quickJournal).open();
 	}
 
 	/**

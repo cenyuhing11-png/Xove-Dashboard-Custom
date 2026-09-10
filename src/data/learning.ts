@@ -25,6 +25,7 @@ export interface LearningNote {
 	priority: string; abilities: string[]; topics: string[]; direction: string;
 	domain: string; stage: string; resourceType: string;
 	startDate?: string; dueDate?: string;
+	longTermPlanId?: string;
 	hasLearningTasks: boolean; hasCreationTasks: boolean;
 }
 export interface CurrentLearning extends LearningNote { goal: string; next: string }
@@ -53,7 +54,8 @@ export function learningNote(path: string, name: string, properties: unknown, he
 		domain: text(fm['领域']), stage: text(fm['阶段']), resourceType: text(fm['资源类型']),
 		hasLearningTasks: headings.includes('学习任务'), hasCreationTasks: headings.includes('创作任务'),
 		...(optionalDate(fm['开始日期']) ? { startDate: optionalDate(fm['开始日期']) } : {}),
-		...(optionalDate(fm['截止日期']) ? { dueDate: optionalDate(fm['截止日期']) } : {}) };
+		...(optionalDate(fm['截止日期']) ? { dueDate: optionalDate(fm['截止日期']) } : {}),
+		...(text(fm['关联长期计划ID']) ? { longTermPlanId: text(fm['关联长期计划ID']) } : {}) };
 }
 export function currentTopics(notes: LearningNote[]): LearningNote[] {
 	const priorities: Record<string, number> = { 主攻: 0, 辅助: 1, 维护: 2 };
@@ -97,14 +99,14 @@ export function learningName(input: string): string {
 	}
 	return name;
 }
-export interface LearningTopicFields { status: string; direction?: string; ability?: string; startDate?: string; dueDate?: string; goal?: string }
+export interface LearningTopicFields { status: string; direction?: string; ability?: string; startDate?: string; dueDate?: string; goal?: string; longTermPlanId?: string }
 export function learningTemplate(kind: LearningKind, name: string, resourceType = '其他资料', topic?: LearningTopicFields): string {
 	const title = learningName(name);
 	const headers: Record<LearningKind, string> = {
 		能力: '状态: 培养中\n领域: ""\n阶段: ""',
-		学习主题: `状态: ${topic?.status ?? '学习中'}\n方向: ${JSON.stringify(topic?.direction || '')}\n所属能力: ${JSON.stringify(topic?.ability?.trim() ? [topic.ability.trim()] : [])}\n优先级: 主攻\n开始日期:${topic?.startDate ? ' ' + JSON.stringify(topic.startDate) : ''}\n截止日期:${topic?.dueDate ? ' ' + JSON.stringify(topic.dueDate) : ''}`,
-		学习资源: topic ? `资源类型: ${JSON.stringify(resourceType)}\n状态: ${topic.status}\n方向: ${JSON.stringify(topic.direction || '')}\n所属能力: ${JSON.stringify(topic.ability?.trim() ? [topic.ability.trim()] : [])}\n开始日期:${topic.startDate ? ' ' + JSON.stringify(topic.startDate) : ''}\n截止日期:${topic.dueDate ? ' ' + JSON.stringify(topic.dueDate) : ''}\n来源: ""\n链接: ""` : `资源类型: ${JSON.stringify(resourceType)}\n状态: 待学习\n方向: ""\n关联主题: []\n来源: ""\n链接: ""`,
-		知识与思考: `状态: ${topic?.status ?? '计划中'}\n方向: ${JSON.stringify(topic?.direction || '')}\n开始日期:${topic?.startDate ? ' ' + JSON.stringify(topic.startDate) : ''}\n截止日期:${topic?.dueDate ? ' ' + JSON.stringify(topic.dueDate) : ''}`,
+		学习主题: `状态: ${topic?.status ?? '学习中'}\n方向: ${JSON.stringify(topic?.direction || '')}\n所属能力: ${JSON.stringify(topic?.ability?.trim() ? [topic.ability.trim()] : [])}\n关联长期计划ID: ${JSON.stringify(topic?.longTermPlanId || '')}\n优先级: 主攻\n开始日期:${topic?.startDate ? ' ' + JSON.stringify(topic.startDate) : ''}\n截止日期:${topic?.dueDate ? ' ' + JSON.stringify(topic.dueDate) : ''}`,
+		学习资源: topic ? `资源类型: ${JSON.stringify(resourceType)}\n状态: ${topic.status}\n方向: ${JSON.stringify(topic.direction || '')}\n所属能力: ${JSON.stringify(topic.ability?.trim() ? [topic.ability.trim()] : [])}\n关联长期计划ID: ${JSON.stringify(topic.longTermPlanId || '')}\n开始日期:${topic.startDate ? ' ' + JSON.stringify(topic.startDate) : ''}\n截止日期:${topic.dueDate ? ' ' + JSON.stringify(topic.dueDate) : ''}\n来源: ""\n链接: ""` : `资源类型: ${JSON.stringify(resourceType)}\n状态: 待学习\n方向: ""\n关联主题: []\n来源: ""\n链接: ""`,
+		知识与思考: `状态: ${topic?.status ?? '计划中'}\n方向: ${JSON.stringify(topic?.direction || '')}\n关联长期计划ID: ${JSON.stringify(topic?.longTermPlanId || '')}\n开始日期:${topic?.startDate ? ' ' + JSON.stringify(topic.startDate) : ''}\n截止日期:${topic?.dueDate ? ' ' + JSON.stringify(topic.dueDate) : ''}`,
 	};
 	const bodies: Record<LearningKind, string> = {
 		能力: '## 能力目标\n\n## 当前阶段\n\n## 能力标准\n\n- [ ]\n\n## 当前学习主题\n\n## 实践与作品\n\n## 备注\n',

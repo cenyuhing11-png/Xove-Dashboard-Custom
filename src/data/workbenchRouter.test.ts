@@ -21,7 +21,7 @@ test('DashboardView remains the one main workbench view', () => {
 	assert.match(dashboard, /getViewType\(\): string \{ return VIEW_TYPE; \}/);
 });
 test('main workbench title stays stable', () => assert.match(dashboard, /getDisplayText\(\): string \{ return '夏知之 · 梦序'; \}/));
-test('router exposes exactly four primary sections', () => assert.match(dashboard, /WorkbenchSection = 'home' \| 'timeTrace' \| 'process' \| 'inbox'/));
+test('router exposes the four primary sections plus one parameterized direction route', () => assert.match(dashboard, /WorkbenchSection = 'home' \| 'timeTrace' \| 'process' \| 'inbox' \| 'direction'/));
 test('home action routes inside the main view', () => assert.match(dashboard, /action === 'home'\) await this\.setSection\('home'\)/));
 test('time trace action routes inside the main view', () => assert.match(dashboard, /action === 'plan'\) await this\.setSection\('timeTrace'\)/));
 test('process action routes inside the main view', () => assert.match(dashboard, /action === 'all'\) await this\.setSection\('process'\)/));
@@ -38,8 +38,13 @@ test('LifeCompass is constructed once by DashboardView on open', () => assert.eq
 test('home renderer no longer owns a second compass', () => assert.doesNotMatch(home, /renderLifeCompass/));
 test('active navigation derives from the current route', () => assert.match(router, /section === 'timeTrace' \? 'plan' : section === 'process' \? 'all' : section === 'inbox' \? 'opportunity' : 'home'/));
 test('time trace uses the shared PlanWorkspaceRenderer', () => {
-	assert.match(dashboard, /new PlanWorkspaceRenderer\(this\.app, plugin\)/);
+	assert.match(dashboard, /new PlanWorkspaceRenderer\(this\.app, plugin,/);
 	assert.match(plan, /export class PlanWorkspaceRenderer extends Component/);
+});
+test('long-term planning remains an internal time-trace mode and deep links reuse the main workbench', () => {
+	assert.match(plan, /mode === 'longTermPlan'/); assert.match(dashboard, /openLongTermPlan[\s\S]*setSection\('timeTrace'\)/);
+	const renderer = plan.match(/export class PlanWorkspaceRenderer[\s\S]*?(?=\nexport class PlanView)/)?.[0] ?? '';
+	assert.ok(renderer); assert.doesNotMatch(renderer, /LONG_TERM_PLAN_VIEW|setViewState/);
 });
 test('legacy PlanView delegates to the shared renderer', () => {
 	assert.match(plan, /export class PlanView extends ItemView/);

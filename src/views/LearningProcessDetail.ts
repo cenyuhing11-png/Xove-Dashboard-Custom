@@ -9,9 +9,11 @@ import { openLearningFile } from '../data/learningVault';
 import { NewEmbeddedTaskModal, renderEmbeddedRows } from './EmbeddedTaskModal';
 import { detailTaskHeader, listEntry } from './viewPrimitives';
 import { learningContentType, processContentTypeLabel } from '../data/processContentTypes';
+import { renderProcessLongTermField } from './ProcessLongTermField';
+import type { ProcessLongTermActions } from './ProcessLongTermField';
 
 /** Secondary detail only; reads one Markdown snapshot and reuses task completion writes. */
-export function renderLearningProcessDetail(el: HTMLElement, app: App, store: EmbeddedTaskStore, note: LearningNote, notes: LearningNote[], content: string, overview: () => void): void {
+export function renderLearningProcessDetail(el: HTMLElement, app: App, store: EmbeddedTaskStore, note: LearningNote, notes: LearningNote[], content: string, overview: () => void, longTerm?: ProcessLongTermActions): void {
 	el.empty();
 	el.createDiv({ cls: 'po-topbar' }).createEl('button', { cls: 'ad-modal-btn', text: '全部进程 →' }).onclick = overview;
 	el.createEl('h1', { cls: 'ad-modal-title', text: note.name });
@@ -20,6 +22,7 @@ export function renderLearningProcessDetail(el: HTMLElement, app: App, store: Em
 	el.createEl('p', { cls: 'ad-modal-hint', text: `学习 · ${processContentTypeLabel(contentType)} · ${status} · 方向：${note.direction || '未关联'} · 所属能力：${note.abilities.join('、') || '未填写'}` });
 	if (note.status && note.status !== status) el.createEl('p', { cls: 'ad-modal-hint', text: `笔记原状态：${note.status}（只读映射为${status}，未改写笔记）` });
 	el.createEl('p', { cls: 'ad-modal-hint', text: `开始日期：${note.startDate || '未设置'} · 截止日期：${note.dueDate || '未设置'}` });
+	renderProcessLongTermField(el, app, longTerm);
 	function section(heading: string): HTMLElement {
 		const block = el.createDiv({ cls: 'ad-update-block' });
 		block.createEl('h2', { cls: 'ad-modal-title', text: heading });
