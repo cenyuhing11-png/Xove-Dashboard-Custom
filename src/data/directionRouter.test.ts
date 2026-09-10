@@ -62,6 +62,11 @@ test('switching direction cancels stale rendering without rebuilding shell', () 
 test('home timeTrace process and inbox navigation remain unchanged', () => {
 	for (const pair of [["'home'", "setSection('home')"], ["'plan'", "setSection('timeTrace')"], ["'all'", "setSection('process')"], ["'opportunity'", "setSection('inbox')"]]) assert.ok(dashboard.includes(`action === ${pair[0]}) await this.${pair[1]}`));
 });
+test('process route reuses one session-local ProjectBoard instead of resetting its view state', () => {
+	assert.match(router, /if \(!this\.processSource\)[\s\S]*?this\.processBoard = new ProjectBoard\(this\.processSource\)/);
+	assert.match(router, /else this\.processSource\.boardEl = this\.boardEl/);
+	assert.doesNotMatch(router, /processBoard\s*=\s*undefined|processSource\s*=\s*undefined/);
+});
 test('legacy plan and project compass hosts route into the main workbench', () => {
 	assert.match(plan, /openWorkbenchDirection\(name, this\.leaf\)/);
 	assert.match(project, /openWorkbenchDirection\(name, this\.leaf\)/);
