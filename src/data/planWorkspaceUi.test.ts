@@ -180,8 +180,73 @@ test('time trace sidebar has four equal view rows, no explanatory labels and a l
 test('plan sidebar dots are restrained and month controls keep author primitives', () => {
 	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
 	assert.match(css, /\.mx-plan-month-dot\s*\{[^}]*width:\s*3px;[^}]*box-shadow:\s*none/);
-	assert.match(view, /cls: `po-chip\$\{month === this\.selectedMonth \? ' is-active' : ''\}`/);
+	assert.match(view, /const monthSelected = month === this\.selectedMonth && \(this\.mode !== 'longTermPlan' \|\| this\.longTermScope === 'month'\)/);
 	assert.match(view, /cls: 'po-cal__btn'/);
+});
+test('long-term time selector starts in year scope without changing the concrete month state', () => {
+	assert.match(view, /type TimeScope = 'year' \| 'month'/);
+	assert.match(view, /private selectedMonth = localPlanSelection\(\)\.month;[\s\S]*private longTermScope: TimeScope = 'year'/);
+	assert.match(view, /readPlanWorkspace\(this\.planFiles\(\), this\.selectedYear, this\.selectedMonth\)/);
+});
+test('long-term year and month selected states are mutually exclusive', () => {
+	assert.match(view, /mx-plan-year-select\$\{this\.longTermScope === 'year' \? ' is-active' : ''\}/);
+	assert.match(view, /month === this\.selectedMonth && \(this\.mode !== 'longTermPlan' \|\| this\.longTermScope === 'month'\)/);
+	assert.match(view, /aria-pressed': String\(this\.longTermScope === 'year'\)/);
+	assert.match(view, /aria-pressed': String\(monthSelected\)/);
+});
+test('the year target is interactive only for long-term plans', () => {
+	assert.match(view, /if \(this\.mode === 'longTermPlan'\) \{[\s\S]*mx-plan-year-select[\s\S]*selectLongTermYear\(\)[\s\S]*\} else yearBar\.createSpan/);
+	assert.match(view, /private selectLongTermYear\(\): void \{ this\.longTermScope = 'year'/);
+});
+test('month selection switches only long-term plans to month scope', () => {
+	assert.match(view, /private selectMonth\(year: number, month: number\): void \{ if \(this\.mode === 'longTermPlan'\) this\.longTermScope = 'month'; this\.setSelection\(year, month\); \}/);
+	assert.match(view, /button\.addEventListener\('click', \(\) => this\.selectMonth\(this\.selectedYear, month\)\)/);
+});
+test('year arrows retain the active long-term scope and month', () => {
+	const sidebar = view.match(/private renderSidebar[\s\S]*?(?=\n\tprivate renderPlanCard)/)?.[0] ?? '';
+	assert.match(sidebar, /prev\.addEventListener\('click', \(\) => this\.setSelection\(this\.selectedYear - 1, this\.selectedMonth\)\)/);
+	assert.match(sidebar, /next\.addEventListener\('click', \(\) => this\.setSelection\(this\.selectedYear \+ 1, this\.selectedMonth\)\)/);
+	assert.doesNotMatch(sidebar, /(?:prev|next)\.addEventListener[^\n]*longTermScope\s*=/);
+});
+test('month dot still means a monthly plan exists and is independent of selection', () => {
+	assert.match(view, /const exists = !!this\.app\.vault\.getAbstractFileByPath\(planInfo\('month'/);
+	assert.match(view, /if \(exists\) button\.createSpan\(\{ cls: 'mx-plan-month-dot' \}\)/);
+	assert.doesNotMatch(view, /if \((?:monthSelected|month === now\.month)\) button\.createSpan\(\{ cls: 'mx-plan-month-dot'/);
+});
+test('long-term header and filtering follow the selected scope', () => {
+	assert.match(view, /text: this\.longTermScope === 'year' \? `\$\{this\.selectedYear\} 年` : `\$\{this\.selectedYear\} 年 \$\{this\.selectedMonth\} 月`/);
+	assert.match(view, /this\.longTermScope === 'year' \? longTermPlansForYear\(plans, this\.selectedYear\) : longTermPlansForMonth\(plans, this\.selectedYear, this\.selectedMonth\)/);
+});
+test('long-term empty state names the selected year or month without a large new card', () => {
+	assert.match(view, /`\$\{this\.selectedYear\} 年暂无长期计划` : `\$\{this\.selectedYear\} 年 \$\{this\.selectedMonth\} 月暂无长期计划`/);
+	assert.match(view, /cls: 'po-empty mx-plan-empty'/);
+});
+test('today selects the current year for long-term plans and keeps existing behavior elsewhere', () => {
+	assert.match(view, /if \(this\.mode === 'longTermPlan'\) this\.longTermScope = 'year'; this\.setSelection\(now\.year, now\.month, new Date\(\)\.getDate\(\)\)/);
+	const selectCurrent = view.match(/const selectCurrent = \(\) => \{[^\n]+\}/)?.[0] ?? '';
+	assert.doesNotMatch(selectCurrent, /this\.mode\s*=(?!=)/);
+});
+test('route-local long-term scope survives mode switches without new persistence', () => {
+	const modeSwitch = view.match(/const selectMode = \(\) => \{[^\n]+\}/)?.[0] ?? '';
+	const deactivate = view.match(/deactivate\(\): void \{[\s\S]*?\n\t\}/)?.[0] ?? '';
+	assert.doesNotMatch(modeSwitch, /longTermScope/);
+	assert.doesNotMatch(deactivate, /longTermScope/);
+	assert.doesNotMatch(view, /localStorage|saveData\(|loadData\(/);
+});
+test('period plan and calendar paths still receive a concrete selected month', () => {
+	assert.match(view, /readPlanWorkspace\(this\.planFiles\(\), this\.selectedYear, this\.selectedMonth\)/);
+	assert.match(view, /new Date\(this\.selectedYear, this\.selectedMonth - 1/);
+	assert.doesNotMatch(view, /selectedMonth\s*=\s*null/);
+});
+test('long-term scope work leaves the shared row renderer intact', () => {
+	assert.match(view, /renderLongTermPlanSummaryRow\(list, plan,/);
+	assert.doesNotMatch(view, /renderLongTermPlanSummaryRow\([^\n]*longTermScope/);
+});
+test('year selection uses compact inherited styling without changing the month grid', () => {
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	assert.match(css, /\.mx-plan-year-select \{[^}]*background: transparent;[^}]*font: inherit/);
+	assert.match(css, /\.mx-plan-year-select\.is-active \{[^}]*background: var\(--ad-s2\)/);
+	assert.match(css, /\.mx-plan-months \{[^}]*grid-template-columns: repeat\(3,/);
 });
 test('journal review is a safe local content render with the shared year and month controls still mounted', () => {
 	assert.match(view, /else this\.renderReview\(main\)/);
@@ -191,7 +256,8 @@ test('journal review is a safe local content render with the shared year and mon
 test('today uses local calendar values and preserves the active view mode', () => {
 	assert.match(view, /const now = localPlanSelection\(\)/);
 	assert.match(view, /setSelection\(now\.year, now\.month, new Date\(\)\.getDate\(\)\)/);
-	assert.doesNotMatch(view, /selectCurrent[\s\S]*this\.mode\s*=/);
+	const selectCurrent = view.match(/const selectCurrent = \(\) => \{[^\n]+\}/)?.[0] ?? '';
+	assert.doesNotMatch(selectCurrent, /this\.mode\s*=(?!=)/);
 });
 test('time trace rename leaves technical PlanView and identifiers intact', () => {
 	assert.ok(view.includes('class PlanView'));

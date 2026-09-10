@@ -1915,6 +1915,9 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-time-trace-divider { margin: 7px 10px; border-top: 1px solid var(--ad-line); }
 .mx-time-trace-today { color: var(--ad-text-mute); }
 .mx-plan-year { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 0 2px 6px; color: var(--ad-text); font-size: 12px; font-weight: 600; }
+.mx-plan-year-select { min-width: 54px; padding: 3px 8px; border: 1px solid transparent; border-radius: var(--ad-r1); background: transparent; box-shadow: none; color: inherit; font: inherit; line-height: 1.4; }
+.mx-plan-year-select:hover { background: var(--ad-h1); }
+.mx-plan-year-select.is-active { border-color: var(--ad-line); background: var(--ad-s2); }
 .mx-plan-months { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
 .mx-plan-months .po-chip { position: relative; min-width: 0; min-height: 28px; padding: 4px; }
 .mx-plan-month-dot { position: absolute; right: 5px; top: 5px; width: 3px; height: 3px; border-radius: 50%; background: var(--ad-accent); box-shadow: none; }

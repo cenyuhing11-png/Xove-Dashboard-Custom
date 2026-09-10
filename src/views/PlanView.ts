@@ -16,7 +16,7 @@ import { journalCalendarEntry, journalDateFromPath } from '../data/journal';
 import type { JournalCalendarEntry } from '../data/journal';
 import { renderEmbeddedTaskCheckbox } from '../components/tasks/EmbeddedTaskCheckbox';
 import { scanLongTermPlans, setProcessLongTermPlan, updateLongTermPlanMarkdown } from '../data/longTermPlanVault';
-import { appendLongTermStage, assignLongTermProcessToStage, deleteLongTermStage, ensureLongTermStageIds, longTermPlanDetailMetadata, longTermPlansForMonth, moveLongTermStage, normalizeLongTermProcessRef, removeLongTermProcessFromStages, toggleLongTermStage, updateLongTermPlanDirections, updateLongTermStage } from '../data/longTermPlans';
+import { appendLongTermStage, assignLongTermProcessToStage, deleteLongTermStage, ensureLongTermStageIds, longTermPlanDetailMetadata, longTermPlansForMonth, longTermPlansForYear, moveLongTermStage, normalizeLongTermProcessRef, removeLongTermProcessFromStages, toggleLongTermStage, updateLongTermPlanDirections, updateLongTermStage } from '../data/longTermPlans';
 import type { LongTermPlan } from '../data/longTermPlans';
 import type { Process } from '../data/processes';
 import { hasProcessSchedule } from '../data/processes';
@@ -44,12 +44,14 @@ function dayLabel(date: Date): string { return `${date.getMonth() + 1}/${date.ge
 function monthTitle(year: number, month: number): string { return `${year} 年 ${month} 月`; }
 function sameDay(a: Date, b: Date): boolean { return dateKey(a) === dateKey(b); }
 function compactProcessDate(value?: string | null): string { return /^\d{4}-\d{2}-\d{2}$/.test(value ?? '') ? value!.slice(5).replace('-', '.') : '—'; }
+type TimeScope = 'year' | 'month';
 
 /** Reusable time-trace content. The legacy PlanView and the main workbench router
  * mount this same renderer, so the business UI has a single implementation. */
 export class PlanWorkspaceRenderer extends Component {
 	private selectedYear = localPlanSelection().year;
 	private selectedMonth = localPlanSelection().month;
+	private longTermScope: TimeScope = 'year';
 	private mode: PlanWorkspaceMode = 'board';
 	private calendarMode: PlanCalendarMode = 'month';
 	private selectedDate = new Date(this.selectedYear, this.selectedMonth - 1, new Date().getDate(), 12);
@@ -129,6 +131,8 @@ export class PlanWorkspaceRenderer extends Component {
 		this.selectedDate = new Date(year, month - 1, Math.min(day, new Date(year, month, 0).getDate()), 12);
 		void this.renderPlanContent();
 	}
+	private selectLongTermYear(): void { this.longTermScope = 'year'; void this.renderPlanContent(); }
+	private selectMonth(year: number, month: number): void { if (this.mode === 'longTermPlan') this.longTermScope = 'month'; this.setSelection(year, month); }
 	async openLongTermPlan(id: string): Promise<void> { this.mode = 'longTermPlan'; this.selectedLongTermPlanId = id; if (this.workspaceEl) await this.renderPlanContent(); }
 	private wireDisclosure(primary: HTMLButtonElement, chevron: HTMLButtonElement, toggleExpanded: () => void, syncExpanded: () => void): void {
 		const activate = (event: MouseEvent) => { event.stopPropagation(); toggleExpanded(); syncExpanded(); };
@@ -168,12 +172,15 @@ export class PlanWorkspaceRenderer extends Component {
 
 		const now = localPlanSelection();
 		const current = list.createDiv({ cls: 'po-sidebar__item mx-time-trace-today', text: '今天', attr: { role: 'button', tabindex: '0' } });
-		const selectCurrent = () => this.setSelection(now.year, now.month, new Date().getDate());
+		const selectCurrent = () => { if (this.mode === 'longTermPlan') this.longTermScope = 'year'; this.setSelection(now.year, now.month, new Date().getDate()); };
 		current.addEventListener('click', selectCurrent);
 		current.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectCurrent(); } });
 		const yearBar = list.createDiv({ cls: 'mx-plan-year' });
 		const prev = yearBar.createEl('button', { cls: 'po-cal__btn', text: '‹', attr: { 'aria-label': '上一年' } });
-		yearBar.createSpan({ text: `${this.selectedYear}` });
+		if (this.mode === 'longTermPlan') {
+			const year = yearBar.createEl('button', { cls: `mx-plan-year-select${this.longTermScope === 'year' ? ' is-active' : ''}`, text: `${this.selectedYear}`, attr: { 'aria-label': `查看 ${this.selectedYear} 年全年长期计划`, 'aria-pressed': String(this.longTermScope === 'year') } });
+			year.addEventListener('click', () => this.selectLongTermYear());
+		} else yearBar.createSpan({ text: `${this.selectedYear}` });
 		const next = yearBar.createEl('button', { cls: 'po-cal__btn', text: '›', attr: { 'aria-label': '下一年' } });
 		prev.addEventListener('click', () => this.setSelection(this.selectedYear - 1, this.selectedMonth));
 		next.addEventListener('click', () => this.setSelection(this.selectedYear + 1, this.selectedMonth));
@@ -181,10 +188,11 @@ export class PlanWorkspaceRenderer extends Component {
 		const grid = list.createDiv({ cls: 'mx-plan-months' });
 		for (let month = 1; month <= 12; month++) {
 			const exists = !!this.app.vault.getAbstractFileByPath(planInfo('month', new Date(this.selectedYear, month - 1, 1, 12)).path);
-			const button = grid.createEl('button', { cls: `po-chip${month === this.selectedMonth ? ' is-active' : ''}`, attr: { 'aria-label': `${month} 月${exists ? '，已有月度计划' : ''}` } });
+			const monthSelected = month === this.selectedMonth && (this.mode !== 'longTermPlan' || this.longTermScope === 'month');
+			const button = grid.createEl('button', { cls: `po-chip${monthSelected ? ' is-active' : ''}`, attr: { 'aria-label': `${month} 月${exists ? '，已有月度计划' : ''}`, 'aria-pressed': String(monthSelected) } });
 			button.createSpan({ text: `${month}月` });
 			if (exists) button.createSpan({ cls: 'mx-plan-month-dot' });
-			button.addEventListener('click', () => this.setSelection(this.selectedYear, month));
+			button.addEventListener('click', () => this.selectMonth(this.selectedYear, month));
 		}
 	}
 
@@ -237,10 +245,10 @@ export class PlanWorkspaceRenderer extends Component {
 		}
 		this.selectedLongTermPlanId = '';
 		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar' }); toolbar.createSpan({ cls: 'mx-plan-title', text: '长期计划' });
-		toolbar.createSpan({ cls: 'mx-plan-context', text: `${this.selectedYear} 年 ${this.selectedMonth} 月` });
-		const visible = longTermPlansForMonth(plans, this.selectedYear, this.selectedMonth);
+		toolbar.createSpan({ cls: 'mx-plan-context', text: this.longTermScope === 'year' ? `${this.selectedYear} 年` : `${this.selectedYear} 年 ${this.selectedMonth} 月` });
+		const visible = this.longTermScope === 'year' ? longTermPlansForYear(plans, this.selectedYear) : longTermPlansForMonth(plans, this.selectedYear, this.selectedMonth);
 		const list = main.createDiv({ cls: 'po-tasklist mx-long-term-list' });
-		if (!visible.length) { list.createDiv({ cls: 'po-empty mx-plan-empty', text: '该月份暂无长期计划' }); return; }
+		if (!visible.length) { list.createDiv({ cls: 'po-empty mx-plan-empty', text: this.longTermScope === 'year' ? `${this.selectedYear} 年暂无长期计划` : `${this.selectedYear} 年 ${this.selectedMonth} 月暂无长期计划` }); return; }
 		for (const plan of visible) {
 			renderLongTermPlanSummaryRow(list, plan, () => { this.selectedLongTermPlanId = plan.id; void this.renderPlanContent(); });
 		}
