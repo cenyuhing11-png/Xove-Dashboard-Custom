@@ -430,6 +430,19 @@ export default class Dashboard extends Plugin {
 		await this.app.workspace.revealLeaf(leaf); this.app.workspace.setActiveLeaf(leaf, { focus: true });
 		if (leaf.view instanceof DashboardView) await leaf.view.openLongTermPlan(id);
 	}
+	async openWorkbenchDirection(name: string, sourceLeaf?: WorkspaceLeaf): Promise<void> {
+		let leaf = sourceLeaf?.view instanceof DashboardView ? sourceLeaf : this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
+		if (!leaf) {
+			leaf = sourceLeaf
+				?? this.app.workspace.getLeavesOfType(PLAN_VIEW)[0]
+				?? this.app.workspace.getLeavesOfType(PROJECT_VIEW)[0]
+				?? this.app.workspace.getLeaf('tab');
+			await leaf.setViewState({ type: VIEW_TYPE, active: true });
+		}
+		await this.app.workspace.revealLeaf(leaf);
+		this.app.workspace.setActiveLeaf(leaf, { focus: true });
+		if (leaf.view instanceof DashboardView) await leaf.view.openDirection(name);
+	}
 
 	openQuickJournal(): void {
 		new QuickJournalModal(this.app, this.quickJournal).open();

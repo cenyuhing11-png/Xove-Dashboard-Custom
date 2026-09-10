@@ -18,7 +18,6 @@ import { ProjectBoard } from './ProjectBoard';
 import { requestProcessStatusChange } from './ProcessStatusAction';
 import { WorkbenchShell } from '../components/workbench/WorkbenchShell';
 import { renderLifeCompass } from '../components/workbench/LifeCompass';
-import { openDirection } from './DirectionView';
 import type Dashboard from '../main';
 import { scanLongTermPlans, setProcessLongTermPlan } from '../data/longTermPlanVault';
 import { renderProcessLongTermField } from './ProcessLongTermField';
@@ -79,7 +78,7 @@ export class ProjectView extends ItemView {
 			if (!this.overview || !this.overviewEl) {
 				el.empty();
 				this.overviewEl = el.createDiv({ cls: 'dashboard-plugin mx-project-overview' });
-				renderLifeCompass(this.overviewEl, name => { void openDirection(this.app, name); });
+				renderLifeCompass(this.overviewEl, name => { if (this.plugin) void this.plugin.openWorkbenchDirection(name, this.leaf); });
 				const boardEl = this.overviewEl.createDiv({ cls: 'po-board' });
 				this.overview = new ProjectBoard({ kind: 'mengxu', app: this.app, boardEl, tasks: this.tasks,
 					items: () => processBoardItems(processes(scanLearning(this.app), scanProjects(this.app), this.tasks.all())),

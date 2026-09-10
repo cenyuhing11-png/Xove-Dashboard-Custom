@@ -8,7 +8,6 @@ import { dateKey, incompleteTaskCountOnDate, localPlanSelection, readPlanWorkspa
 import { planInfo } from '../data/planning';
 import { WorkbenchShell } from '../components/workbench/WorkbenchShell';
 import { renderLifeCompass } from '../components/workbench/LifeCompass';
-import { openDirection } from './DirectionView';
 import { scanLearning } from '../data/learningVault';
 import { scanProjects } from '../data/projectVault';
 import { processes } from '../data/processes';
@@ -501,7 +500,7 @@ export class PlanView extends ItemView {
 		const root = this.contentEl;
 		root.empty(); root.removeClass('ad-modal'); root.addClass('mx-plan-workspace-view');
 		const page = root.createDiv({ cls: 'dashboard-plugin mx-plan-workspace' });
-		renderLifeCompass(page, name => { void openDirection(this.app, name); });
+		renderLifeCompass(page, name => { void this.plugin.openWorkbenchDirection(name, this.leaf); });
 		this.shell = new WorkbenchShell(this.plugin, page, action => this.plugin.navigateWorkbench(action, this.leaf), 'plan');
 		this.addChild(this.shell);
 		this.addChild(this.renderer);

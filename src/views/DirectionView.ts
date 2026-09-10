@@ -1,6 +1,6 @@
 import { App, ItemView, Notice, WorkspaceLeaf } from 'obsidian';
 import type { ViewStateResult } from 'obsidian';
-import { directionAbilities, directionInfo, directionResources, directionTopics, ensureDirection } from '../data/compass';
+import { directionAbilities, directionInfo, directionResources, directionTopics } from '../data/compass';
 import { learningFiles, openLearningFile, scanLearning } from '../data/learningVault';
 import { scanProjects } from '../data/projectVault';
 import { directionProjects } from '../data/projects';
@@ -8,47 +8,20 @@ import { openProjects } from './ProjectView';
 import { listEntry } from './viewPrimitives';
 
 export const DIRECTION_VIEW = 'xove-dashboard-custom-direction';
-export async function openDirection(app: App, name: string): Promise<void> {
-	try {
-		await ensureDirection(learningFiles(app), name);
-		const leaf = app.workspace.getLeavesOfType(DIRECTION_VIEW).find(leaf => leaf.view instanceof DirectionView && leaf.view.getState().direction === name) ?? app.workspace.getLeaf('tab');
-		await leaf.setViewState({ type: DIRECTION_VIEW, active: true, state: { direction: name } });
-		await app.workspace.revealLeaf(leaf);
-	} catch (error) { new Notice(`无法打开方向：${error instanceof Error ? error.message : '请检查权限'}`); }
-}
-export class DirectionView extends ItemView {
-	private direction = '';
+
+/** Shared legacy direction-detail renderer. DashboardView mounts this inside the
+ * unified workbench; DirectionView keeps it only for restored workspace tabs. */
+export class DirectionDetailRenderer {
 	private generation = 0;
-	constructor(leaf: WorkspaceLeaf) { super(leaf); }
-	getViewType(): string { return DIRECTION_VIEW; }
-	getDisplayText(): string { return this.direction || '人生方向'; }
-	getIcon(): string { return 'compass'; }
-	getState() { return { direction: this.direction }; }
-	async setState(state: { direction?: string }, result: ViewStateResult): Promise<void> {
-		this.direction = typeof state.direction === 'string' ? state.direction : '';
-		await this.render();
-		await super.setState(state, result);
-	}
-	async onOpen(): Promise<void> {
-		const update = () => { void this.render(); };
-		this.registerEvent(this.app.metadataCache.on('changed', update));
-		this.registerEvent(this.app.metadataCache.on('resolved', update));
-		this.registerEvent(this.app.vault.on('modify', update));
-		this.registerEvent(this.app.vault.on('delete', update));
-		this.registerEvent(this.app.vault.on('rename', update));
-		this.contentEl.addClass('mx-direction');
-		this.contentEl.addClass('ad-modal');
-		await this.render();
-	}
-	async onClose(): Promise<void> { this.generation++; }
-	private async render(): Promise<void> {
+	constructor(private app: App) {}
+	cancel(): void { this.generation++; }
+	async render(el: HTMLElement, direction: string): Promise<void> {
 		const token = ++this.generation;
-		if (!this.direction) return;
+		if (!direction) return;
 		try {
-			const info = directionInfo(this.direction);
+			const info = directionInfo(direction);
 			const markdown = await learningFiles(this.app).read(info.path);
 			if (token !== this.generation) return;
-			const el = this.contentEl;
 			el.empty();
 			el.createEl('h1', { cls: 'ad-modal-title', text: info.name });
 			const priority = this.app.metadataCache.getCache(info.path)?.frontmatter?.['优先级'];
@@ -75,6 +48,38 @@ export class DirectionView extends ItemView {
 				listEntry(projectSection, p.name, `${p.status}${p.dueDate ? ` · 截止 ${p.dueDate}` : ''}`, () => { void openProjects(this.app, p); });
 			}
 			el.createEl('button', { cls: 'ad-modal-btn', text: '编辑方向笔记 →' }).onclick = () => { void openLearningFile(this.app, info.path).catch(() => new Notice('方向笔记不存在或已移动')); };
-		} catch { if (token === this.generation) { this.contentEl.empty(); this.contentEl.createEl('p', { text: '方向笔记无法读取，请检查是否已移动或删除。' }); } }
+		} catch {
+			if (token === this.generation) { el.empty(); el.createEl('p', { text: '方向笔记无法读取，请检查是否已移动或删除。' }); }
+		}
+	}
+}
+
+export class DirectionView extends ItemView {
+	private direction = '';
+	private renderer: DirectionDetailRenderer;
+	constructor(leaf: WorkspaceLeaf) { super(leaf); this.renderer = new DirectionDetailRenderer(this.app); }
+	getViewType(): string { return DIRECTION_VIEW; }
+	getDisplayText(): string { return this.direction || '人生方向'; }
+	getIcon(): string { return 'compass'; }
+	getState() { return { direction: this.direction }; }
+	async setState(state: { direction?: string }, result: ViewStateResult): Promise<void> {
+		this.direction = typeof state.direction === 'string' ? state.direction : '';
+		await this.render();
+		await super.setState(state, result);
+	}
+	async onOpen(): Promise<void> {
+		const update = () => { void this.render(); };
+		this.registerEvent(this.app.metadataCache.on('changed', update));
+		this.registerEvent(this.app.metadataCache.on('resolved', update));
+		this.registerEvent(this.app.vault.on('modify', update));
+		this.registerEvent(this.app.vault.on('delete', update));
+		this.registerEvent(this.app.vault.on('rename', update));
+		this.contentEl.addClass('mx-direction');
+		this.contentEl.addClass('ad-modal');
+		await this.render();
+	}
+	async onClose(): Promise<void> { this.renderer.cancel(); }
+	private async render(): Promise<void> {
+		await this.renderer.render(this.contentEl, this.direction);
 	}
 }

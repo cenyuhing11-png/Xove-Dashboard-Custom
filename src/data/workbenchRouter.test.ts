@@ -21,7 +21,7 @@ test('DashboardView remains the one main workbench view', () => {
 	assert.match(dashboard, /getViewType\(\): string \{ return VIEW_TYPE; \}/);
 });
 test('main workbench title stays stable', () => assert.match(dashboard, /getDisplayText\(\): string \{ return '夏知之 · 梦序'; \}/));
-test('router exposes exactly four primary sections', () => assert.match(dashboard, /WorkbenchSection = 'home' \| 'timeTrace' \| 'process' \| 'inbox'/));
+test('router exposes the four primary sections plus one parameterized direction route', () => assert.match(dashboard, /WorkbenchSection = 'home' \| 'timeTrace' \| 'process' \| 'inbox' \| 'direction'/));
 test('home action routes inside the main view', () => assert.match(dashboard, /action === 'home'\) await this\.setSection\('home'\)/));
 test('time trace action routes inside the main view', () => assert.match(dashboard, /action === 'plan'\) await this\.setSection\('timeTrace'\)/));
 test('process action routes inside the main view', () => assert.match(dashboard, /action === 'all'\) await this\.setSection\('process'\)/));
