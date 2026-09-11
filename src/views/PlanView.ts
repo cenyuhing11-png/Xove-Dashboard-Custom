@@ -232,7 +232,7 @@ export class PlanWorkspaceRenderer extends Component {
 
 	private renderBoard(main: HTMLElement, snapshot: Awaited<ReturnType<typeof readPlanWorkspace>>): void {
 		const { year, month } = this.timeState.visible;
-		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar' });
+		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar mx-time-trace-section-header' });
 		toolbar.createSpan({ cls: 'mx-plan-title', text: '周期计划' });
 		toolbar.createSpan({ cls: 'mx-plan-context', text: `${monthTitle(year, month)} · Q${snapshot.quarter}` });
 		const top = main.createDiv({ cls: 'po-kanban mx-plan-summary' });
@@ -421,7 +421,7 @@ export class PlanWorkspaceRenderer extends Component {
 	private async renderReview(main: HTMLElement, token: number): Promise<void> {
 		const records = await discoverReviewRecords(this.app);
 		if (token !== this.generation || !main.isConnected) return;
-		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar mx-journal-review-toolbar' });
+		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar mx-time-trace-section-header mx-journal-review-toolbar' });
 		this.renderReviewToolbar(toolbar, records);
 		const content = main.createDiv({ cls: 'mx-journal-review-content' });
 		if (this.reviewView === 'recent') { this.renderRecentReviews(content, records); return; }
@@ -470,7 +470,7 @@ export class PlanWorkspaceRenderer extends Component {
 		this.selectedLongTermPlanId = '';
 		const focus = this.timeState.focus;
 		const month = focusMonth(this.timeState);
-		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar' }); toolbar.createSpan({ cls: 'mx-plan-title', text: '长期计划' });
+		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar mx-time-trace-section-header' }); toolbar.createSpan({ cls: 'mx-plan-title', text: '长期计划' });
 		toolbar.createSpan({ cls: 'mx-plan-context', text: focus.kind === 'year' ? `${focus.year} 年` : `${month.year} 年 ${month.month} 月` });
 		const visible = focus.kind === 'year' ? longTermPlansForYear(plans, focus.year) : longTermPlansForMonth(plans, month.year, month.month);
 		const list = main.createDiv({ cls: 'po-tasklist mx-long-term-list' });
@@ -576,8 +576,7 @@ export class PlanWorkspaceRenderer extends Component {
 		this.sourceLabels = new Map(processes(scanLearning(this.app), scanProjects(this.app), tasks).map(process => [process.sourceFile, taskSourceTypeLabel(process.contentType)]));
 		const journals = await this.readCalendarJournals();
 		if (token !== this.generation || !main.isConnected) return;
-		const root = main.createDiv({ cls: 'po-cal' }); root.tabIndex = 0;
-		const bar = root.createDiv({ cls: 'po-cal__bar' });
+		const bar = main.createDiv({ cls: 'po-toolbar po-cal__bar mx-time-trace-section-header' });
 		bar.createSpan({ cls: 'mx-plan-title', text: '综合日历' });
 		const seg = bar.createDiv({ cls: 'po-cal__seg' });
 		for (const [mode, label] of [['month', '月'], ['week', '周']] as const) {
@@ -590,6 +589,7 @@ export class PlanWorkspaceRenderer extends Component {
 		const today = nav.createEl('button', { cls: 'po-cal__btn', text: '今天' });
 		const next = nav.createEl('button', { cls: 'po-cal__btn', text: '›' });
 		prev.addEventListener('click', () => this.moveCalendar(-1)); today.addEventListener('click', () => this.setTimeState(selectToday(this.timeState))); next.addEventListener('click', () => this.moveCalendar(1));
+		const root = main.createDiv({ cls: 'po-cal' }); root.tabIndex = 0;
 		if (this.calendarMode === 'month') this.renderCalendarMonth(root, journals, tasks); else this.renderCalendarWeek(root, journals, tasks);
 		const selectedDate = this.calendarDate();
 		this.renderDayDetail(root, selectedDate, journals.get(dateKey(selectedDate)));

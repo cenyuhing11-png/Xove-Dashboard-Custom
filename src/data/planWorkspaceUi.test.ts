@@ -126,6 +126,33 @@ test('sidebar removes its duplicate title and exposes four settled time-trace vi
 	assert.match(view, /private async renderCalendar[\s\S]*mx-plan-title', text: '综合日历'/);
 	assert.match(view, /private async renderReview[\s\S]*mx-plan-title', text: '日记回顾'/);
 });
+test('all four time-trace headers share one full-width wrapper while body wrappers stay unchanged', () => {
+	const board = view.match(/private renderBoard[\s\S]*?(?=\n\tprivate existingFile)/)?.[0] ?? '';
+	const review = view.match(/private async renderReview[\s\S]*?(?=\n\tprivate async renderLongTermPlans)/)?.[0] ?? '';
+	const longTerm = view.match(/private async renderLongTermPlans[\s\S]*?(?=\n\tprivate processForRef)/)?.[0] ?? '';
+	const calendar = view.match(/private async renderCalendar[\s\S]*?(?=\n\tprivate moveCalendar)/)?.[0] ?? '';
+	assert.match(board, /po-toolbar mx-plan-toolbar mx-time-trace-section-header/);
+	assert.match(longTerm, /po-toolbar mx-plan-toolbar mx-time-trace-section-header/);
+	assert.match(calendar, /main\.createDiv\(\{ cls: 'po-toolbar po-cal__bar mx-time-trace-section-header' \}\)/);
+	assert.match(review, /po-toolbar mx-plan-toolbar mx-time-trace-section-header mx-journal-review-toolbar/);
+	assert.match(board, /main\.createDiv\(\{ cls: 'po-kanban mx-plan-summary' \}\)/);
+	assert.match(board, /main\.createDiv\(\{ cls: 'po-kanban mx-plan-weeks' \}\)/);
+	assert.match(longTerm, /main\.createDiv\(\{ cls: 'po-tasklist mx-long-term-list' \}\)/);
+	assert.match(calendar, /main\.createDiv\(\{ cls: 'po-cal' \}\)/);
+	assert.match(review, /main\.createDiv\(\{ cls: 'mx-journal-review-content' \}\)/);
+	assert.match(calendar, /\[\['month', '月'\], \['week', '周'\]\]/);
+	for (const control of ["text: '‹'", "text: '今天'", "text: '›'"]) assert.match(calendar, new RegExp(control));
+});
+test('shared time-trace header owns one responsive-safe width padding and divider rule', () => {
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	const rule = css.match(/\.mx-time-trace-section-header\s*\{([^}]+)\}/)?.[1] ?? '';
+	assert.match(rule, /width:\s*100%/);
+	assert.match(rule, /min-width:\s*0/);
+	assert.match(rule, /margin:\s*0/);
+	assert.match(rule, /padding:\s*8px 10px/);
+	assert.match(rule, /border-bottom:\s*1px solid var\(--ad-line\)/);
+	assert.match(rule, /box-sizing:\s*border-box/);
+});
 test('month journals use an adaptive multiline cell while quick-note fallback stays compact', () => {
 	const month = view.match(/private renderCalendarMonth[\s\S]*?(?=\n\tprivate renderCalendarWeek)/)?.[0] ?? '';
 	assert.match(month, /mx-plan-calendar-day-body/);
