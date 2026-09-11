@@ -6,12 +6,13 @@ import type { PlanFiles } from './planning.ts';
 import type { TimeFocus, TimeTraceState } from './timeTrace.ts';
 import { parseDateKey } from './timeTrace.ts';
 import { planDisplayLabel, reviewDisplayLabel, reviewDisplayTitle } from './cycleDisplayLabels.ts';
+import { quarterStartDate } from './quarters.ts';
 
 export type JournalReviewMode = 'review' | 'compare';
 export type JournalReviewViewMode = 'record' | 'recent' | 'search' | 'pastToday';
 
 export interface JournalReviewTarget {
-	kind: JournalKind;
+	kind: JournalKind | 'quarter';
 	date: Date;
 	primary: string;
 	secondary?: string;
@@ -70,6 +71,10 @@ export function reviewDateForFocus(focus: TimeFocus): Date | null {
 	if (focus.kind === 'week') return isoWeekMonday(focus.isoYear, focus.isoWeek);
 	if (!Number.isInteger(focus.year) || focus.year < 1000 || focus.year > 9999) return null;
 	if (focus.kind === 'year') return new Date(focus.year, 0, 1, 12);
+	if (focus.kind === 'quarter') {
+		try { return quarterStartDate(focus.year, focus.quarter); }
+		catch { return null; }
+	}
 	if (!Number.isInteger(focus.month) || focus.month < 1 || focus.month > 12) return null;
 	return new Date(focus.year, focus.month - 1, 1, 12);
 }
@@ -79,6 +84,7 @@ function focusTargetDate(focus: TimeFocus): Date {
 	if (exact) return exact;
 	if (focus.kind === 'day') return parseDateKey(focus.date) ?? new Date(focus.date);
 	if (focus.kind === 'week') return parseDateKey(focus.anchorDate) ?? new Date(focus.isoYear, 0, 4, 12);
+	if (focus.kind === 'quarter') return quarterStartDate(focus.year, focus.quarter);
 	return new Date(focus.year, focus.kind === 'month' ? focus.month - 1 : 0, 1, 12);
 }
 
@@ -118,6 +124,13 @@ export function journalReviewTarget(focus: TimeFocus): JournalReviewTarget {
 			primary: `${focus.year} 年 ${focus.month} 月`, secondary: reviewDisplayLabel('month'),
 			reviewPaths: reviewCandidates('month', date),
 			planPath: planInfo('month', date).path, planLabel: planDisplayLabel('month'), reviewLabel: reviewDisplayLabel('month'),
+		};
+	}
+	if (focus.kind === 'quarter') {
+		return {
+			kind: 'quarter', date,
+			primary: `${focus.year} Q${focus.quarter}`, secondary: '季复盘',
+			reviewPaths: [], reviewLabel: '季复盘',
 		};
 	}
 	return {
@@ -180,6 +193,7 @@ export function dayReviewSections(markdown: string): MarkdownReviewSection[] {
 
 /** Create the review represented by an explicit focus; never substitutes the current real date. */
 export async function ensureReviewForFocus(files: PlanFiles, focus: TimeFocus): Promise<string> {
+	if (focus.kind === 'quarter') throw new Error('季复盘存储体系尚未建立');
 	const date = reviewDateForFocus(focus);
 	if (!date) throw new Error(focus.kind === 'day' ? '日记日期无效' : '复盘周期无效');
 	return ensureJournal(files, focus.kind, date);

@@ -18,7 +18,7 @@ import { dayReviewSections, discoverReviewRecords, ensureReviewForFocus, journal
 import type { JournalReviewMode, JournalReviewViewMode, MarkdownReviewSection, ReviewRecord } from '../data/journalReview';
 import { renderEmbeddedTaskCheckbox } from '../components/tasks/EmbeddedTaskCheckbox';
 import { scanLongTermPlans, setProcessLongTermPlan, updateLongTermPlanMarkdown } from '../data/longTermPlanVault';
-import { appendLongTermStage, assignLongTermProcessToStage, deleteLongTermStage, ensureLongTermStageIds, longTermPlanDetailMetadata, longTermPlansForMonth, longTermPlansForYear, moveLongTermStage, normalizeLongTermProcessRef, removeLongTermProcessFromStages, toggleLongTermStage, updateLongTermPlanDirections, updateLongTermStage } from '../data/longTermPlans';
+import { appendLongTermStage, assignLongTermProcessToStage, deleteLongTermStage, ensureLongTermStageIds, longTermPlanDetailMetadata, longTermPlansForMonth, longTermPlansForQuarter, longTermPlansForYear, moveLongTermStage, normalizeLongTermProcessRef, removeLongTermProcessFromStages, toggleLongTermStage, updateLongTermPlanDirections, updateLongTermStage } from '../data/longTermPlans';
 import type { LongTermPlan } from '../data/longTermPlans';
 import type { Process } from '../data/processes';
 import { hasProcessSchedule } from '../data/processes';
@@ -31,7 +31,7 @@ import { LongTermNarrativeModal } from './LongTermNarrativeModal';
 import { LongTermPlanDirectionModal } from './LongTermPlanDirectionModal';
 import { renderLongTermPlanSummaryRow } from './LongTermPlanRow';
 import { renderTimeTraceMiniCalendar } from '../components/timeTrace/TimeTraceMiniCalendar';
-import { focusDate, focusMatchesWeek, focusMonth, hasTimeTraceMarker, initialTimeTraceState, parseDateKey, selectDay } from '../data/timeTrace';
+import { focusDate, focusLabel, focusMatchesWeek, focusMonth, hasTimeTraceMarker, initialTimeTraceState, parseDateKey, selectDay } from '../data/timeTrace';
 import type { TimeFocus, TimeTraceState } from '../data/timeTrace';
 
 export const PLAN_VIEW = 'xove-dashboard-custom-plan-workspace';
@@ -52,6 +52,7 @@ function sameTimeFocus(a: TimeFocus, b: TimeFocus): boolean {
 	if (a.kind !== b.kind) return false;
 	if (a.kind === 'day' && b.kind === 'day') return a.date === b.date;
 	if (a.kind === 'week' && b.kind === 'week') return a.isoYear === b.isoYear && a.isoWeek === b.isoWeek && a.anchorDate === b.anchorDate;
+	if (a.kind === 'quarter' && b.kind === 'quarter') return a.year === b.year && a.quarter === b.quarter;
 	if (a.kind === 'month' && b.kind === 'month') return a.year === b.year && a.month === b.month;
 	return a.kind === 'year' && b.kind === 'year' && a.year === b.year;
 }
@@ -234,7 +235,10 @@ export class PlanWorkspaceRenderer extends Component {
 	private renderBoard(header: HTMLElement, main: HTMLElement, snapshot: Awaited<ReturnType<typeof readPlanWorkspace>>): void {
 		const { year, month } = this.timeState.visible;
 		header.createSpan({ cls: 'mx-plan-title', text: '周期计划' });
-		header.createSpan({ cls: 'mx-plan-context', text: `${monthTitle(year, month)} · Q${snapshot.quarter}` });
+		const context = this.timeState.focus.kind === 'year' || this.timeState.focus.kind === 'quarter' || this.timeState.focus.kind === 'month'
+			? focusLabel(this.timeState.focus)
+			: `${monthTitle(year, month)} · Q${snapshot.quarter}`;
+		header.createSpan({ cls: 'mx-plan-context', text: context });
 		const top = main.createDiv({ cls: 'po-kanban mx-plan-summary' });
 		for (const card of [snapshot.annual, snapshot.quarterly, snapshot.monthly]) {
 			const column = top.createDiv({ cls: 'po-kanban__col' }); this.renderPlanCard(column, card, card.period === this.timeState.focus.kind);
@@ -376,9 +380,11 @@ export class PlanWorkspaceRenderer extends Component {
 			week: ['本周尚未创建周复盘', '创建本周复盘 →'],
 			month: ['本月尚未创建月复盘', '创建本月复盘 →'],
 			year: ['本年度尚未创建年复盘', '创建本年复盘 →'],
+			quarter: ['本季尚未创建季复盘', ''],
 		}[target.kind];
 		const empty = parent.createDiv({ cls: 'mx-journal-review-missing-day' });
 		empty.createDiv({ cls: 'ad-modal-hint', text: copy[0] });
+		if (target.kind === 'quarter') return;
 		const create = empty.createEl('button', { cls: 'mx-inline-action mx-journal-review-create', text: copy[1], attr: { type: 'button' } });
 		create.onclick = async () => {
 			const focus = this.timeState.focus;
@@ -438,7 +444,7 @@ export class PlanWorkspaceRenderer extends Component {
 		if (dayTitle) record.createDiv({ cls: 'mx-journal-review-record-title', text: dayTitle });
 		if (target.secondary) record.createDiv({ cls: 'ad-modal-hint', text: target.secondary });
 		const controls = content.createDiv({ cls: 'mx-journal-review-record-controls' });
-		if (target.kind !== 'day') {
+		if (target.kind !== 'day' && target.kind !== 'quarter') {
 			const modes = controls.createDiv({ cls: 'mx-journal-review-modes', attr: { role: 'tablist', 'aria-label': '阅读模式' } });
 			for (const [mode, label] of [['review', '复盘'], ['compare', '计划 ↔ 复盘']] as const) {
 				const button = modes.createEl('button', { cls: `mx-journal-review-mode${this.reviewMode === mode ? ' is-active' : ''}`, text: label, attr: { type: 'button', role: 'tab', 'aria-selected': String(this.reviewMode === mode) } });
@@ -450,6 +456,7 @@ export class PlanWorkspaceRenderer extends Component {
 			edit.onclick = () => this.openSource(reviewFile);
 		}
 		if (token !== this.generation || !main.isConnected) return;
+		if (target.kind === 'quarter') { this.renderMissingReview(content, target); return; }
 		if (!reviewFile && (target.kind === 'day' || this.reviewMode === 'review')) { this.renderMissingReview(content, target); return; }
 
 		if (target.kind !== 'day' && this.reviewMode === 'compare') {
@@ -465,16 +472,16 @@ export class PlanWorkspaceRenderer extends Component {
 		const focus = this.timeState.focus;
 		const month = focusMonth(this.timeState);
 		header.createSpan({ cls: 'mx-plan-title', text: '长期计划' });
-		header.createSpan({ cls: 'mx-plan-context', text: focus.kind === 'year' ? `${focus.year} 年` : `${month.year} 年 ${month.month} 月` });
+		header.createSpan({ cls: 'mx-plan-context', text: focus.kind === 'year' || focus.kind === 'quarter' ? focusLabel(focus) : `${month.year} 年 ${month.month} 月` });
 		const selected = plans.find(plan => plan.id === this.selectedLongTermPlanId);
 		if (selected) {
 			if (selected.stages.some(stage => !stage.id)) { await updateLongTermPlanMarkdown(this.app, selected, content => ensureLongTermStageIds(content)); await this.renderPlanContent(); return; }
 			this.renderLongTermDetail(main, selected, plans); return;
 		}
 		this.selectedLongTermPlanId = '';
-		const visible = focus.kind === 'year' ? longTermPlansForYear(plans, focus.year) : longTermPlansForMonth(plans, month.year, month.month);
+		const visible = focus.kind === 'year' ? longTermPlansForYear(plans, focus.year) : focus.kind === 'quarter' ? longTermPlansForQuarter(plans, focus.year, focus.quarter) : longTermPlansForMonth(plans, month.year, month.month);
 		const list = main.createDiv({ cls: 'po-tasklist mx-long-term-list' });
-		if (!visible.length) { list.createDiv({ cls: 'po-empty mx-plan-empty', text: focus.kind === 'year' ? `${focus.year} 年暂无长期计划` : `${month.year} 年 ${month.month} 月暂无长期计划` }); return; }
+		if (!visible.length) { list.createDiv({ cls: 'po-empty mx-plan-empty', text: focus.kind === 'year' ? `${focus.year} 年暂无长期计划` : focus.kind === 'quarter' ? `${focus.year} Q${focus.quarter} 暂无长期计划` : `${month.year} 年 ${month.month} 月暂无长期计划` }); return; }
 		for (const plan of visible) {
 			renderLongTermPlanSummaryRow(list, plan, () => { this.selectedLongTermPlanId = plan.id; void this.renderPlanContent(); });
 		}

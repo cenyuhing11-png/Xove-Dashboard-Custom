@@ -119,6 +119,7 @@ test('focused review creation reuses existing files and rejects invalid periods'
 	assert.equal(store.contents.get(existing), '用户已有复盘');
 	await assert.rejects(ensureReviewForFocus(store.files, { kind: 'month', year: 2025, month: 13 }), /周期无效/);
 	await assert.rejects(ensureReviewForFocus(store.files, { kind: 'week', isoYear: 2025, isoWeek: 54, anchorDate: '2025-01-01' }), /周期无效/);
+	await assert.rejects(ensureReviewForFocus(store.files, { kind: 'quarter', year: 2025, quarter: 3 }), /季复盘存储体系尚未建立/);
 });
 
 test('discovery recognizes the four real journal and review kinds', () => {

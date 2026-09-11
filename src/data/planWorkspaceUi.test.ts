@@ -337,9 +337,18 @@ test('picker selected and real-current cues are visually separate and neutral', 
 	const pickerCss = css.match(/\.mx-mini-calendar-picker-option\.is-selected \{[^}]*\}/)?.[0] ?? '';
 	assert.equal(pickerCss.includes('--ad-accent'), false);
 });
-test('year month week and day selected states all derive from the discriminated focus', () => {
-	for (const helper of ['focusMatchesYear', 'focusMatchesMonth', 'focusMatchesWeek', 'focusMatchesDay']) assert.ok(miniCalendar.includes(helper));
+test('year quarter month week and day selected states all derive from the discriminated focus', () => {
+	for (const helper of ['focusMatchesYear', 'focusMatchesQuarter', 'focusMatchesMonth', 'focusMatchesWeek', 'focusMatchesDay']) assert.ok(miniCalendar.includes(helper));
 	assert.match(miniCalendar, /aria-pressed': String\(selected\)/);
+});
+test('quarter is a lightweight same-row scope derived from visible month without a picker', () => {
+	assert.match(miniCalendar, /const title = nav\.createDiv\(\{ cls: 'mx-mini-calendar-title' \}\)/);
+	assert.match(miniCalendar, /quarterOfMonth\(state\.visible\.month\)/);
+	assert.match(miniCalendar, /mx-mini-calendar-separator/);
+	assert.match(miniCalendar, /mx-mini-calendar-scope mx-mini-calendar-quarter/);
+	assert.match(miniCalendar, /options\.onChange\(selectQuarter\(state\)\)/);
+	assert.doesNotMatch(miniCalendar, /openPicker\('quarter'\)|pickerKind: 'quarter'|Q1.*Q2.*Q3.*Q4/);
+	assert.match(css, /\.mx-mini-calendar-quarter \{[^}]*font-family: var\(--ad-font-mono\)/);
 });
 test('one shared mini calendar renderer is mounted once by the sidebar', () => {
 	assert.equal((view.match(/renderTimeTraceMiniCalendar\(list/g) ?? []).length, 1);
@@ -357,13 +366,18 @@ test('week controls expose ISO week labels and select the represented Monday', (
 	assert.match(miniCalendar, /`W\$\{String\(week\.isoWeek\)\.padStart\(2, '0'\)\}`/);
 	assert.match(miniCalendar, /selectWeek\(state, week\.days\[0\]!\.date\)/);
 });
-test('long-term plans use year precision only for year focus and anchor month otherwise', () => {
-	assert.match(view, /focus\.kind === 'year' \? longTermPlansForYear\(plans, focus\.year\) : longTermPlansForMonth\(plans, month\.year, month\.month\)/);
+test('long-term plans use year quarter and month precision without changing row rendering', () => {
+	assert.match(view, /focus\.kind === 'year' \? longTermPlansForYear\(plans, focus\.year\) : focus\.kind === 'quarter' \? longTermPlansForQuarter\(plans, focus\.year, focus\.quarter\) : longTermPlansForMonth\(plans, month\.year, month\.month\)/);
 	assert.match(view, /const month = focusMonth\(this\.timeState\)/);
 });
-test('long-term empty state reflects year or month precision without a large new card', () => {
-	assert.match(view, /focus\.kind === 'year' \? `\$\{focus\.year\} 年暂无长期计划` : `\$\{month\.year\} 年 \$\{month\.month\} 月暂无长期计划`/);
+test('long-term empty state reflects year quarter or month precision without a large new card', () => {
+	assert.match(view, /focus\.kind === 'quarter' \? `\$\{focus\.year\} Q\$\{focus\.quarter\} 暂无长期计划`/);
 	assert.match(view, /cls: 'po-empty mx-plan-empty'/);
+});
+test('cycle plan header and card focus understand quarter while still reading the visible month snapshot', () => {
+	assert.match(view, /focus\.kind === 'year' \|\| this\.timeState\.focus\.kind === 'quarter' \|\| this\.timeState\.focus\.kind === 'month'/);
+	assert.match(view, /focusLabel\(this\.timeState\.focus\)/);
+	assert.match(view, /card\.period === this\.timeState\.focus\.kind/);
 });
 test('period plans use visible month while week and day focus locate the matching week card', () => {
 	assert.match(view, /readPlanWorkspace\(this\.planFiles\(\), year, month\)/);
@@ -406,12 +420,13 @@ test('marker semantics remain section-specific and read only', () => {
 	assert.match(timeTrace, /focus\.kind === 'day'[\s\S]*mode === 'calendar' \|\| mode === 'review'/);
 	assert.doesNotMatch(resolver, /vault\.create|vault\.modify|ensurePlan/);
 });
-test('calendar reuses month week and day modes without adding a year mode', () => {
+test('calendar reuses month week and day modes and leaves quarter on the visible month view', () => {
 	const calendar = view.match(/private async renderCalendar[\s\S]*?(?=\n\tprivate weekDates)/)?.[0] ?? '';
 	assert.match(calendar, /this\.calendarMode = this\.timeState\.focus\.kind === 'week' \? 'week' : 'month'/);
 	assert.match(view, /day\.addEventListener\('click', \(\) => this\.setDayFocus\(date\)\)/);
 	assert.match(calendar, /this\.calendarMode === 'month'\) this\.renderCalendarMonth[\s\S]*else this\.renderCalendarWeek/);
 	assert.equal(calendar.includes("['year', '年']"), false);
+	assert.equal(calendar.includes("'quarter' ?"), false);
 });
 test('time trace rename leaves technical PlanView and identifiers intact', () => {
 	assert.ok(view.includes('class PlanView'));

@@ -18,14 +18,24 @@ test('day review renders only the three settled reading sections and no task wid
 	assert.doesNotMatch(adapter.match(/dayReviewSections[\s\S]*?\n}/)?.[0] ?? '', /今日任务/);
 });
 
-test('week month and year expose review and plan comparison modes', () => {
+test('week month and year expose review and plan comparison modes while quarter does not', () => {
 	assert.match(view, /\[\['review', '复盘'\], \['compare', '计划 ↔ 复盘'\]\]/);
-	assert.match(view, /target\.kind !== 'day'/);
+	assert.match(view, /target\.kind !== 'day' && target\.kind !== 'quarter'/);
 	assert.match(view, /mx-journal-review-record-controls/);
 	assert.match(view, /mx-journal-review-mode/);
 	assert.doesNotMatch(view, /mx-journal-review-modes[^\n]*po-cal__seg/);
 	assert.match(view, /mx-journal-review-pane is-plan/);
 	assert.match(view, /mx-journal-review-pane is-review/);
+});
+
+test('quarter review is an explicit storage-free empty state without create or compare actions', () => {
+	assert.match(view, /quarter: \['本季尚未创建季复盘', ''\]/);
+	assert.match(view, /if \(target\.kind === 'quarter'\) return/);
+	assert.match(view, /if \(target\.kind === 'quarter'\) \{ this\.renderMissingReview\(content, target\); return; \}/);
+	const adapter = readFileSync(new URL('./journalReview.ts', import.meta.url), 'utf8');
+	assert.match(adapter, /kind: 'quarter'[\s\S]*primary: `\$\{focus\.year\} Q\$\{focus\.quarter\}`[\s\S]*secondary: '季复盘'[\s\S]*reviewPaths: \[\]/);
+	assert.match(adapter, /focus\.kind === 'quarter'\) throw new Error\('季复盘存储体系尚未建立'\)/);
+	assert.match(adapter, /export interface ReviewRecord \{\s*kind: JournalKind;/);
 });
 
 test('record header uses the frontmatter title only when a daily title exists', () => {

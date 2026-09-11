@@ -2,6 +2,7 @@ import type { EmbeddedTask } from './embeddedTasks.ts';
 import { isoWeek, planInfo, readSection } from './planning.ts';
 import type { PlanFiles, PlanPeriod } from './planning.ts';
 import { planDisplayLabel } from './cycleDisplayLabels.ts';
+import { quarterOfMonth } from './quarters.ts';
 
 export type PlanWorkspaceMode = 'board' | 'longTermPlan' | 'calendar' | 'review';
 export type PlanCalendarMode = 'month' | 'week';
@@ -15,10 +16,8 @@ export function localPlanSelection(now = new Date()): PlanWorkspaceSelection {
 	return { year: now.getFullYear(), month: now.getMonth() + 1 };
 }
 
-export function quarterForMonth(month: number): number {
-	if (!Number.isInteger(month) || month < 1 || month > 12) throw new Error('月份必须为 1 到 12');
-	return Math.floor((month - 1) / 3) + 1;
-}
+/** Kept as the public compatibility name used by the existing planning workspace. */
+export const quarterForMonth = quarterOfMonth;
 
 export function selectionDate(year: number, month: number): Date {
 	if (!Number.isInteger(year) || year < 1) throw new Error('年份无效');

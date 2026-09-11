@@ -5,6 +5,7 @@ import {
 	focusLabel,
 	focusMatchesDay,
 	focusMatchesMonth,
+	focusMatchesQuarter,
 	focusMatchesWeek,
 	focusMatchesYear,
 	focusMonth,
@@ -14,6 +15,7 @@ import {
 	parseDateKey,
 	selectDay,
 	selectMonth,
+	selectQuarter,
 	selectToday,
 	selectWeek,
 	selectYear,
@@ -92,6 +94,18 @@ test('picker month selection preserves the visible year and selects month precis
 	assert.deepEqual(state, { visible: { year: 2026, month: 3 }, focus: { kind: 'month', year: 2026, month: 3 } });
 });
 
+test('quarter selection derives Q3 from visible September without moving the visible month', () => {
+	const state = selectQuarter(september);
+	assert.deepEqual(state, { visible: { year: 2026, month: 9 }, focus: { kind: 'quarter', year: 2026, quarter: 3 } });
+	assert.ok(focusMatchesQuarter(state.focus, 2026, 3));
+});
+
+test('quarter selection follows visible month changes instead of storing a second visible quarter', () => {
+	const october = shiftVisibleMonth(selectQuarter(september), 1);
+	assert.deepEqual(october.visible, { year: 2026, month: 10 });
+	assert.deepEqual(selectQuarter(october).focus, { kind: 'quarter', year: 2026, quarter: 4 });
+});
+
 test('year picker exposes twelve years with its anchor near the centre', () => {
 	assert.deepEqual(yearPickerPage(2026), [2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032]);
 });
@@ -119,10 +133,11 @@ test('an adjacent-month day selection also changes the visible month', () => {
 	assert.deepEqual(state.focus, { kind: 'day', date: '2026-08-31' });
 });
 
-test('focus matchers keep all four focus kinds mutually exclusive', () => {
+test('focus matchers keep all five focus kinds mutually exclusive', () => {
 	const focus = selectWeek(september, new Date(2026, 8, 10, 12)).focus;
 	assert.equal(focusMatchesYear(focus, 2026), false);
 	assert.equal(focusMatchesMonth(focus, 2026, 9), false);
+	assert.equal(focusMatchesQuarter(focus, 2026, 3), false);
 	assert.equal(focusMatchesDay(focus, '2026-09-10'), false);
 	assert.equal(focusMatchesWeek(focus, 2026, 37), true);
 });
@@ -141,8 +156,15 @@ test('year focus leaves the concrete visible month available to cycle plans', ()
 	assert.equal(focusDate(september).getMonth(), 8);
 });
 
+test('quarter focus leaves the concrete visible month available to month-only consumers', () => {
+	const state = selectQuarter(september);
+	assert.deepEqual(focusMonth(state), { year: 2026, month: 9 });
+	assert.equal(focusDate(state).getMonth(), 8);
+});
+
 test('focus labels preserve the selected precision', () => {
 	assert.equal(focusLabel({ kind: 'year', year: 2026 }), '2026 年');
+	assert.equal(focusLabel({ kind: 'quarter', year: 2026, quarter: 3 }), '2026 Q3');
 	assert.equal(focusLabel({ kind: 'month', year: 2026, month: 9 }), '2026 年 9 月');
 	assert.equal(focusLabel({ kind: 'week', isoYear: 2026, isoWeek: 7, anchorDate: '2026-02-09' }), '2026-W07');
 	assert.equal(focusLabel({ kind: 'day', date: '2026-09-10' }), '2026-09-10');
@@ -159,14 +181,15 @@ test('initial state uses the current visible year without persisted state', () =
 });
 
 const markerSources = (plans: string[] = [], journals: string[] = [], days: string[] = []) => ({
-	planExists: (period: 'year' | 'month' | 'week', date: Date) => plans.includes(`${period}:${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`),
+	planExists: (period: 'year' | 'quarter' | 'month' | 'week', date: Date) => plans.includes(`${period}:${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`),
 	journalExists: (period: 'year' | 'month' | 'week', date: Date) => journals.includes(`${period}:${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`),
 	dailyJournalExists: (date: string) => days.includes(date),
 });
 
-test('cycle markers represent existing year month and week plans', () => {
-	const sources = markerSources(['year:2026-1-1', 'month:2026-9-1', 'week:2026-9-7']);
+test('cycle markers represent existing year quarter month and week plans', () => {
+	const sources = markerSources(['year:2026-1-1', 'quarter:2026-7-1', 'month:2026-9-1', 'week:2026-9-7']);
 	assert.equal(hasTimeTraceMarker('cycle', { kind: 'year', year: 2026 }, sources), true);
+	assert.equal(hasTimeTraceMarker('cycle', { kind: 'quarter', year: 2026, quarter: 3 }, sources), true);
 	assert.equal(hasTimeTraceMarker('cycle', { kind: 'month', year: 2026, month: 9 }, sources), true);
 	assert.equal(hasTimeTraceMarker('cycle', { kind: 'week', isoYear: 2026, isoWeek: 37, anchorDate: '2026-09-07' }, sources), true);
 });
@@ -187,6 +210,7 @@ test('review markers represent day week month and year journals', () => {
 	assert.equal(hasTimeTraceMarker('review', { kind: 'week', isoYear: 2026, isoWeek: 37, anchorDate: '2026-09-07' }, sources), true);
 	assert.equal(hasTimeTraceMarker('review', { kind: 'month', year: 2026, month: 9 }, sources), true);
 	assert.equal(hasTimeTraceMarker('review', { kind: 'year', year: 2026 }, sources), true);
+	assert.equal(hasTimeTraceMarker('review', { kind: 'quarter', year: 2026, quarter: 3 }, sources), false);
 });
 
 test('long-term plans deliberately expose no mini-calendar markers', () => {

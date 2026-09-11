@@ -1921,6 +1921,8 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .dashboard-plugin button.mx-mini-calendar-week,
 .dashboard-plugin button.mx-mini-calendar-day { position: relative; min-width: 0; border: 1px solid transparent; border-radius: var(--ad-r1); background: transparent; box-shadow: none; color: var(--ad-text); font-family: var(--ad-font); line-height: 1; }
 .mx-mini-calendar-scope { min-height: 24px; padding: 3px 4px; color: inherit; font-size: inherit; font-weight: inherit; }
+.mx-mini-calendar-separator { color: var(--ad-text-dim); font-weight: 400; }
+.mx-mini-calendar-quarter { padding-inline: 3px; font-family: var(--ad-font-mono); }
 .mx-mini-calendar-chevron { margin-left: 2px; color: var(--ad-text-dim); font-size: 9px; }
 .mx-mini-calendar-picker { position: absolute; top: calc(100% + 3px); left: 50%; z-index: 20; width: 212px; max-width: calc(100vw - 32px); padding: 7px; transform: translateX(-50%); border: 1px solid var(--ad-line); border-radius: var(--ad-r2); background: var(--ad-s1); box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
 .mx-mini-calendar-picker-head { display: grid; grid-template-columns: 24px minmax(0, 1fr) 24px; align-items: center; margin-bottom: 5px; color: var(--ad-text-mute); font-family: var(--ad-font-mono); font-size: 10px; text-align: center; }

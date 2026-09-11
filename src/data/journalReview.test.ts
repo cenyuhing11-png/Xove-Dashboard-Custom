@@ -49,6 +49,16 @@ test('year focus resolves the existing annual review and plan paths', () => {
 	assert.equal(target.reviewLabel, '年复盘');
 });
 
+test('quarter focus exposes a storage-free seasonal review target', () => {
+	const target = journalReviewTarget({ kind: 'quarter', year: 2026, quarter: 3 });
+	assert.equal(target.kind, 'quarter');
+	assert.equal(target.primary, '2026 Q3');
+	assert.equal(target.secondary, '季复盘');
+	assert.equal(target.reviewLabel, '季复盘');
+	assert.deepEqual(target.reviewPaths, []);
+	assert.equal(target.planPath, undefined);
+});
+
 test('review parser preserves markdown bodies but removes frontmatter and record H1', () => {
 	const sections = markdownReviewSections('---\n类型: 周记\n---\n\n# 标题\n\n## 本周完成\n\n- 完成 [[项目]]\n\n## 本周感受\n\n**不错**\n');
 	assert.deepEqual(sections, [
