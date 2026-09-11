@@ -6,7 +6,7 @@ import { join, relative } from 'node:path';
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const srcRoot = join(repoRoot, 'src');
-const manifest = JSON.parse(readFileSync(join(repoRoot, 'manifest.json'), 'utf8')) as { isDesktopOnly?: boolean };
+const manifest = JSON.parse(readFileSync(join(repoRoot, 'manifest.json'), 'utf8')) as { version?: string; isDesktopOnly?: boolean };
 
 function sourceFiles(dir: string): string[] {
 	return readdirSync(dir).flatMap(name => {
@@ -30,6 +30,7 @@ const desktopOnlyPatterns: Array<[string, RegExp]> = [
 
 test('manifest no longer declares the plugin desktop-only', () => {
 	assert.equal(manifest.isDesktopOnly, false);
+	assert.equal(manifest.version, '0.4.0-dev.3');
 });
 
 test('mobile production source has no desktop-only Node or Electron module imports', () => {
@@ -51,4 +52,55 @@ test('Dashboard Workbench TimeTrace and Process sources remain mobile-safe', () 
 		assert.ok(source, suffix);
 		for (const [, pattern] of desktopOnlyPatterns) assert.doesNotMatch(source.text, pattern, suffix);
 	}
+});
+
+test('main module emits the load sentinel before plugin lifecycle starts', () => {
+	const main = productionSources.find(source => source.path.endsWith('src/main.ts'));
+	assert.ok(main);
+	assert.match(main.text, /console\.info\('\[Mengxu MobileDiag\] module:loaded'\)/);
+});
+
+test('onload diagnostics have stable stage order and a completion marker', () => {
+	const main = productionSources.find(source => source.path.endsWith('src/main.ts'));
+	assert.ok(main);
+	const stages = [
+		'01 onload:start',
+		'02 load-settings',
+		'03 services',
+		'04 markdown-processor',
+		'05 editor-extensions',
+		'06 views',
+		'07 commands',
+		'08 settings-tab',
+		'09 status-bar',
+		'10 update-modal:queued',
+		'11 onload:complete',
+	];
+	const positions = stages.map(stage => main.text.indexOf(stage));
+	assert.ok(positions.every(position => position >= 0));
+	assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
+});
+
+test('fatal onload diagnostics log name message stack and rethrow', () => {
+	const main = productionSources.find(source => source.path.endsWith('src/main.ts'));
+	assert.ok(main);
+	assert.match(main.text, /ONLOAD_FATAL name/);
+	assert.match(main.text, /ONLOAD_FATAL message/);
+	assert.match(main.text, /ONLOAD_FATAL stack/);
+	assert.match(main.text, /console\.error\('\[Mengxu MobileDiag\] ONLOAD_FATAL', error\)[\s\S]*throw error;/);
+});
+
+test('diagnostic helpers do not write Vault data or Markdown', () => {
+	const main = productionSources.find(source => source.path.endsWith('src/main.ts'));
+	assert.ok(main);
+	const helper = main.text.slice(main.text.indexOf('function mobileDiag'), main.text.indexOf('/** 番茄钟运行时状态'));
+	assert.ok(helper);
+	assert.doesNotMatch(helper, /vault\.|saveData|create\(|modify\(|process\(/);
+});
+
+test('production bundle retains diagnostic sentinels without Node or Electron imports', () => {
+	const bundle = readFileSync(join(repoRoot, 'main.js'), 'utf8');
+	assert.match(bundle, /\[Mengxu MobileDiag\] module:loaded/);
+	assert.match(bundle, /\[Mengxu MobileDiag\] ONLOAD_FATAL/);
+	assert.doesNotMatch(bundle, /require\("(?:electron|fs|path|os|child_process|node:fs|node:path|node:os)"\)/);
 });

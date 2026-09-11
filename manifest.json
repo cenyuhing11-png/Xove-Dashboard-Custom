@@ -1,7 +1,7 @@
 {
 	"id": "xove-dashboard-custom",
 	"name": "夏知之 · 梦序",
-	"version": "0.4.0-dev.2",
+	"version": "0.4.0-dev.3",
 	"minAppVersion": "1.8.0",
 	"description": "Turn your home tab into a customizable dashboard for capturing tasks, tracking projects, and reviewing your note activity.",
 	"author": "xw",
