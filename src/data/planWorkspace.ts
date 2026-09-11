@@ -1,6 +1,9 @@
 import type { EmbeddedTask } from './embeddedTasks.ts';
 import { isoWeek, planInfo, readSection } from './planning.ts';
+import { existingPlanPath } from './planning.ts';
 import type { PlanFiles, PlanPeriod } from './planning.ts';
+import { planDisplayLabel } from './cycleDisplayLabels.ts';
+import { quarterOfMonth } from './quarters.ts';
 
 export type PlanWorkspaceMode = 'board' | 'longTermPlan' | 'calendar' | 'review';
 export type PlanCalendarMode = 'month' | 'week';
@@ -14,10 +17,8 @@ export function localPlanSelection(now = new Date()): PlanWorkspaceSelection {
 	return { year: now.getFullYear(), month: now.getMonth() + 1 };
 }
 
-export function quarterForMonth(month: number): number {
-	if (!Number.isInteger(month) || month < 1 || month > 12) throw new Error('月份必须为 1 到 12');
-	return Math.floor((month - 1) / 3) + 1;
-}
+/** Kept as the public compatibility name used by the existing planning workspace. */
+export const quarterForMonth = quarterOfMonth;
 
 export function selectionDate(year: number, month: number): Date {
 	if (!Number.isInteger(year) || year < 1) throw new Error('年份无效');
@@ -47,18 +48,16 @@ export function monthIsoWeeks(year: number, month: number): Array<{ isoYear: num
 }
 
 async function card(files: Pick<PlanFiles, 'kind' | 'read'>, period: PlanPeriod, date: Date, title: string, primary: string, fallback?: string): Promise<PlanWorkspaceCard> {
-	const info = planInfo(period, date);
 	try {
-		const kind = files.kind(info.path);
-		if (!kind) return { period, title, path: info.path, exists: false, entries: [] };
-		if (kind !== 'file') throw new Error('计划路径不是文件');
-		const markdown = await files.read(info.path);
+		const path = existingPlanPath(files, period, date);
+		if (!path) return { period, title, path: planInfo(period, date).path, exists: false, entries: [] };
+		const markdown = await files.read(path);
 		let section = readSection(markdown, primary);
 		if (!section.content.length && fallback) section = readSection(markdown, fallback);
 		const entries = (section.items.length ? section.items : section.content).slice(0, 3);
-		return { period, title, path: info.path, exists: true, entries };
+		return { period, title, path, exists: true, entries };
 	} catch {
-		return { period, title, path: info.path, exists: true, entries: [], error: '暂时无法读取计划' };
+		return { period, title, path: planInfo(period, date).path, exists: true, entries: [], error: '暂时无法读取计划' };
 	}
 }
 
@@ -66,12 +65,12 @@ export async function readPlanWorkspace(files: Pick<PlanFiles, 'kind' | 'read'>,
 	const date = selectionDate(year, month);
 	const quarter = quarterForMonth(month);
 	const [annual, quarterly, monthly] = await Promise.all([
-		card(files, 'year', date, `${year} 年度`, '年度核心突破'),
-		card(files, 'quarter', date, `${year} Q${quarter}`, '当前季度主题', '季度重点'),
-		card(files, 'month', date, `${year} 年 ${month} 月`, '本月重点'),
+		card(files, 'year', date, `${year} ${planDisplayLabel('year')}`, '今年最想实现的突破', '年度核心突破'),
+		card(files, 'quarter', date, `${year} Q${quarter} ${planDisplayLabel('quarter')}`, '当前季度主题', '季度重点'),
+		card(files, 'month', date, `${year} 年 ${month} ${planDisplayLabel('month')}`, '本月重点'),
 	]);
 	const weeks = await Promise.all(monthIsoWeeks(year, month).map(async value => {
-		const base = await card(files, 'week', value.start, `W${String(value.week).padStart(2, '0')}`, '本周重点');
+		const base = await card(files, 'week', value.start, `W${String(value.week).padStart(2, '0')} ${planDisplayLabel('week')}`, '本周重点');
 		return { ...base, ...value };
 	}));
 	return { selection: { year, month }, quarter, annual, quarterly, monthly, weeks };

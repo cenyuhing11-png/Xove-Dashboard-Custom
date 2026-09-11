@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { dateKey, incompleteTaskCountOnDate, localPlanSelection, monthIsoWeeks, quarterForMonth, readPlanWorkspace, selectionDate, taskCalendarCategory, taskCalendarSourceLabel, tasksInMonth, tasksOnDate } from './planWorkspace.ts';
-import { planInfo } from './planning.ts';
+import { legacyPlanInfo, planInfo } from './planning.ts';
 import type { EmbeddedTask, EmbeddedSourceType } from './embeddedTasks.ts';
 
 function task(sourceType: EmbeddedSourceType, date?: string, completed = false, sourceFile?: string): EmbeddedTask {
@@ -33,6 +33,33 @@ test('workspace reads annual, quarterly and monthly sections without creating fi
 	values[planInfo('month', date).path] = '## 本月重点\n- M';
 	const result = await readPlanWorkspace(store(values), 2026, 9);
 	assert.deepEqual(result.annual.entries, ['A', 'B', 'C']); assert.deepEqual(result.quarterly.entries, ['Q1', 'Q2']); assert.deepEqual(result.monthly.entries, ['M']);
+	assert.equal(result.annual.title, '2026 年计划');
+	assert.equal(result.quarterly.title, '2026 Q3 季计划');
+	assert.equal(result.monthly.title, '2026 年 9 月计划');
+	assert.equal(result.weeks[0]!.title, 'W36 周计划');
+});
+test('workspace reads legacy year quarter month and week plans in place', async () => {
+	const date = new Date(2026, 8, 1, 12); const values: Record<string, string> = {};
+	values[legacyPlanInfo('year', date).path] = '## 年度核心突破\n- 旧年';
+	values[legacyPlanInfo('quarter', date).path] = '## 当前季度主题\n- 旧季';
+	values[legacyPlanInfo('month', date).path] = '## 本月重点\n- 旧月';
+	const firstWeek = monthIsoWeeks(2026, 9)[0]!.start;
+	values[legacyPlanInfo('week', firstWeek).path] = '## 本周重点\n- 旧周';
+	const result = await readPlanWorkspace(store(values), 2026, 9);
+	assert.deepEqual(result.annual.entries, ['旧年']);
+	assert.deepEqual(result.quarterly.entries, ['旧季']);
+	assert.deepEqual(result.monthly.entries, ['旧月']);
+	assert.deepEqual(result.weeks[0]!.entries, ['旧周']);
+	assert.equal(result.annual.path, legacyPlanInfo('year', date).path);
+});
+test('workspace prefers canonical month plan when canonical and legacy both exist', async () => {
+	const date = new Date(2026, 8, 1, 12); const values: Record<string, string> = {
+		[planInfo('month', date).path]: '## 本月重点\n- 新月',
+		[legacyPlanInfo('month', date).path]: '## 本月重点\n- 旧月',
+	};
+	const result = await readPlanWorkspace(store(values), 2026, 9);
+	assert.deepEqual(result.monthly.entries, ['新月']);
+	assert.equal(result.monthly.path, planInfo('month', date).path);
 });
 test('quarter falls back to 季度重点', async () => { const date = new Date(2026, 8, 1, 12); const values = { [planInfo('quarter', date).path]: '## 季度重点\n- fallback' }; assert.deepEqual((await readPlanWorkspace(store(values), 2026, 9)).quarterly.entries, ['fallback']); });
 test('missing plans remain neutral read-only states', async () => { const result = await readPlanWorkspace(store({}), 2026, 9); assert.equal(result.annual.exists, false); assert.equal(result.monthly.entries.length, 0); assert.ok(result.weeks.every(week => !week.exists)); });

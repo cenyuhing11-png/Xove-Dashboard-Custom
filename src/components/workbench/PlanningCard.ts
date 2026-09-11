@@ -1,10 +1,11 @@
 import type { PlanPeriod, PlanState } from '../../data/planning';
 import { addEmpty, addEntry, createGroup, createSection } from './shared';
+import { planDisplayLabel } from '../../data/cycleDisplayLabels';
 
 export function renderPlanningCard(parent: HTMLElement, plans: PlanState[], open: (period: PlanPeriod) => void): void {
 	const body = createSection(parent, '🗓 当前计划');
 	const labels = { week: '本周重点', month: '本月重点', quarter: '当前季度', year: '年度目标' };
-	const names = { week: '本周计划', month: '本月计划', quarter: '季度计划', year: '年度计划' };
+	const names = { week: '本周计划', month: '本月计划', quarter: planDisplayLabel('quarter'), year: planDisplayLabel('year') };
 	for (const plan of plans) {
 		const { period } = plan;
 		const group = period === 'year' ? body : createGroup(body, labels[period]);

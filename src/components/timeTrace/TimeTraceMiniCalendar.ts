@@ -1,6 +1,7 @@
 import { dateKey } from '../../data/planWorkspace';
-import { focusMatchesDay, focusMatchesMonth, focusMatchesWeek, focusMatchesYear, miniCalendarWeeks, selectDay, selectMonth, selectToday, selectWeek, selectYear, shiftVisibleMonth, yearPickerPage } from '../../data/timeTrace';
+import { focusMatchesDay, focusMatchesMonth, focusMatchesQuarter, focusMatchesWeek, focusMatchesYear, miniCalendarWeeks, selectDay, selectMonth, selectQuarter, selectToday, selectWeek, selectYear, shiftVisibleMonth, yearPickerPage } from '../../data/timeTrace';
 import type { TimeFocus, TimeTraceState } from '../../data/timeTrace';
+import { quarterOfMonth } from '../../data/quarters';
 
 export interface TimeTraceMiniCalendarOptions {
 	state: TimeTraceState;
@@ -11,7 +12,7 @@ export interface TimeTraceMiniCalendarOptions {
 
 function marker(parent: HTMLElement, visible: boolean): void { if (visible) parent.createSpan({ cls: 'mx-mini-calendar-marker', attr: { 'aria-hidden': 'true' } }); }
 
-/** One shared year/month/week/day selector for every Time Trace section. */
+/** One shared year/quarter/month/week/day selector for every Time Trace section. */
 export function renderTimeTraceMiniCalendar(parent: HTMLElement, options: TimeTraceMiniCalendarOptions): () => void {
 	const { state } = options;
 	const today = options.today ?? new Date();
@@ -31,6 +32,12 @@ export function renderTimeTraceMiniCalendar(parent: HTMLElement, options: TimeTr
 	const month = title.createEl('button', { cls: `mx-mini-calendar-scope${focusMatchesMonth(state.focus, state.visible.year, state.visible.month) ? ' is-selected' : ''}`, text: `${state.visible.month} 月`, attr: { type: 'button', 'aria-pressed': String(focusMatchesMonth(state.focus, state.visible.year, state.visible.month)), 'aria-haspopup': 'dialog', 'aria-expanded': 'false' } });
 	month.createSpan({ cls: 'mx-mini-calendar-chevron', text: '⌄', attr: { 'aria-hidden': 'true' } });
 	marker(month, options.hasMarker(monthFocus));
+	title.createSpan({ cls: 'mx-mini-calendar-separator', text: '·', attr: { 'aria-hidden': 'true' } });
+	const quarterValue = quarterOfMonth(state.visible.month);
+	const quarterFocus: TimeFocus = { kind: 'quarter', year: state.visible.year, quarter: quarterValue };
+	const quarter = title.createEl('button', { cls: `mx-mini-calendar-scope mx-mini-calendar-quarter${focusMatchesQuarter(state.focus, state.visible.year, quarterValue) ? ' is-selected' : ''}`, text: `Q${quarterValue}`, attr: { type: 'button', 'aria-label': `选择 ${state.visible.year} Q${quarterValue}`, 'aria-pressed': String(focusMatchesQuarter(state.focus, state.visible.year, quarterValue)) } });
+	marker(quarter, options.hasMarker(quarterFocus));
+	quarter.onclick = () => options.onChange(selectQuarter(state));
 	const next = nav.createEl('button', { cls: 'po-cal__btn', text: '›', attr: { type: 'button', 'aria-label': '下一月' } });
 	next.onclick = () => options.onChange(shiftVisibleMonth(state, 1));
 

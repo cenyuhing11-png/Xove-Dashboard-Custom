@@ -1,9 +1,12 @@
 import { dateKey } from './planWorkspace.ts';
 import { isoWeek } from './planning.ts';
+import { quarterOfMonth, quarterStartDate } from './quarters.ts';
+import type { Quarter } from './quarters.ts';
 
 export interface VisibleMonth { year: number; month: number }
 export type TimeFocus =
 	| { kind: 'year'; year: number }
+	| { kind: 'quarter'; year: number; quarter: Quarter }
 	| { kind: 'month'; year: number; month: number }
 	| { kind: 'week'; isoYear: number; isoWeek: number; anchorDate: string }
 	| { kind: 'day'; date: string };
@@ -13,8 +16,8 @@ export interface MiniCalendarWeek { isoYear: number; isoWeek: number; anchorDate
 export const YEAR_PICKER_PAGE_SIZE = 12;
 export type TimeTraceMarkerMode = 'cycle' | 'longTerm' | 'calendar' | 'review';
 export interface TimeTraceMarkerSources {
-	planExists(period: 'year' | 'month' | 'week', date: Date): boolean;
-	journalExists(period: 'year' | 'month' | 'week', date: Date): boolean;
+	planExists(period: 'year' | 'quarter' | 'month' | 'week', date: Date): boolean;
+	journalExists(period: 'year' | 'quarter' | 'month' | 'week', date: Date): boolean;
 	dailyJournalExists(date: string): boolean;
 }
 
@@ -36,6 +39,9 @@ export function selectYear(state: TimeTraceState, year = state.visible.year): Ti
 }
 export function selectMonth(state: TimeTraceState, month = state.visible.month): TimeTraceState {
 	return { visible: { year: state.visible.year, month }, focus: { kind: 'month', year: state.visible.year, month } };
+}
+export function selectQuarter(state: TimeTraceState): TimeTraceState {
+	return { visible: state.visible, focus: { kind: 'quarter', year: state.visible.year, quarter: quarterOfMonth(state.visible.month) } };
 }
 /** A stable twelve-year page with the anchor year near its centre. */
 export function yearPickerPage(anchorYear: number, pageOffset = 0): number[] {
@@ -61,6 +67,7 @@ export function focusMonth(state: TimeTraceState): VisibleMonth {
 }
 export function focusLabel(focus: TimeFocus): string {
 	if (focus.kind === 'year') return `${focus.year} 年`;
+	if (focus.kind === 'quarter') return `${focus.year} Q${focus.quarter}`;
 	if (focus.kind === 'month') return `${focus.year} 年 ${focus.month} 月`;
 	if (focus.kind === 'week') return `${focus.isoYear}-W${String(focus.isoWeek).padStart(2, '0')}`;
 	return focus.date;
@@ -68,6 +75,10 @@ export function focusLabel(focus: TimeFocus): string {
 export function hasTimeTraceMarker(mode: TimeTraceMarkerMode, focus: TimeFocus, sources: TimeTraceMarkerSources): boolean {
 	if (mode === 'longTerm') return false;
 	if (focus.kind === 'day') return (mode === 'calendar' || mode === 'review') && sources.dailyJournalExists(focus.date);
+	if (focus.kind === 'quarter') {
+		const date = quarterStartDate(focus.year, focus.quarter);
+		return mode === 'cycle' ? sources.planExists('quarter', date) : mode === 'review' ? sources.journalExists('quarter', date) : false;
+	}
 	if (mode === 'calendar') return false;
 	const date = focus.kind === 'week'
 		? parseDateKey(focus.anchorDate)
@@ -86,6 +97,7 @@ export function miniCalendarWeeks(year: number, month: number): MiniCalendarWeek
 	});
 }
 export function focusMatchesYear(focus: TimeFocus, year: number): boolean { return focus.kind === 'year' && focus.year === year; }
+export function focusMatchesQuarter(focus: TimeFocus, year: number, quarter: number): boolean { return focus.kind === 'quarter' && focus.year === year && focus.quarter === quarter; }
 export function focusMatchesMonth(focus: TimeFocus, year: number, month: number): boolean { return focus.kind === 'month' && focus.year === year && focus.month === month; }
 export function focusMatchesWeek(focus: TimeFocus, isoYear: number, isoWeek: number): boolean { return focus.kind === 'week' && focus.isoYear === isoYear && focus.isoWeek === isoWeek; }
 export function focusMatchesDay(focus: TimeFocus, date: string): boolean { return focus.kind === 'day' && focus.date === date; }

@@ -4,6 +4,7 @@ import { learningName } from './learning.ts';
 import { LONG_TERM_PLAN_ROOT } from './vaultPaths.ts';
 import { PROJECT_STATUSES, projectDirections } from './projects.ts';
 import type { ProjectStatus } from './projects.ts';
+import { quarterEndMonth, quarterStartMonth } from './quarters.ts';
 
 export { LONG_TERM_PLAN_ROOT } from './vaultPaths.ts';
 export const LONG_TERM_STAGE_MARKER = 'mx-long-stage';
@@ -151,5 +152,6 @@ export function updateLongTermPlanDirections(markdown: string, value: readonly s
 export async function createLongTermPlan(files: PlanFiles, input: NewLongTermPlan, id: string, createdDate: string): Promise<string> { const info = longTermPlanPath(input.name); const content = longTermPlanTemplate(input, id, createdDate); if (files.kind(info.path)) throw new Error('同名长期计划已存在，请打开已有计划；不会覆盖'); if (!files.kind('05-计划')) await files.createFolder('05-计划'); if (!files.kind(LONG_TERM_PLAN_ROOT)) await files.createFolder(LONG_TERM_PLAN_ROOT); await files.create(info.path, content); return info.path; }
 function sortVisibleLongTermPlans(plans: LongTermPlan[]): LongTermPlan[] { return plans.sort((a, b) => a.startMonth.localeCompare(b.startMonth) || a.name.localeCompare(b.name, 'zh-CN')); }
 export function longTermPlansForMonth(plans: readonly LongTermPlan[], year: number, month: number): LongTermPlan[] { const key = `${year}-${String(month).padStart(2, '0')}`; return sortVisibleLongTermPlans(plans.filter(plan => plan.startMonth <= key && plan.endMonth >= key && plan.status !== '归档')); }
+export function longTermPlansForQuarter(plans: readonly LongTermPlan[], year: number, quarter: number): LongTermPlan[] { const firstMonth = quarterStartMonth(year, quarter), lastMonth = quarterEndMonth(year, quarter); return sortVisibleLongTermPlans(plans.filter(plan => plan.startMonth <= lastMonth && plan.endMonth >= firstMonth && plan.status !== '归档')); }
 export function longTermPlansForYear(plans: readonly LongTermPlan[], year: number): LongTermPlan[] { const firstMonth = `${year}-01`, lastMonth = `${year}-12`; return sortVisibleLongTermPlans(plans.filter(plan => plan.startMonth <= lastMonth && plan.endMonth >= firstMonth && plan.status !== '归档')); }
 export function activeLongTermPlans(plans: readonly LongTermPlan[]): LongTermPlan[] { return plans.filter(plan => plan.status !== '归档'); }

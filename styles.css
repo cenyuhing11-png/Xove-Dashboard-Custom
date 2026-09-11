@@ -1921,6 +1921,8 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .dashboard-plugin button.mx-mini-calendar-week,
 .dashboard-plugin button.mx-mini-calendar-day { position: relative; min-width: 0; border: 1px solid transparent; border-radius: var(--ad-r1); background: transparent; box-shadow: none; color: var(--ad-text); font-family: var(--ad-font); line-height: 1; }
 .mx-mini-calendar-scope { min-height: 24px; padding: 3px 4px; color: inherit; font-size: inherit; font-weight: inherit; }
+.mx-mini-calendar-separator { color: var(--ad-text-dim); font-weight: 400; }
+.mx-mini-calendar-quarter { padding-inline: 3px; font-family: var(--ad-font-mono); }
 .mx-mini-calendar-chevron { margin-left: 2px; color: var(--ad-text-dim); font-size: 9px; }
 .mx-mini-calendar-picker { position: absolute; top: calc(100% + 3px); left: 50%; z-index: 20; width: 212px; max-width: calc(100vw - 32px); padding: 7px; transform: translateX(-50%); border: 1px solid var(--ad-line); border-radius: var(--ad-r2); background: var(--ad-s1); box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
 .mx-mini-calendar-picker-head { display: grid; grid-template-columns: 24px minmax(0, 1fr) 24px; align-items: center; margin-bottom: 5px; color: var(--ad-text-mute); font-family: var(--ad-font-mono); font-size: 10px; text-align: center; }
@@ -1948,13 +1950,66 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-mini-calendar-weekdays { margin-bottom: 2px; color: var(--ad-text-dim); font-size: 9px; line-height: 18px; text-align: center; }
 .mx-mini-calendar-marker { position: absolute; right: 2px; bottom: 2px; width: 3px; height: 3px; border-radius: 50%; background: var(--ad-text-mute); pointer-events: none; }
 .mx-mini-calendar-scope .mx-mini-calendar-marker { right: 1px; bottom: 1px; }
-.mx-plan-context { margin-left: auto; color: var(--ad-text-dim); font-size: 11px; }
-.mx-plan-title { color: var(--ad-text); font-size: 12px; font-weight: 600; }
+.mx-plan-context { margin-left: auto; color: var(--ad-text-dim); font-size: 11px; line-height: 16px; }
+.mx-plan-title { color: var(--ad-text); font-size: 12px; font-weight: 600; line-height: 16px; }
+.mx-time-trace-section-header { display: flex; align-items: center; width: 100%; min-width: 0; min-height: 33px; block-size: 33px; margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--ad-line); box-sizing: border-box; }
+.mx-time-trace-section-body { display: contents; }
 .mx-plan-summary { flex: 1 1 0; min-height: 220px; padding-bottom: 5px; }
 .mx-plan-weeks { flex: 2 1 0; flex-wrap: nowrap; min-height: 300px; padding-top: 5px; overflow-x: auto; border-top: 1px solid var(--ad-line); }
 .mx-plan-weeks .po-kanban__col { flex: 1 0 180px; min-width: 180px; }
 .mx-plan-container .po-kanban__col.is-time-focus { border-color: var(--ad-text-mute); background: var(--ad-h1); }
 .mx-plan-empty { min-height: 74px; padding: 18px 8px; text-align: center; }
+.mx-journal-review-toolbar { gap: 8px; flex-wrap: nowrap; }
+.mx-journal-review-tools { display: flex; align-items: center; gap: 2px; margin: 0 0 0 auto; }
+.dashboard-plugin button.mx-journal-review-tool,
+.dashboard-plugin button.mx-journal-review-mode { border: 0; border-radius: var(--ad-r1); background: transparent; box-shadow: none; color: var(--ad-text-mute); font-family: var(--ad-font); font-size: 11px; font-weight: 500; }
+.dashboard-plugin button.mx-journal-review-tool { min-height: 16px; height: 16px; padding: 0 7px; line-height: 16px; }
+.dashboard-plugin button.mx-journal-review-mode { min-height: 26px; padding: 3px 7px; }
+.dashboard-plugin button.mx-journal-review-tool:hover,
+.dashboard-plugin button.mx-journal-review-mode:hover { background: var(--ad-h1); color: var(--ad-text); }
+.dashboard-plugin button.mx-journal-review-tool.is-active { color: var(--ad-text); }
+.mx-journal-review-record-controls { display: flex; align-items: center; gap: 8px; min-height: 31px; padding: 5px 0 3px; border-bottom: 1px solid var(--ad-line); }
+.mx-journal-review-modes { display: flex; align-items: center; gap: 4px; }
+.dashboard-plugin button.mx-journal-review-mode { position: relative; border-radius: 0; }
+.dashboard-plugin button.mx-journal-review-mode.is-active { color: var(--ad-text); }
+.dashboard-plugin button.mx-journal-review-mode.is-active::after { content: ''; position: absolute; right: 7px; bottom: 0; left: 7px; height: 1px; background: var(--ad-text-mute); }
+.mx-journal-review-edit { margin-left: auto; }
+.mx-journal-review-content { width: 100%; max-width: 1080px; min-width: 0; margin: 0 auto; padding: 10px 12px 28px; box-sizing: border-box; }
+.mx-journal-review-tool-title { margin: 12px 0 3px; font-size: 18px; line-height: 1.45; }
+.mx-journal-review-tool-context { margin: 0 0 5px; }
+.mx-journal-review-search { width: min(100%, 560px); margin: 9px 0 7px; box-sizing: border-box; }
+.mx-journal-review-results { display: flex; flex-direction: column; min-width: 0; }
+.mx-journal-review-result { display: grid; grid-template-columns: minmax(72px, 92px) minmax(0, 1fr); gap: 8px; padding: 9px 4px; border-bottom: 1px solid var(--ad-line); cursor: pointer; }
+.mx-journal-review-result:hover,
+.mx-journal-review-result:focus-visible { background: var(--ad-h1); outline: none; }
+.mx-journal-review-result-time { padding-top: 1px; color: var(--ad-text-dim); font-family: var(--ad-font-mono); font-size: 10px; line-height: 1.5; }
+.mx-journal-review-result-body { min-width: 0; }
+.mx-journal-review-result-title { overflow: hidden; color: var(--ad-text); font-size: 12px; font-weight: 600; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.mx-journal-review-result-type { margin: 1px 0 0; }
+.mx-journal-review-result-snippet { display: -webkit-box; margin-top: 3px; overflow: hidden; color: var(--ad-text-mute); font-size: 11px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.mx-journal-review-results.is-recent .mx-journal-review-result { align-items: center; padding-block: 7px; }
+.mx-journal-review-tool-empty { min-height: 0; padding: 22px 8px; }
+.mx-journal-review-more { display: block; margin: 9px auto 0; }
+.mx-journal-review-action-message { margin: 6px 0 0; }
+.mx-journal-review-missing-day { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 0; padding: 18px 0; }
+.mx-journal-review-missing-day > .ad-modal-hint { margin: 0; }
+.mx-journal-review-record-head { padding: 10px 0 12px; border-bottom: 1px solid var(--ad-line); }
+.mx-journal-review-record-head > .ad-modal-title { margin: 0; font-size: 18px; line-height: 1.45; }
+.mx-journal-review-record-title { margin-top: 3px; color: var(--ad-text); font-size: 13px; font-weight: 600; }
+.mx-journal-review-record-head > .ad-modal-hint { margin: 3px 0 0; }
+.mx-journal-review-document-head { display: flex; align-items: center; gap: 8px; padding: 12px 0 6px; }
+.mx-journal-review-document-head > .ad-modal-title { margin: 0; font-size: 14px; }
+.mx-journal-review-document-head > .mx-inline-action { margin-left: auto; }
+.mx-journal-review-section { min-width: 0; padding: 10px 0; }
+.mx-journal-review-section + .mx-journal-review-section { border-top: 1px solid var(--ad-line); }
+.mx-journal-review-section > .ad-modal-title { margin: 0 0 6px; font-size: 13px; }
+.mx-journal-review-section > .ad-modal-hint { margin: 0; }
+.mx-journal-review-markdown { padding: 0; }
+.mx-journal-review-empty { min-height: 96px; padding: 24px 8px; }
+.mx-journal-review-compare { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-width: 0; }
+.mx-journal-review-pane { min-width: 0; }
+.mx-journal-review-pane.is-plan { padding-right: 16px; }
+.mx-journal-review-pane.is-review { padding-left: 16px; border-left: 1px solid var(--ad-line); }
 .mx-long-term-list { display: flex; flex-direction: column; gap: 5px; padding: 10px; }
 .mx-long-term-row__body { min-width: 0; flex: 1; }
 .mx-long-term-row__body .ad-modal-hint { margin: 2px 0 0; }
@@ -2057,6 +2112,7 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-plan-calendar-days { grid-auto-rows: minmax(72px, 1fr); }
 .mx-plan-calendar-day-body { display: flex; flex: 1; min-height: 0; flex-direction: column; }
 .po-cal__day.has-incomplete-tasks .mx-plan-calendar-day-body { padding-bottom: 15px; box-sizing: border-box; }
+.po-cal__wcol.has-incomplete-tasks { padding-bottom: 17px; }
 .mx-plan-calendar-incomplete { position: absolute; right: 7px; bottom: 5px; color: var(--ad-text-dim); font-size: 10px; font-weight: 500; line-height: 1; pointer-events: none; }
 .mx-calendar-task-marker { flex: 0 0 auto; padding: 0 3px; border-radius: 3px; background: var(--ad-s2); color: var(--ad-text-mute); font-size: 9px; font-weight: 600; line-height: 13px; }
 .mx-calendar-task-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2123,6 +2179,15 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 @container (max-width: 720px) {
   .mx-plan-container { flex-direction: column; min-height: 0; }
   .mx-plan-container .po-sidebar { width: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--ad-line); }
+  .mx-time-trace-section-header { block-size: auto; }
+  .mx-journal-review-toolbar { flex-wrap: wrap; }
+  .mx-journal-review-tools { flex-wrap: wrap; width: 100%; margin-left: 0; }
+  .mx-journal-review-record-controls { flex-wrap: wrap; }
+  .mx-journal-review-result { grid-template-columns: minmax(64px, 80px) minmax(0, 1fr); }
+  .mx-journal-review-content { padding-right: 8px; padding-left: 8px; }
+  .mx-journal-review-compare { grid-template-columns: minmax(0, 1fr); }
+  .mx-journal-review-pane.is-plan { padding-right: 0; }
+  .mx-journal-review-pane.is-review { padding-top: 8px; padding-left: 0; border-top: 1px solid var(--ad-line); border-left: 0; }
   .mx-plan-summary .po-kanban__col { min-width: 220px; }
   .mx-plan-calendar-days { min-width: 620px; }
   .mx-plan-workspace .po-cal { overflow-x: auto; }
@@ -2285,7 +2350,7 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 /* 已完成：整条变灰 + 删除线 */
 .po-cal__wbar.is-done { opacity: 0.6; filter: saturate(0.25); }
 .po-cal__wbar.is-done .po-cal__mbar-seg { text-decoration: line-through; color: var(--ad-text-dim); }
-.po-cal__wcol { grid-row: 6; border: 1px solid var(--ad-line); border-radius: var(--ad-r2); padding: 4px; display: flex; flex-direction: column; gap: 2px; min-height: 220px; cursor: pointer; transition: all 0.12s ease; overflow-y: auto; }
+.po-cal__wcol { grid-row: 6; position: relative; border: 1px solid var(--ad-line); border-radius: var(--ad-r2); padding: 4px; display: flex; flex-direction: column; gap: 2px; min-height: 220px; cursor: pointer; transition: all 0.12s ease; overflow-y: auto; }
 .po-cal__wcol:hover { background: var(--ad-h1); border-color: var(--ad-line-s); }
 .po-cal__wcol.is-today { background: transparent; border-color: var(--ad-accent); box-shadow: 0 0 8px 2px color-mix(in srgb, var(--ad-accent) 30%, transparent); }
 .po-cal__wcol.is-sel { border-color: var(--ad-accent); box-shadow: inset 0 0 0 1px var(--ad-accent); }

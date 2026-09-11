@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ensureJournal, isCanonicalDailyJournalPath, journalCalendarEntry, journalDateFromPath, journalEntry, journalHistory, journalInfo, journalStates, journalTaskWidgetOffset, journalTasks, journalTemplate, journalTitleWidgetOffset, updateJournalTitleContent } from './journal.ts';
+import { ensureJournal, isCanonicalDailyJournalPath, journalCalendarEntry, journalDateFromPath, journalEntry, journalHistory, journalInfo, journalPaths, journalStates, journalTaskWidgetOffset, journalTasks, journalTemplate, journalTitleWidgetOffset, updateJournalTitleContent } from './journal.ts';
 import type { JournalEntry, JournalKind } from './journal.ts';
 import type { PlanFiles } from './planning.ts';
 import { DAILY_TASK_FILE, parseEmbeddedTasks } from './embeddedTasks.ts';
 
 const date = new Date(2026, 8, 6, 0, 1);
-for (const [kind, suffix] of Object.entries({ day: '01-日记/2026-09-06', week: '02-周记/2026-W36 周记', month: '03-月度复盘/2026-09 月度复盘', year: '04-年度复盘/2026 年度复盘' })) {
+for (const [kind, suffix] of Object.entries({ day: '01-日记/2026-09-06', week: '02-周复盘/2026-W36 周复盘', month: '03-月复盘/2026-09 月复盘', quarter: '04-季复盘/2026-Q3 季复盘', year: '05-年复盘/2026 年复盘' })) {
 	test(`${kind} local path`, () => assert.equal(journalInfo(kind as JournalKind, date).path, `04-日记与复盘/${suffix}.md`));
 }
 test('week journal shares ISO week-year boundaries with planning', () => {
@@ -124,25 +124,36 @@ test('calendar journal ignores headings inside frontmatter and code fences', () 
 	assert.equal(entry?.title, '真实标题');
 	assert.equal(entry?.quickNoteCount, 0);
 });
-test('weekly template includes current plan link and six sections', () => {
+test('weekly review template includes current canonical plan link and five settled sections', () => {
 	const md = journalTemplate('week', date);
 	assert.match(md, /类型: 周记\n期间: 2026-W36\n关联计划: "\[\[2026-W36 周计划\]\]"/);
-	assert.equal((md.match(/^## /gm) ?? []).length, 6);
-	assert.match(md, /# 2026 W36 周记/);
+	assert.equal((md.match(/^## /gm) ?? []).length, 5);
+	assert.match(md, /# 2026 W36 周复盘/);
+	assert.doesNotMatch(md, /- \[[ x]\]/);
 });
-test('monthly template includes nine sections and monthly plan link', () => {
+test('monthly review template includes six settled sections and canonical plan link', () => {
 	const md = journalTemplate('month', date);
 	assert.match(md, /类型: 复盘\n周期: 月度\n期间: 2026-09/);
-	assert.match(md, /关联计划: "\[\[2026-09 月度计划\]\]"/);
-	assert.equal((md.match(/^## /gm) ?? []).length, 9);
+	assert.match(md, /关联计划: "\[\[2026-09 月计划\]\]"/);
+	assert.equal((md.match(/^## /gm) ?? []).length, 6);
 	assert.match(md, /# 2026年9月复盘/);
+	assert.doesNotMatch(md, /- \[[ x]\]/);
 });
-test('annual template includes ten sections and yearly plan link', () => {
+test('quarter review template includes six settled sections and canonical plan link', () => {
+	const md = journalTemplate('quarter', date);
+	assert.match(md, /类型: 复盘\n周期: 季度\n期间: 2026-Q3/);
+	assert.match(md, /关联计划: "\[\[2026-Q3 季计划\]\]"/);
+	assert.equal((md.match(/^## /gm) ?? []).length, 6);
+	assert.match(md, /# 2026 Q3 季复盘/);
+	assert.doesNotMatch(md, /- \[[ x]\]/);
+});
+test('annual review template includes seven settled sections and canonical plan link', () => {
 	const md = journalTemplate('year', date);
 	assert.match(md, /类型: 复盘\n周期: 年度\n期间: 2026/);
-	assert.match(md, /关联计划: "\[\[2026 年度计划\]\]"/);
-	assert.equal((md.match(/^## /gm) ?? []).length, 10);
-	assert.match(md, /# 2026年度复盘/);
+	assert.match(md, /关联计划: "\[\[2026 年计划\]\]"/);
+	assert.equal((md.match(/^## /gm) ?? []).length, 7);
+	assert.match(md, /# 2026年复盘/);
+	assert.doesNotMatch(md, /- \[[ x]\]/);
 });
 function store() {
 	const contents = new Map<string, string>();
@@ -168,12 +179,35 @@ test('existing legacy suffixed diary is reused without creating a clean-name dup
 	assert.equal(s.contents.size, 1);
 	assert.equal(journalStates(s.files, date)[0]?.exists, true);
 });
-for (const kind of ['day', 'week', 'month', 'year'] as const) test(`${kind} missing note creates template and no other note`, async () => {
+for (const kind of ['day', 'week', 'month', 'quarter', 'year'] as const) test(`${kind} missing note creates canonical template and no other note`, async () => {
 	const s = store(); const path = await ensureJournal(s.files, kind, date);
+	assert.equal(path, journalInfo(kind, date).path);
 	assert.equal(s.contents.get(path), journalTemplate(kind, date));
 	await ensureJournal(s.files, kind, date);
 	assert.equal(s.contents.size, 1);
 	assert.ok(s.folders.has(journalInfo(kind, date).folder));
+});
+for (const [kind, legacy] of [
+	['week', '04-日记与复盘/02-周记/2026-W36 周记.md'],
+	['month', '04-日记与复盘/03-月度复盘/2026-09 月度复盘.md'],
+	['year', '04-日记与复盘/04-年度复盘/2026 年度复盘.md'],
+] as const) test(`existing legacy ${kind} review is reused without creating a canonical duplicate`, async () => {
+	const s = store(); s.contents.set(legacy, '用户旧复盘');
+	assert.equal(await ensureJournal(s.files, kind, date), legacy);
+	assert.equal(s.contents.size, 1);
+	assert.equal(s.contents.get(legacy), '用户旧复盘');
+	assert.equal(journalPaths(kind, date).includes(legacy), true);
+});
+test('canonical review is reused and preferred when canonical and legacy both exist', async () => {
+	const s = store();
+	const canonical = journalInfo('month', date).path;
+	const legacy = '04-日记与复盘/03-月度复盘/2026-09 月度复盘.md';
+	s.contents.set(canonical, '新复盘');
+	s.contents.set(legacy, '旧复盘');
+	assert.equal(await ensureJournal(s.files, 'month', date), canonical);
+	assert.equal(s.contents.get(canonical), '新复盘');
+	assert.equal(s.contents.get(legacy), '旧复盘');
+	assert.equal(s.contents.size, 2);
 });
 test('concurrent create is safe', async () => {
 	const s = store();
@@ -197,10 +231,10 @@ test('file and folder collisions fail without destroying data', async () => {
 	assert.equal(s.contents.get('04-日记与复盘'), '保留');
 });
 function entry(kind: JournalKind, period: string): JournalEntry {
-	const folder = { day: '01-日记', week: '02-周记', month: '03-月度复盘', year: '04-年度复盘' }[kind];
+	const folder = { day: '01-日记', week: '02-周复盘', month: '03-月复盘', quarter: '04-季复盘', year: '05-年复盘' }[kind];
 	return journalEntry(`04-日记与复盘/${folder}/${period}.md`, period, {
 		类型: kind === 'day' ? '日记' : kind === 'week' ? '周记' : '复盘',
-		周期: kind === 'month' ? '月度' : '年度', 日期: period, 期间: period,
+		周期: kind === 'month' ? '月度' : kind === 'quarter' ? '季度' : '年度', 日期: period, 期间: period,
 	})!;
 }
 test('recent records combine days and weeks by period start, descending', () => {
@@ -209,8 +243,13 @@ test('recent records combine days and weeks by period start, descending', () => 
 	assert.equal(notes[0]?.period, '2026-08-31');
 });
 test('reviews combine monthly and yearly periods descending', () => {
-	const notes = [entry('year', '2025'), entry('month', '2026-09'), entry('year', '2026'), entry('day', '2026-09-06')];
+	const notes = [entry('year', '2025'), entry('month', '2026-09'), entry('quarter', '2026-Q3'), entry('year', '2026'), entry('day', '2026-09-06')];
 	assert.deepEqual(journalHistory(notes, 'reviews').map((n) => n.period), ['2026-09', '2026', '2025']);
+});
+test('legacy history modal ignores quarter records and keeps its existing scope', () => {
+	const quarter = entry('quarter', '2026-Q3');
+	assert.deepEqual(journalHistory([quarter], 'reviews'), []);
+	assert.deepEqual(journalHistory([quarter], 'records'), []);
 });
 test('history is limited to 30 entries', () => {
 	const notes = Array.from({ length: 40 }, (_, i) => entry('year', String(2000 + i)));

@@ -1,11 +1,12 @@
 import type { JournalKind, JournalState } from '../../data/journal';
 import { addEmpty, addEntry, createGroup, createSection } from './shared';
+import { reviewDisplayLabel } from '../../data/cycleDisplayLabels';
 
 export interface JournalActions { open(kind: JournalKind): void; history(mode: 'records' | 'reviews'): void }
 export function renderJournalCards(parent: HTMLElement, states: JournalState[], actions: JournalActions): void {
-	const diary = createSection(parent, '📓 日记 / 周记', true);
-	const review = createSection(parent, '🔄 月度 / 年度复盘', true);
-	const labels = { day: '今日日记', week: '本周周记', month: '本月复盘', year: '年度复盘' };
+	const diary = createSection(parent, '📓 日记 / 周复盘', true);
+	const review = createSection(parent, '🔄 月复盘 / 年复盘', true);
+	const labels = { day: '今日日记', week: `本${reviewDisplayLabel('week')}`, month: `本${reviewDisplayLabel('month')}`, quarter: `本${reviewDisplayLabel('quarter')}`, year: reviewDisplayLabel('year') };
 	for (const state of states) {
 		const { kind } = state;
 		const group = createGroup(kind === 'day' || kind === 'week' ? diary : review, labels[kind]);

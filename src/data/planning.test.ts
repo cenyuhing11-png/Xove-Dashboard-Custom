@@ -1,12 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ensurePlan, isoWeek, planInfo, planTemplate, readPlan, readSection } from './planning.ts';
+import { ensurePlan, existingPlanPath, isoWeek, legacyPlanInfo, planInfo, planPaths, planTemplate, readPlan, readSection } from './planning.ts';
 import type { PlanFiles, PlanPeriod } from './planning.ts';
 
 const date = new Date(2026, 8, 6, 23, 59);
 for (const [period, path] of Object.entries({
-	year: '02-年度/2026 年度计划', quarter: '03-季度/2026-Q3 季度计划', month: '04-月度/2026-09 月度计划', week: '05-周计划/2026-W36 周计划',
+	year: '02-年计划/2026 年计划', quarter: '03-季计划/2026-Q3 季计划', month: '04-月计划/2026-09 月计划', week: '05-周计划/2026-W36 周计划',
 })) test(`${period} local plan path`, () => assert.equal(planInfo(period as PlanPeriod, date).path, `05-计划/${path}.md`));
+
+test('legacy plan paths remain explicitly available for fallback reads', () => {
+	assert.equal(legacyPlanInfo('year', date).path, '05-计划/02-年度/2026 年度计划.md');
+	assert.equal(legacyPlanInfo('quarter', date).path, '05-计划/03-季度/2026-Q3 季度计划.md');
+	assert.equal(legacyPlanInfo('month', date).path, '05-计划/04-月度/2026-09 月度计划.md');
+	assert.equal(legacyPlanInfo('week', date).path, '05-计划/05-周计划/2026-W36 周计划.md');
+});
+
+test('plan path candidates put canonical first and do not duplicate identical week paths', () => {
+	assert.deepEqual(planPaths('year', date), ['05-计划/02-年计划/2026 年计划.md', '05-计划/02-年度/2026 年度计划.md']);
+	assert.deepEqual(planPaths('quarter', date), ['05-计划/03-季计划/2026-Q3 季计划.md', '05-计划/03-季度/2026-Q3 季度计划.md']);
+	assert.deepEqual(planPaths('month', date), ['05-计划/04-月计划/2026-09 月计划.md', '05-计划/04-月度/2026-09 月度计划.md']);
+	assert.deepEqual(planPaths('week', date), ['05-计划/05-周计划/2026-W36 周计划.md']);
+});
 
 test('ISO week-year boundaries', () => {
 	assert.deepEqual(isoWeek(new Date(2021, 0, 1)), { year: 2020, week: 53 });
@@ -79,9 +93,23 @@ for (const period of ['year', 'quarter', 'month', 'week'] as PlanPeriod[]) test(
 test('template properties and parent links', () => {
 	assert.match(planTemplate('year', date), /类型: 计划\n周期: 年度\n期间: 2026\n状态: 进行中/);
 	assert.doesNotMatch(planTemplate('year', date), /上级计划/);
-	assert.match(planTemplate('quarter', date), /上级计划: "\[\[2026 年度计划\]\]"/);
-	assert.match(planTemplate('month', date), /上级计划: "\[\[2026-Q3 季度计划\]\]"/);
-	assert.match(planTemplate('week', date), /上级计划: "\[\[2026-09 月度计划\]\]"/);
+	assert.match(planTemplate('quarter', date), /上级计划: "\[\[2026 年计划\]\]"/);
+	assert.match(planTemplate('month', date), /上级计划: "\[\[2026-Q3 季计划\]\]"/);
+	assert.match(planTemplate('week', date), /上级计划: "\[\[2026-09 月计划\]\]"/);
+});
+
+test('all period plan templates use the settled headings and no task checkbox syntax', () => {
+	const expected: Record<PlanPeriod, string[]> = {
+		week: ['这周我想推进什么', '本周重点', '这周我不准备做什么', '周末希望看到的变化'],
+		month: ['这个月我想达到什么状态', '本月重点', '这个月我不准备做什么', '月底希望看到的变化'],
+		quarter: ['这个季度我想达到什么状态', '当前季度主题', '季度重点', '这个季度我不准备做什么', '季末希望看到的变化'],
+		year: ['这一年我想达到什么状态', '今年最想实现的突破', '这一年我不准备做什么', '年底希望看到的变化'],
+	};
+	for (const period of ['week', 'month', 'quarter', 'year'] as PlanPeriod[]) {
+		const markdown = planTemplate(period, date);
+		assert.deepEqual((markdown.match(/^## .+$/gm) ?? []).map(line => line.slice(3)), expected[period]);
+		assert.doesNotMatch(markdown, /- \[[ x]\]/);
+	}
 });
 test('concurrent create only writes once', async () => {
 	const store = memoryFiles();
@@ -106,10 +134,34 @@ test('read missing plan and read failure have different states', async () => {
 });
 test('week/month summaries are limited to three, annual to one', async () => {
 	const store = memoryFiles();
-	for (const [period, title] of [['week', '本周重点'], ['month', '本月重点'], ['year', '年度核心突破']] as const) {
+	for (const [period, title] of [['week', '本周重点'], ['month', '本月重点'], ['year', '今年最想实现的突破']] as const) {
 		store.contents.set(planInfo(period, date).path, `## ${title}\n- 一\n- 二\n- 三\n- 四`);
 		assert.equal((await readPlan(store.files, period, date)).entries.length, period === 'year' ? 1 : 3);
 	}
+});
+test('legacy annual heading remains a fallback when the new heading is empty', async () => {
+	const store = memoryFiles();
+	store.contents.set(planInfo('year', date).path, '## 今年最想实现的突破\n\n## 年度核心突破\n- 旧标题内容');
+	assert.deepEqual((await readPlan(store.files, 'year', date)).entries, ['旧标题内容']);
+});
+test('legacy plan files stay readable without creating a canonical duplicate', async () => {
+	for (const period of ['year', 'quarter', 'month', 'week'] as PlanPeriod[]) {
+		const store = memoryFiles();
+		const legacy = legacyPlanInfo(period, date).path;
+		store.contents.set(legacy, '用户旧计划');
+		assert.equal(await ensurePlan(store.files, period, date), legacy);
+		assert.equal(store.writes(), 0);
+		assert.equal(store.contents.has(planInfo(period, date).path), planInfo(period, date).path === legacy);
+	}
+});
+test('canonical plan wins when canonical and legacy both exist', async () => {
+	const store = memoryFiles();
+	const canonical = planInfo('month', date).path;
+	const legacy = legacyPlanInfo('month', date).path;
+	store.contents.set(canonical, '## 本月重点\n- 新');
+	store.contents.set(legacy, '## 本月重点\n- 旧');
+	assert.equal(existingPlanPath(store.files, 'month', date), canonical);
+	assert.deepEqual((await readPlan(store.files, 'month', date)).entries, ['新']);
 });
 test('quarter theme supports prose and falls back to focus', async () => {
 	const store = memoryFiles();

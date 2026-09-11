@@ -1,10 +1,24 @@
 import { ensureSafeNote } from './safeNote.ts';
-import { PLAN_ROOT, PLAN_FOLDERS } from './vaultPaths.ts';
+import { LEGACY_PLAN_FOLDERS, PLAN_ROOT, PLAN_FOLDERS } from './vaultPaths.ts';
 export { PLAN_ROOT } from './vaultPaths.ts';
 
 export type PlanPeriod = 'year' | 'quarter' | 'month' | 'week';
 export const PLAN_PERIODS: PlanPeriod[] = ['week', 'month', 'quarter', 'year'];
-const folders: Record<PlanPeriod, string> = { year: '年度', quarter: '季度', month: '月度', week: '周计划' };
+const cycleNames: Record<PlanPeriod, string> = { year: '年度', quarter: '季度', month: '月度', week: '周计划' };
+const displayNames: Record<PlanPeriod, string> = { year: '年计划', quarter: '季计划', month: '月计划', week: '周计划' };
+const legacyDisplayNames: Record<PlanPeriod, string> = { year: '年度计划', quarter: '季度计划', month: '月度计划', week: '周计划' };
+
+function planInfoForFolder(period: PlanPeriod, date: Date, folder: string, legacy: boolean) {
+	const year = date.getFullYear();
+	const month = `${year}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+	const quarter = `${year}-Q${Math.floor(date.getMonth() / 3) + 1}`;
+	const iso = isoWeek(date);
+	const keys = { year: String(year), quarter, month, week: `${iso.year}-W${String(iso.week).padStart(2, '0')}` };
+	const key = keys[period];
+	const name = `${key} ${legacy ? legacyDisplayNames[period] : displayNames[period]}`;
+	const parent = period === 'quarter' ? `${year} 年计划` : period === 'month' ? `${quarter} 季计划` : period === 'week' ? `${month} 月计划` : undefined;
+	return { period, key, name, parent, folder: `${PLAN_ROOT}/${folder}`, path: `${PLAN_ROOT}/${folder}/${name}.md` };
+}
 
 /** Use local calendar dates; count calendar days rather than elapsed DST hours. */
 export function isoWeek(date: Date): { year: number; week: number } {
@@ -17,27 +31,40 @@ export function isoWeek(date: Date): { year: number; week: number } {
 }
 
 export function planInfo(period: PlanPeriod, date = new Date()) {
-	const year = date.getFullYear();
-	const month = `${year}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-	const quarter = `${year}-Q${Math.floor(date.getMonth() / 3) + 1}`;
-	const iso = isoWeek(date);
-	const keys = { year: String(year), quarter, month, week: `${iso.year}-W${String(iso.week).padStart(2, '0')}` };
-	const key = keys[period];
-	const name = `${key} ${period === 'week' ? '周计划' : `${folders[period]}计划`}`;
-	const parent = period === 'quarter' ? `${year} 年度计划` : period === 'month' ? `${quarter} 季度计划` : period === 'week' ? `${month} 月度计划` : undefined;
-	return { period, key, name, parent, folder: `${PLAN_ROOT}/${PLAN_FOLDERS[period]}`, path: `${PLAN_ROOT}/${PLAN_FOLDERS[period]}/${name}.md` };
+	return planInfoForFolder(period, date, PLAN_FOLDERS[period], false);
+}
+
+/** Legacy paths remain readable until the real Vault migration phase. */
+export function legacyPlanInfo(period: PlanPeriod, date = new Date()) {
+	return planInfoForFolder(period, date, LEGACY_PLAN_FOLDERS[period], true);
+}
+
+/** Canonical first, then legacy; identical week paths are returned once. */
+export function planPaths(period: PlanPeriod, date = new Date()): string[] {
+	return [...new Set([planInfo(period, date).path, legacyPlanInfo(period, date).path])];
+}
+
+export function existingPlanPath(files: Pick<PlanFiles, 'kind'>, period: PlanPeriod, date = new Date()): string | undefined {
+	let blocked = false;
+	for (const path of planPaths(period, date)) {
+		const kind = files.kind(path);
+		if (kind === 'file') return path;
+		if (kind === 'folder') blocked = true;
+	}
+	if (blocked) throw new Error('计划路径被文件夹占用');
+	return undefined;
 }
 
 export function planTemplate(period: PlanPeriod, date = new Date()): string {
 	const info = planInfo(period, date);
 	const title = period === 'month' ? `${date.getFullYear()}年${date.getMonth() + 1}月` : period === 'quarter' || period === 'week' ? info.name.replace('-', ' ') : info.name;
 	const sections: Record<PlanPeriod, string> = {
-		year: '## 这一年我想达到什么状态\n\n\n## 年度核心突破\n\n-\n-\n-\n\n## 这一年我不准备做什么\n\n\n## 年底希望看到的变化\n',
-		quarter: '## 这个季度我想达到什么状态\n\n\n## 当前季度主题\n\n\n## 季度重点\n\n-\n-\n-\n\n## 这个季度我不准备做什么\n\n\n## 季末希望看到的变化\n',
-		month: '## 这个月我想达到什么状态\n\n\n## 本月重点\n\n-\n-\n-\n\n## 这个月我不准备做什么\n\n\n## 月底希望看到的变化\n',
-		week: '## 这周我想推进什么\n\n\n## 本周重点\n\n-\n-\n-\n\n## 这周我不准备做什么\n\n\n## 周末希望看到的变化\n',
+		year: '## 这一年我想达到什么状态\n\n## 今年最想实现的突破\n\n## 这一年我不准备做什么\n\n## 年底希望看到的变化\n',
+		quarter: '## 这个季度我想达到什么状态\n\n## 当前季度主题\n\n## 季度重点\n\n## 这个季度我不准备做什么\n\n## 季末希望看到的变化\n',
+		month: '## 这个月我想达到什么状态\n\n## 本月重点\n\n## 这个月我不准备做什么\n\n## 月底希望看到的变化\n',
+		week: '## 这周我想推进什么\n\n## 本周重点\n\n## 这周我不准备做什么\n\n## 周末希望看到的变化\n',
 	};
-	return `---\n类型: 计划\n周期: ${folders[period]}\n期间: ${info.key}\n状态: 进行中\n${info.parent ? `上级计划: "[[${info.parent}]]"\n` : ''}---\n\n# ${title}\n\n${sections[period]}`;
+	return `---\n类型: 计划\n周期: ${cycleNames[period]}\n期间: ${info.key}\n状态: 进行中\n${info.parent ? `上级计划: "[[${info.parent}]]"\n` : ''}---\n\n# ${title}\n\n${sections[period]}`;
 }
 
 function plainText(value: string): string {
@@ -89,15 +116,14 @@ export interface PlanFiles {
 }
 
 export async function readPlan(files: PlanFiles, period: PlanPeriod, date = new Date()): Promise<PlanState> {
-	const path = planInfo(period, date).path;
 	try {
-		const kind = files.kind(path);
-		if (!kind) return { period, exists: false, entries: [] };
-		if (kind !== 'file') throw new Error('计划路径被文件夹占用');
+		const path = existingPlanPath(files, period, date);
+		if (!path) return { period, exists: false, entries: [] };
 		const markdown = await files.read(path);
-		const title = { week: '本周重点', month: '本月重点', quarter: '当前季度主题', year: '年度核心突破' }[period];
-		const section = readSection(markdown, title);
-		const entries = period === 'quarter' ? (section.content.length ? section.content : readSection(markdown, '季度重点').items) : section.items;
+		const titles = { week: ['本周重点'], month: ['本月重点'], quarter: ['当前季度主题', '季度重点'], year: ['今年最想实现的突破', '年度核心突破'] }[period];
+		let section = readSection(markdown, titles[0]!);
+		for (const fallback of titles.slice(1)) if (!section.content.length) section = readSection(markdown, fallback);
+		const entries = period === 'quarter' ? (section.content.length ? section.content : section.items) : section.items;
 		return { period, exists: true, entries: entries.slice(0, period === 'week' || period === 'month' ? 3 : 1) };
 	} catch {
 		return { period, exists: true, entries: [], error: '暂时无法读取计划，请检查对应笔记' };
@@ -106,6 +132,8 @@ export async function readPlan(files: PlanFiles, period: PlanPeriod, date = new 
 
 /** Never modify an existing file; a concurrent creator wins safely. */
 export async function ensurePlan(files: PlanFiles, period: PlanPeriod, date = new Date()): Promise<string> {
+	const existing = existingPlanPath(files, period, date);
+	if (existing) return existing;
 	const info = planInfo(period, date);
 	return ensureSafeNote(files, info.path, [PLAN_ROOT, info.folder], planTemplate(period, date));
 }
