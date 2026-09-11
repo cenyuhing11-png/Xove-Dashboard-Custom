@@ -14,7 +14,7 @@ import { processes } from '../data/processes';
 import { processContentTypeLabel, taskSourceTypeLabel } from '../data/processContentTypes';
 import { JOURNAL_ROOT, journalCalendarEntry, journalDateFromPath, journalInfo, readJournalTitle } from '../data/journal';
 import type { JournalCalendarEntry } from '../data/journal';
-import { dayReviewSections, discoverReviewRecords, ensureDayReviewForFocus, journalReviewTarget, markdownReviewSections, pastTodayReference, pastTodayReviewRecords, randomReviewRecord, recentReviewRecords, recentReviewTimeLabel, recentReviewTitle, reviewRecordTimeLabel, searchReviewRecords, timeStateForReviewRecord } from '../data/journalReview';
+import { dayReviewSections, discoverReviewRecords, ensureReviewForFocus, journalReviewTarget, markdownReviewSections, pastTodayReference, pastTodayReviewRecords, randomReviewRecord, recentReviewRecords, recentReviewTimeLabel, recentReviewTitle, reviewRecordTimeLabel, searchReviewRecords, timeStateForReviewRecord } from '../data/journalReview';
 import type { JournalReviewMode, JournalReviewViewMode, MarkdownReviewSection, ReviewRecord } from '../data/journalReview';
 import { renderEmbeddedTaskCheckbox } from '../components/tasks/EmbeddedTaskCheckbox';
 import { scanLongTermPlans, setProcessLongTermPlan, updateLongTermPlanMarkdown } from '../data/longTermPlanVault';
@@ -48,6 +48,13 @@ export async function openPlanWorkspace(app: App): Promise<void> {
 function dayLabel(date: Date): string { return `${date.getMonth() + 1}/${date.getDate()}`; }
 function monthTitle(year: number, month: number): string { return `${year} 年 ${month} 月`; }
 function sameDay(a: Date, b: Date): boolean { return dateKey(a) === dateKey(b); }
+function sameTimeFocus(a: TimeFocus, b: TimeFocus): boolean {
+	if (a.kind !== b.kind) return false;
+	if (a.kind === 'day' && b.kind === 'day') return a.date === b.date;
+	if (a.kind === 'week' && b.kind === 'week') return a.isoYear === b.isoYear && a.isoWeek === b.isoWeek && a.anchorDate === b.anchorDate;
+	if (a.kind === 'month' && b.kind === 'month') return a.year === b.year && a.month === b.month;
+	return a.kind === 'year' && b.kind === 'year' && a.year === b.year;
+}
 function compactProcessDate(value?: string | null): string { return /^\d{4}-\d{2}-\d{2}$/.test(value ?? '') ? value!.slice(5).replace('-', '.') : '—'; }
 
 /** Reusable time-trace content. The legacy PlanView and the main workbench router
@@ -274,7 +281,7 @@ export class PlanWorkspaceRenderer extends Component {
 		}
 	}
 
-	private async renderReviewDocument(parent: HTMLElement, label: string, file: TFile | undefined, emptyText: string, dayOnly = false, showHeader = true): Promise<void> {
+	private async renderReviewDocument(parent: HTMLElement, label: string, file: TFile | undefined, emptyText: string, dayOnly = false, showHeader = true, renderMissing?: (parent: HTMLElement) => void): Promise<void> {
 		if (showHeader) {
 			const head = parent.createDiv({ cls: 'mx-journal-review-document-head' });
 			head.createEl('h2', { cls: 'ad-modal-title', text: label });
@@ -283,7 +290,7 @@ export class PlanWorkspaceRenderer extends Component {
 				open.onclick = () => this.openSource(file);
 			}
 		}
-		if (!file) { parent.createDiv({ cls: 'po-empty mx-journal-review-empty', text: emptyText }); return; }
+		if (!file) { if (renderMissing) renderMissing(parent); else parent.createDiv({ cls: 'po-empty mx-journal-review-empty', text: emptyText }); return; }
 		try {
 			const markdown = await this.app.vault.cachedRead(file);
 			const sections = dayOnly ? dayReviewSections(markdown) : markdownReviewSections(markdown);
@@ -363,20 +370,27 @@ export class PlanWorkspaceRenderer extends Component {
 		for (const record of recordsForDay) this.renderReviewResultRow(list, record, record.previewText, { timeLabel: `${record.period.slice(0, 4)} 年` });
 	}
 
-	private renderMissingDayReview(parent: HTMLElement): void {
+	private renderMissingReview(parent: HTMLElement, target: ReturnType<typeof journalReviewTarget>): void {
+		const copy = {
+			day: ['这一天尚未创建日记', '创建这天日记 →'],
+			week: ['本周尚未创建周记', '创建本周周记 →'],
+			month: ['本月尚未创建月度复盘', '创建本月复盘 →'],
+			year: ['本年度尚未创建年度复盘', '创建年度复盘 →'],
+		}[target.kind];
 		const empty = parent.createDiv({ cls: 'mx-journal-review-missing-day' });
-		empty.createDiv({ cls: 'ad-modal-hint', text: '这一天尚未创建日记' });
-		const create = empty.createEl('button', { cls: 'mx-inline-action mx-journal-review-create', text: '创建这天日记 →', attr: { type: 'button' } });
+		empty.createDiv({ cls: 'ad-modal-hint', text: copy[0] });
+		const create = empty.createEl('button', { cls: 'mx-inline-action mx-journal-review-create', text: copy[1], attr: { type: 'button' } });
 		create.onclick = async () => {
 			const focus = this.timeState.focus;
-			if (focus.kind !== 'day') return;
+			if (focus.kind !== target.kind) return;
+			const reviewMode = this.reviewMode;
 			create.disabled = true;
 			try {
-				await ensureDayReviewForFocus(this.planFiles(), focus);
-				if (this.mode === 'review' && this.reviewView === 'record' && this.timeState.focus.kind === 'day' && this.timeState.focus.date === focus.date) await this.renderPlanContent();
+				await ensureReviewForFocus(this.planFiles(), focus);
+				if (this.mode === 'review' && this.reviewView === 'record' && this.reviewMode === reviewMode && sameTimeFocus(this.timeState.focus, focus)) await this.renderPlanContent();
 			} catch (error) {
 				create.disabled = false;
-				new Notice(`无法创建日记：${error instanceof Error ? error.message : '请检查目录权限'}`);
+				new Notice(`无法创建${target.reviewLabel}：${error instanceof Error ? error.message : '请检查目录权限'}`);
 			}
 		};
 	}
@@ -436,12 +450,12 @@ export class PlanWorkspaceRenderer extends Component {
 			edit.onclick = () => this.openSource(reviewFile);
 		}
 		if (token !== this.generation || !main.isConnected) return;
-		if (target.kind === 'day' && !reviewFile) { this.renderMissingDayReview(content); return; }
+		if (!reviewFile && (target.kind === 'day' || this.reviewMode === 'review')) { this.renderMissingReview(content, target); return; }
 
 		if (target.kind !== 'day' && this.reviewMode === 'compare') {
 			const compare = content.createDiv({ cls: 'mx-journal-review-compare' });
 			await this.renderReviewDocument(compare.createDiv({ cls: 'mx-journal-review-pane is-plan' }), target.planLabel ?? '计划', planFile, `尚未创建${target.planLabel ?? '对应计划'}`);
-			await this.renderReviewDocument(compare.createDiv({ cls: 'mx-journal-review-pane is-review' }), target.reviewLabel, reviewFile, `尚未创建${target.reviewLabel}`);
+			await this.renderReviewDocument(compare.createDiv({ cls: 'mx-journal-review-pane is-review' }), target.reviewLabel, reviewFile, `尚未创建${target.reviewLabel}`, false, true, parent => this.renderMissingReview(parent, target));
 			return;
 		}
 		await this.renderReviewDocument(content.createDiv({ cls: 'mx-journal-review-pane is-reading' }), target.reviewLabel, reviewFile, `尚未创建${target.reviewLabel}`, target.kind === 'day', false);
@@ -576,7 +590,7 @@ export class PlanWorkspaceRenderer extends Component {
 		const today = nav.createEl('button', { cls: 'po-cal__btn', text: '今天' });
 		const next = nav.createEl('button', { cls: 'po-cal__btn', text: '›' });
 		prev.addEventListener('click', () => this.moveCalendar(-1)); today.addEventListener('click', () => this.setTimeState(selectToday(this.timeState))); next.addEventListener('click', () => this.moveCalendar(1));
-		if (this.calendarMode === 'month') this.renderCalendarMonth(root, journals, tasks); else this.renderCalendarWeek(root, journals);
+		if (this.calendarMode === 'month') this.renderCalendarMonth(root, journals, tasks); else this.renderCalendarWeek(root, journals, tasks);
 		const selectedDate = this.calendarDate();
 		this.renderDayDetail(root, selectedDate, journals.get(dateKey(selectedDate)));
 	}
@@ -595,6 +609,14 @@ export class PlanWorkspaceRenderer extends Component {
 	}
 	private weekTitle(): string { const dates = this.weekDates(); return `${dayLabel(dates[0]!)}–${dayLabel(dates[6]!)}`; }
 
+	private renderCalendarIncomplete(parent: HTMLElement, tasks: EmbeddedTask[], key: string): number {
+		const count = incompleteTaskCountOnDate(tasks, key);
+		if (!count) return 0;
+		parent.addClass('has-incomplete-tasks');
+		parent.createSpan({ cls: 'mx-plan-calendar-incomplete', text: `☐ ${count}`, attr: { 'aria-label': `${count} 项未完成任务` } });
+		return count;
+	}
+
 	private renderCalendarMonth(root: HTMLElement, journals: Map<string, JournalCalendarEntry>, tasks: EmbeddedTask[]): void {
 		const { year, month } = this.timeState.visible;
 		const weekdays = root.createDiv({ cls: 'po-cal__weekdays' });
@@ -605,32 +627,32 @@ export class PlanWorkspaceRenderer extends Component {
 		const today = new Date();
 		for (let index = 0; index < 42; index++) {
 			const date = new Date(cursor); date.setDate(cursor.getDate() + index);
-			const key = dateKey(date); const journal = journals.get(key); const incompleteCount = incompleteTaskCountOnDate(tasks, key);
+			const key = dateKey(date); const journal = journals.get(key);
 			let cls = 'po-cal__day';
 			if (date.getFullYear() !== year || date.getMonth() !== month - 1) cls += ' is-out';
 			if (date.getDay() === 0 || date.getDay() === 6) cls += ' is-weekend';
 			if (sameDay(date, today)) cls += ' is-today';
 			if (this.timeState.focus.kind === 'day' && this.timeState.focus.date === key) cls += ' is-sel';
-			if (incompleteCount > 0) cls += ' has-incomplete-tasks';
 			const day = days.createDiv({ cls }); day.createSpan({ cls: `po-cal__day-num${sameDay(date, today) ? ' is-today' : ''}`, text: String(date.getDate()) });
 			const body = day.createDiv({ cls: 'po-cal__day-body mx-plan-calendar-day-body' }); body.createDiv({ cls: 'po-cal__slot' });
 			if (journal) this.renderCalendarJournal(body, journal, 'month');
-			if (incompleteCount > 0) day.createSpan({ cls: 'mx-plan-calendar-incomplete', text: `☐ ${incompleteCount}`, attr: { 'aria-label': `${incompleteCount} 项未完成任务` } });
+			this.renderCalendarIncomplete(day, tasks, key);
 			day.addEventListener('click', () => this.setDayFocus(date));
 		}
 	}
 
-	private renderCalendarWeek(root: HTMLElement, journals: Map<string, JournalCalendarEntry>): void {
+	private renderCalendarWeek(root: HTMLElement, journals: Map<string, JournalCalendarEntry>, allTasks: EmbeddedTask[]): void {
 		const weekdays = root.createDiv({ cls: 'po-cal__weekdays' });
 		for (const name of ['一', '二', '三', '四', '五', '六', '日']) weekdays.createSpan({ text: name });
 		const cols = root.createDiv({ cls: 'po-cal__week' });
 		const today = new Date();
 		for (const date of this.weekDates()) {
-			const key = dateKey(date); const tasks = tasksOnDate(this.plugin.embeddedTasks.all(), key); const journal = journals.get(key);
+			const key = dateKey(date); const tasks = tasksOnDate(allTasks, key); const journal = journals.get(key);
 			const col = cols.createDiv({ cls: `po-cal__wcol${sameDay(date, today) ? ' is-today' : ''}${this.timeState.focus.kind === 'day' && this.timeState.focus.date === key ? ' is-sel' : ''}` });
 			const head = col.createDiv({ cls: 'po-cal__wcol-hd' }); head.createSpan({ cls: 'po-cal__wcol-day', text: String(date.getDate()) }); head.createSpan({ cls: 'po-cal__wcol-name', text: `${date.getMonth() + 1}月` });
 			if (journal) this.renderCalendarJournal(col, journal);
 			for (const task of tasks) this.renderCalendarChip(col, task);
+			this.renderCalendarIncomplete(col, allTasks, key);
 			col.addEventListener('click', () => this.setDayFocus(date));
 		}
 	}

@@ -2106,6 +2106,7 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-plan-calendar-days { grid-auto-rows: minmax(72px, 1fr); }
 .mx-plan-calendar-day-body { display: flex; flex: 1; min-height: 0; flex-direction: column; }
 .po-cal__day.has-incomplete-tasks .mx-plan-calendar-day-body { padding-bottom: 15px; box-sizing: border-box; }
+.po-cal__wcol.has-incomplete-tasks { padding-bottom: 17px; }
 .mx-plan-calendar-incomplete { position: absolute; right: 7px; bottom: 5px; color: var(--ad-text-dim); font-size: 10px; font-weight: 500; line-height: 1; pointer-events: none; }
 .mx-calendar-task-marker { flex: 0 0 auto; padding: 0 3px; border-radius: 3px; background: var(--ad-s2); color: var(--ad-text-mute); font-size: 9px; font-weight: 600; line-height: 13px; }
 .mx-calendar-task-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2342,7 +2343,7 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 /* 已完成：整条变灰 + 删除线 */
 .po-cal__wbar.is-done { opacity: 0.6; filter: saturate(0.25); }
 .po-cal__wbar.is-done .po-cal__mbar-seg { text-decoration: line-through; color: var(--ad-text-dim); }
-.po-cal__wcol { grid-row: 6; border: 1px solid var(--ad-line); border-radius: var(--ad-r2); padding: 4px; display: flex; flex-direction: column; gap: 2px; min-height: 220px; cursor: pointer; transition: all 0.12s ease; overflow-y: auto; }
+.po-cal__wcol { grid-row: 6; position: relative; border: 1px solid var(--ad-line); border-radius: var(--ad-r2); padding: 4px; display: flex; flex-direction: column; gap: 2px; min-height: 220px; cursor: pointer; transition: all 0.12s ease; overflow-y: auto; }
 .po-cal__wcol:hover { background: var(--ad-h1); border-color: var(--ad-line-s); }
 .po-cal__wcol.is-today { background: transparent; border-color: var(--ad-accent); box-shadow: 0 0 8px 2px color-mix(in srgb, var(--ad-accent) 30%, transparent); }
 .po-cal__wcol.is-sel { border-color: var(--ad-accent); box-shadow: inset 0 0 0 1px var(--ad-accent); }

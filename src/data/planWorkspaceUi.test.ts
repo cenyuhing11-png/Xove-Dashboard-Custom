@@ -40,8 +40,7 @@ test('month calendar cells render journals plus an incomplete count but never ta
 	const month = view.match(/private renderCalendarMonth[\s\S]*?(?=\n\tprivate renderCalendarWeek)/)?.[0] ?? '';
 	assert.ok(month);
 	assert.match(month, /renderCalendarJournal\(body, journal, 'month'\)/);
-	assert.match(month, /incompleteTaskCountOnDate\(tasks, key\)/);
-	assert.match(month, /incompleteCount > 0[\s\S]*mx-plan-calendar-incomplete[\s\S]*`☐ \$\{incompleteCount\}`/);
+	assert.match(month, /renderCalendarIncomplete\(day, tasks, key\)/);
 	assert.doesNotMatch(month, /tasksOnDate|renderCalendarChip|mx-calendar-task|po-cal__day-more|text: `\+\$\{hidden\}`|task\.text/);
 	assert.equal(month.includes('TASK_DISPLAY_LABELS['), false);
 });
@@ -54,10 +53,25 @@ test('month incomplete cue stays bottom-right, muted, noninteractive and reserve
 test('week calendar keeps journals, every task chip and existing markers', () => {
 	const week = view.match(/private renderCalendarWeek[\s\S]*?(?=\n\tprivate renderDayDetail)/)?.[0] ?? '';
 	assert.ok(week);
-	assert.match(week, /tasksOnDate\(this\.plugin\.embeddedTasks\.all\(\), key\)/);
+	assert.match(week, /tasksOnDate\(allTasks, key\)/);
 	assert.match(week, /if \(journal\) this\.renderCalendarJournal\(col, journal\);[\s\S]*for \(const task of tasks\) this\.renderCalendarChip\(col, task\)/);
+	assert.match(week, /renderCalendarIncomplete\(col, allTasks, key\)/);
 	assert.match(view, /taskDisplayMarker\(task\.sourceType\)/);
 	assert.match(view, /mx-calendar-task-text/);
+});
+test('month and week share one incomplete-task counter and one neutral marker class', () => {
+	const helper = view.match(/private renderCalendarIncomplete[\s\S]*?(?=\n\tprivate renderCalendarMonth)/)?.[0] ?? '';
+	assert.match(helper, /incompleteTaskCountOnDate\(tasks, key\)/);
+	assert.match(helper, /if \(!count\) return 0/);
+	assert.match(helper, /mx-plan-calendar-incomplete/);
+	assert.match(helper, /`☐ \$\{count\}`/);
+	assert.doesNotMatch(helper, /onclick|addEventListener/);
+	assert.match(view, /renderCalendarMonth\(root, journals, tasks\); else this\.renderCalendarWeek\(root, journals, tasks\)/);
+});
+test('week incomplete marker is anchored inside each day card without replacing its rows', () => {
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	assert.match(css, /\.po-cal__wcol \{[^}]*position: relative/);
+	assert.match(css, /\.po-cal__wcol\.has-incomplete-tasks \{[^}]*padding-bottom: 17px/);
 });
 test('selected day detail groups only populated learning creation and daily sections', () => {
 	assert.match(view, /const groups = groupEmbeddedForDisplay\(tasks\)/);
@@ -71,7 +85,8 @@ test('calendar dates come only from Embedded Tasks, never process start or due d
 	assert.ok(calendar);
 	assert.equal(calendar.includes('process.startDate'), false);
 	assert.equal(calendar.includes('process.dueDate'), false);
-	assert.match(calendar, /tasksOnDate\(this\.plugin\.embeddedTasks\.all\(\)/);
+	assert.match(calendar, /const tasks = this\.plugin\.embeddedTasks\.all\(\)/);
+	assert.match(calendar, /tasksOnDate\(allTasks, key\)/);
 });
 test('all four time-trace sections read one shared time state', () => {
 	for (const key of ['timeState', "'board'", "'longTermPlan'", "'calendar'", "'review'"]) assert.ok(view.includes(key));
@@ -380,7 +395,7 @@ test('daily subtitles are absent in journal Reading, journal Live Preview and sh
 	assert.match(journalSummary, /renderJournalTaskSummary/);
 	assert.match(journalTaskLivePreview, /renderJournalTaskSummary/);
 	assert.match(view, /private renderTaskRow[\s\S]*taskSourceSubtitle\(task,[\s\S]*if \(subtitle\) body\.createSpan/);
-	assert.match(view, /if \(this\.calendarMode === 'month'\) this\.renderCalendarMonth\(root, journals, tasks\); else this\.renderCalendarWeek\(root, journals\);[\s\S]*this\.renderDayDetail\(root,/);
+	assert.match(view, /if \(this\.calendarMode === 'month'\) this\.renderCalendarMonth\(root, journals, tasks\); else this\.renderCalendarWeek\(root, journals, tasks\);[\s\S]*this\.renderDayDetail\(root,/);
 });
 test('home and all-task lists share the same daily-no-subtitle helper without hiding useful sources', () => {
 	assert.match(embeddedTaskModal, /taskSourceSubtitle\(task, detail\)/);

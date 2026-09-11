@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
 	discoverReviewRecords,
 	ensureDayReviewForFocus,
+	ensureReviewForFocus,
 	pastTodayReference,
 	pastTodayReviewRecords,
 	plainReviewText,
@@ -86,6 +87,38 @@ test('focused daily creation surfaces storage failures without pretending succes
 	store.files.create = async () => { throw new Error('磁盘只读'); };
 	await assert.rejects(ensureDayReviewForFocus(store.files, { kind: 'day', date: '2026-09-08' }), /磁盘只读/);
 	assert.equal(store.contents.size, 0);
+});
+
+test('week review creation uses the selected ISO week rather than the current real week', async () => {
+	const store = journalStore();
+	const focus = { kind: 'week', isoYear: 2024, isoWeek: 18, anchorDate: '2099-01-01' } as const;
+	const path = await ensureReviewForFocus(store.files, focus);
+	const date = new Date(2024, 3, 29, 12);
+	assert.equal(path, journalInfo('week', date).path);
+	assert.equal(store.contents.get(path), journalTemplate('week', date));
+	assert.match(path, /2024-W18 周记\.md$/);
+});
+
+test('month and year review creation use their selected historical focus and shared templates', async () => {
+	for (const [focus, kind, date] of [
+		[{ kind: 'month', year: 2025, month: 6 } as const, 'month' as const, new Date(2025, 5, 1, 12)],
+		[{ kind: 'year', year: 2023 } as const, 'year' as const, new Date(2023, 0, 1, 12)],
+	] as const) {
+		const store = journalStore();
+		const path = await ensureReviewForFocus(store.files, focus);
+		assert.equal(path, journalInfo(kind, date).path);
+		assert.equal(store.contents.get(path), journalTemplate(kind, date));
+	}
+});
+
+test('focused review creation reuses existing files and rejects invalid periods', async () => {
+	const existing = journalInfo('month', new Date(2025, 5, 1, 12)).path;
+	const store = journalStore({ [existing]: '用户已有复盘' });
+	assert.equal(await ensureReviewForFocus(store.files, { kind: 'month', year: 2025, month: 6 }), existing);
+	assert.equal(store.contents.size, 1);
+	assert.equal(store.contents.get(existing), '用户已有复盘');
+	await assert.rejects(ensureReviewForFocus(store.files, { kind: 'month', year: 2025, month: 13 }), /周期无效/);
+	await assert.rejects(ensureReviewForFocus(store.files, { kind: 'week', isoYear: 2025, isoWeek: 54, anchorDate: '2025-01-01' }), /周期无效/);
 });
 
 test('discovery recognizes the four real journal and review kinds', () => {

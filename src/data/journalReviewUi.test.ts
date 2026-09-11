@@ -91,40 +91,51 @@ test('result rows route back to the shared focus and record reader', () => {
 });
 
 test('a missing day record exposes one lightweight focused-date creation action', () => {
-	assert.match(view, /target\.kind === 'day' && !reviewFile[\s\S]*?this\.renderMissingDayReview\(content\)/);
-	assert.match(view, /text: '这一天尚未创建日记'/);
-	assert.match(view, /text: '创建这天日记 →'/);
+	assert.match(view, /!reviewFile && \(target\.kind === 'day' \|\| this\.reviewMode === 'review'\)[\s\S]*?this\.renderMissingReview\(content, target\)/);
+	assert.match(view, /day: \['这一天尚未创建日记', '创建这天日记 →'\]/);
 	assert.match(view, /mx-inline-action mx-journal-review-create/);
 });
 
-test('focused day creation reuses ensureJournal through the shared adapter and then redraws in place', () => {
-	const method = view.match(/private renderMissingDayReview[\s\S]*?(?=\n\tprivate renderReviewToolbar)/)?.[0] ?? '';
+test('all missing review kinds expose the settled lightweight creation copy', () => {
+	for (const copy of [
+		"week: ['本周尚未创建周记', '创建本周周记 →']",
+		"month: ['本月尚未创建月度复盘', '创建本月复盘 →']",
+		"year: ['本年度尚未创建年度复盘', '创建年度复盘 →']",
+	]) assert.ok(view.includes(copy));
+});
+
+test('focused review creation reuses ensureJournal through the shared adapter and redraws in place', () => {
+	const method = view.match(/private renderMissingReview[\s\S]*?(?=\n\tprivate renderReviewToolbar)/)?.[0] ?? '';
 	assert.match(method, /const focus = this\.timeState\.focus/);
-	assert.match(method, /focus\.kind !== 'day'/);
-	assert.match(method, /await ensureDayReviewForFocus\(this\.planFiles\(\), focus\)/);
+	assert.match(method, /focus\.kind !== target\.kind/);
+	assert.match(method, /await ensureReviewForFocus\(this\.planFiles\(\), focus\)/);
 	assert.match(method, /await this\.renderPlanContent\(\)/);
 	assert.match(view, /createFolder: \(path: string\) => vault\.createFolder\(path\)/);
 	assert.match(view, /create: \(path: string, content: string\) => vault\.create\(path, content\)/);
 });
 
-test('focused day creation keeps route focus and visible month and never opens Markdown', () => {
-	const method = view.match(/private renderMissingDayReview[\s\S]*?(?=\n\tprivate renderReviewToolbar)/)?.[0] ?? '';
+test('focused review creation keeps route focus visible month and record or compare mode', () => {
+	const method = view.match(/private renderMissingReview[\s\S]*?(?=\n\tprivate renderReviewToolbar)/)?.[0] ?? '';
 	assert.doesNotMatch(method, /this\.(?:timeState|reviewView|mode)\s*=(?!=)/);
 	assert.doesNotMatch(method, /openSource|openFile|openLinkText|getLeaf|workspace/);
-	assert.match(method, /this\.timeState\.focus\.date === focus\.date/);
+	assert.match(method, /const reviewMode = this\.reviewMode/);
+	assert.match(method, /this\.reviewMode === reviewMode/);
+	assert.match(method, /sameTimeFocus\(this\.timeState\.focus, focus\)/);
 });
 
-test('focused day creation reports failures and leaves the empty state mounted', () => {
-	const method = view.match(/private renderMissingDayReview[\s\S]*?(?=\n\tprivate renderReviewToolbar)/)?.[0] ?? '';
+test('focused review creation reports failures and leaves the empty state mounted', () => {
+	const method = view.match(/private renderMissingReview[\s\S]*?(?=\n\tprivate renderReviewToolbar)/)?.[0] ?? '';
 	assert.match(method, /catch \(error\)/);
 	assert.match(method, /create\.disabled = false/);
-	assert.match(method, /new Notice\(`无法创建日记：/);
+	assert.match(method, /new Notice\(`无法创建\$\{target\.reviewLabel\}：/);
 });
 
-test('week month and year missing records do not gain a create action', () => {
+test('compare mode provides the same review CTA only in the missing right pane', () => {
 	const render = view.match(/private async renderReview\([\s\S]*?(?=\n\tprivate async renderLongTermPlans)/)?.[0] ?? '';
-	assert.match(render, /target\.kind === 'day' && !reviewFile/);
-	assert.doesNotMatch(render, /target\.kind !== 'day'.*renderMissingDayReview/);
+	const planLine = render.split('\n').find(line => line.includes("is-plan'")) ?? '';
+	assert.match(planLine, /尚未创建\$\{target\.planLabel \?\? '对应计划'\}/);
+	assert.doesNotMatch(planLine, /renderMissingReview/);
+	assert.match(render, /is-review'[\s\S]*?parent => this\.renderMissingReview\(parent, target\)/);
 });
 
 test('recent rows use time plus one main text and suppress only their type subtitle', () => {

@@ -1,7 +1,7 @@
 import type { App } from 'obsidian';
 import { ensureJournal, journalCalendarEntry, journalEntry, journalFrontmatterTitle, journalInfo } from './journal.ts';
 import type { JournalKind } from './journal.ts';
-import { planInfo } from './planning.ts';
+import { isoWeek, planInfo } from './planning.ts';
 import type { PlanFiles } from './planning.ts';
 import type { TimeFocus, TimeTraceState } from './timeTrace.ts';
 import { parseDateKey } from './timeTrace.ts';
@@ -55,7 +55,27 @@ function atNoon(date: Date): Date {
 	return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12);
 }
 
+function isoWeekMonday(year: number, week: number): Date | null {
+	if (!Number.isInteger(year) || year < 1000 || year > 9999 || !Number.isInteger(week) || week < 1 || week > 53) return null;
+	const januaryFourth = new Date(year, 0, 4, 12);
+	const monday = new Date(januaryFourth);
+	monday.setDate(januaryFourth.getDate() - ((januaryFourth.getDay() + 6) % 7) + (week - 1) * 7);
+	const resolved = isoWeek(monday);
+	return resolved.year === year && resolved.week === week ? monday : null;
+}
+
+export function reviewDateForFocus(focus: TimeFocus): Date | null {
+	if (focus.kind === 'day') return parseDateKey(focus.date);
+	if (focus.kind === 'week') return isoWeekMonday(focus.isoYear, focus.isoWeek);
+	if (!Number.isInteger(focus.year) || focus.year < 1000 || focus.year > 9999) return null;
+	if (focus.kind === 'year') return new Date(focus.year, 0, 1, 12);
+	if (!Number.isInteger(focus.month) || focus.month < 1 || focus.month > 12) return null;
+	return new Date(focus.year, focus.month - 1, 1, 12);
+}
+
 function focusTargetDate(focus: TimeFocus): Date {
+	const exact = reviewDateForFocus(focus);
+	if (exact) return exact;
 	if (focus.kind === 'day') return parseDateKey(focus.date) ?? new Date(focus.date);
 	if (focus.kind === 'week') return parseDateKey(focus.anchorDate) ?? new Date(focus.isoYear, 0, 4, 12);
 	return new Date(focus.year, focus.kind === 'month' ? focus.month - 1 : 0, 1, 12);
@@ -157,12 +177,17 @@ export function dayReviewSections(markdown: string): MarkdownReviewSection[] {
 	return markdownReviewSections(markdown, ['随时记', '今日日记', '今日回看']);
 }
 
-/** Create only the daily journal represented by an explicit day focus. */
+/** Create the review represented by an explicit focus; never substitutes the current real date. */
+export async function ensureReviewForFocus(files: PlanFiles, focus: TimeFocus): Promise<string> {
+	const date = reviewDateForFocus(focus);
+	if (!date) throw new Error(focus.kind === 'day' ? '日记日期无效' : '复盘周期无效');
+	return ensureJournal(files, focus.kind, date);
+}
+
+/** Backwards-compatible Day entry point retained for the existing review UI and tests. */
 export async function ensureDayReviewForFocus(files: PlanFiles, focus: TimeFocus): Promise<string | null> {
 	if (focus.kind !== 'day') return null;
-	const date = parseDateKey(focus.date);
-	if (!date) throw new Error('日记日期无效');
-	return ensureJournal(files, 'day', date);
+	return ensureReviewForFocus(files, focus);
 }
 
 function dateKeyValue(date: Date): string {
