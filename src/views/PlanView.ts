@@ -14,7 +14,7 @@ import { processes } from '../data/processes';
 import { processContentTypeLabel, taskSourceTypeLabel } from '../data/processContentTypes';
 import { JOURNAL_ROOT, journalCalendarEntry, journalDateFromPath, journalInfo, readJournalTitle } from '../data/journal';
 import type { JournalCalendarEntry } from '../data/journal';
-import { dayReviewSections, discoverReviewRecords, journalReviewTarget, markdownReviewSections, pastTodayReference, pastTodayReviewRecords, randomReviewRecord, recentReviewRecords, reviewRecordTimeLabel, searchReviewRecords, timeStateForReviewRecord } from '../data/journalReview';
+import { dayReviewSections, discoverReviewRecords, ensureDayReviewForFocus, journalReviewTarget, markdownReviewSections, pastTodayReference, pastTodayReviewRecords, randomReviewRecord, recentReviewRecords, recentReviewTimeLabel, recentReviewTitle, reviewRecordTimeLabel, searchReviewRecords, timeStateForReviewRecord } from '../data/journalReview';
 import type { JournalReviewMode, JournalReviewViewMode, MarkdownReviewSection, ReviewRecord } from '../data/journalReview';
 import { renderEmbeddedTaskCheckbox } from '../components/tasks/EmbeddedTaskCheckbox';
 import { scanLongTermPlans, setProcessLongTermPlan, updateLongTermPlanMarkdown } from '../data/longTermPlanVault';
@@ -134,9 +134,12 @@ export class PlanWorkspaceRenderer extends Component {
 	onunload(): void { this.deactivate(); }
 
 	private planFiles() {
+		const vault = this.app.vault;
 		return {
-			kind: (path: string) => { const entry = this.app.vault.getAbstractFileByPath(path); return entry instanceof TFile ? 'file' as const : entry ? 'folder' as const : undefined; },
-			read: async (path: string) => { const file = this.app.vault.getAbstractFileByPath(path); if (!(file instanceof TFile)) throw new Error('计划文件不存在'); return this.app.vault.cachedRead(file); },
+			kind: (path: string) => { const entry = vault.getAbstractFileByPath(path); return entry instanceof TFile ? 'file' as const : entry ? 'folder' as const : undefined; },
+			read: async (path: string) => { const file = vault.getAbstractFileByPath(path); if (!(file instanceof TFile)) throw new Error('计划文件不存在'); return vault.cachedRead(file); },
+			createFolder: (path: string) => vault.createFolder(path),
+			create: (path: string, content: string) => vault.create(path, content),
 		};
 	}
 
@@ -299,12 +302,12 @@ export class PlanWorkspaceRenderer extends Component {
 		void this.renderPlanContent();
 	}
 
-	private renderReviewResultRow(parent: HTMLElement, record: ReviewRecord, snippet = '', compactDay = false, timeLabel?: string): void {
+	private renderReviewResultRow(parent: HTMLElement, record: ReviewRecord, snippet = '', options?: { compactDay?: boolean; timeLabel?: string; title?: string; showType?: boolean }): void {
 		const row = parent.createDiv({ cls: 'mx-journal-review-result', attr: { role: 'button', tabindex: '0' } });
-		row.createDiv({ cls: 'mx-journal-review-result-time', text: timeLabel ?? reviewRecordTimeLabel(record, compactDay) });
+		row.createDiv({ cls: 'mx-journal-review-result-time', text: options?.timeLabel ?? reviewRecordTimeLabel(record, options?.compactDay) });
 		const body = row.createDiv({ cls: 'mx-journal-review-result-body' });
-		if (record.title) body.createDiv({ cls: 'mx-journal-review-result-title', text: record.title });
-		body.createDiv({ cls: 'ad-modal-hint mx-journal-review-result-type', text: record.label });
+		body.createDiv({ cls: 'mx-journal-review-result-title', text: options?.title ?? record.title });
+		if (options?.showType !== false) body.createDiv({ cls: 'ad-modal-hint mx-journal-review-result-type', text: record.label });
 		if (snippet) body.createDiv({ cls: 'mx-journal-review-result-snippet', text: snippet });
 		const open = () => this.openReviewRecord(record);
 		row.onclick = open;
@@ -313,10 +316,10 @@ export class PlanWorkspaceRenderer extends Component {
 
 	private renderRecentReviews(content: HTMLElement, records: ReviewRecord[]): void {
 		content.createEl('h1', { cls: 'ad-modal-title mx-journal-review-tool-title', text: '最近记录' });
-		const list = content.createDiv({ cls: 'mx-journal-review-results' });
+		const list = content.createDiv({ cls: 'mx-journal-review-results is-recent' });
 		const visible = recentReviewRecords(records, this.reviewRecentLimit);
 		if (!visible.length) { list.createDiv({ cls: 'po-empty mx-journal-review-tool-empty', text: '暂无记录' }); return; }
-		for (const record of visible) this.renderReviewResultRow(list, record, '', true);
+		for (const record of visible) this.renderReviewResultRow(list, record, '', { timeLabel: recentReviewTimeLabel(record), title: recentReviewTitle(record), showType: false });
 		if (records.length > visible.length) {
 			const more = content.createEl('button', { cls: 'mx-inline-action mx-journal-review-more', text: '显示更多', attr: { type: 'button' } });
 			more.onclick = () => { this.reviewRecentLimit += 12; void this.renderPlanContent(); };
@@ -357,7 +360,25 @@ export class PlanWorkspaceRenderer extends Component {
 		const list = content.createDiv({ cls: 'mx-journal-review-results' });
 		const recordsForDay = pastTodayReviewRecords(records, reference);
 		if (!recordsForDay.length) { list.createDiv({ cls: 'po-empty mx-journal-review-tool-empty', text: '过去的这一天暂无记录' }); return; }
-		for (const record of recordsForDay) this.renderReviewResultRow(list, record, record.previewText, false, `${record.period.slice(0, 4)} 年`);
+		for (const record of recordsForDay) this.renderReviewResultRow(list, record, record.previewText, { timeLabel: `${record.period.slice(0, 4)} 年` });
+	}
+
+	private renderMissingDayReview(parent: HTMLElement): void {
+		const empty = parent.createDiv({ cls: 'mx-journal-review-missing-day' });
+		empty.createDiv({ cls: 'ad-modal-hint', text: '这一天尚未创建日记' });
+		const create = empty.createEl('button', { cls: 'mx-inline-action mx-journal-review-create', text: '创建这天日记 →', attr: { type: 'button' } });
+		create.onclick = async () => {
+			const focus = this.timeState.focus;
+			if (focus.kind !== 'day') return;
+			create.disabled = true;
+			try {
+				await ensureDayReviewForFocus(this.planFiles(), focus);
+				if (this.mode === 'review' && this.reviewView === 'record' && this.timeState.focus.kind === 'day' && this.timeState.focus.date === focus.date) await this.renderPlanContent();
+			} catch (error) {
+				create.disabled = false;
+				new Notice(`无法创建日记：${error instanceof Error ? error.message : '请检查目录权限'}`);
+			}
+		};
 	}
 
 	private renderReviewToolbar(toolbar: HTMLElement, records: ReviewRecord[]): void {
@@ -415,6 +436,7 @@ export class PlanWorkspaceRenderer extends Component {
 			edit.onclick = () => this.openSource(reviewFile);
 		}
 		if (token !== this.generation || !main.isConnected) return;
+		if (target.kind === 'day' && !reviewFile) { this.renderMissingDayReview(content); return; }
 
 		if (target.kind !== 'day' && this.reviewMode === 'compare') {
 			const compare = content.createDiv({ cls: 'mx-journal-review-compare' });

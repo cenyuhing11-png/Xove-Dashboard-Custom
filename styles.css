@@ -1981,9 +1981,12 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-journal-review-result-title { overflow: hidden; color: var(--ad-text); font-size: 12px; font-weight: 600; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
 .mx-journal-review-result-type { margin: 1px 0 0; }
 .mx-journal-review-result-snippet { display: -webkit-box; margin-top: 3px; overflow: hidden; color: var(--ad-text-mute); font-size: 11px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.mx-journal-review-results.is-recent .mx-journal-review-result { align-items: center; padding-block: 7px; }
 .mx-journal-review-tool-empty { min-height: 0; padding: 22px 8px; }
 .mx-journal-review-more { display: block; margin: 9px auto 0; }
 .mx-journal-review-action-message { margin: 6px 0 0; }
+.mx-journal-review-missing-day { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 0; padding: 18px 0; }
+.mx-journal-review-missing-day > .ad-modal-hint { margin: 0; }
 .mx-journal-review-record-head { padding: 10px 0 12px; border-bottom: 1px solid var(--ad-line); }
 .mx-journal-review-record-head > .ad-modal-title { margin: 0; font-size: 18px; line-height: 1.45; }
 .mx-journal-review-record-title { margin-top: 3px; color: var(--ad-text); font-size: 13px; font-weight: 600; }

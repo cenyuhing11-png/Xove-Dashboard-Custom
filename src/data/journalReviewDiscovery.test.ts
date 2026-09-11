@@ -2,17 +2,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
 	discoverReviewRecords,
+	ensureDayReviewForFocus,
 	pastTodayReference,
 	pastTodayReviewRecords,
 	plainReviewText,
 	randomReviewRecord,
 	recentReviewRecords,
+	recentReviewTimeLabel,
+	recentReviewTitle,
 	reviewRecordFromSource,
 	reviewRecordTimeLabel,
 	searchReviewRecords,
 	timeStateForReviewRecord,
 } from './journalReview.ts';
 import type { ReviewRecord, ReviewRecordSource } from './journalReview.ts';
+import { journalInfo, journalTemplate } from './journal.ts';
+import type { PlanFiles } from './planning.ts';
 
 const root = '04-日记与复盘';
 
@@ -32,6 +37,56 @@ function record(kind: 'day' | 'week' | 'month' | 'year', period: string, markdow
 	assert.ok(value);
 	return value;
 }
+
+function journalStore(initial?: Record<string, string>) {
+	const contents = new Map(Object.entries(initial ?? {}));
+	const folders = new Set<string>();
+	const files: PlanFiles = {
+		kind: path => contents.has(path) ? 'file' : folders.has(path) ? 'folder' : undefined,
+		read: async path => contents.get(path) ?? '',
+		createFolder: async path => { if (folders.has(path)) throw new Error('exists'); folders.add(path); },
+		create: async (path, content) => { if (contents.has(path)) throw new Error('exists'); contents.set(path, content); },
+	};
+	return { contents, files };
+}
+
+test('day review creation uses the explicit historical focus and shared template', async () => {
+	const store = journalStore();
+	const focus = { kind: 'day', date: '2026-09-08' } as const;
+	const path = await ensureDayReviewForFocus(store.files, focus);
+	assert.equal(path, '04-日记与复盘/01-日记/2026-09-08.md');
+	assert.equal(store.contents.get(path!), journalTemplate('day', new Date(2026, 8, 8, 12)));
+	assert.doesNotMatch(store.contents.keys().next().value ?? '', /2026-09-11/);
+});
+
+test('day review creation supports today through the same focus-driven helper', async () => {
+	const today = new Date();
+	const period = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+	const store = journalStore();
+	assert.equal(await ensureDayReviewForFocus(store.files, { kind: 'day', date: period }), journalInfo('day', today).path);
+});
+
+test('existing focused daily journal is reused without duplicate creation', async () => {
+	const path = '04-日记与复盘/01-日记/2026-09-08.md';
+	const store = journalStore({ [path]: '用户已有正文' });
+	assert.equal(await ensureDayReviewForFocus(store.files, { kind: 'day', date: '2026-09-08' }), path);
+	assert.equal(store.contents.size, 1);
+	assert.equal(store.contents.get(path), '用户已有正文');
+});
+
+test('focused daily creation rejects invalid dates and ignores non-day focus', async () => {
+	const store = journalStore();
+	await assert.rejects(ensureDayReviewForFocus(store.files, { kind: 'day', date: '2026-02-30' }), /日期无效/);
+	assert.equal(await ensureDayReviewForFocus(store.files, { kind: 'month', year: 2026, month: 9 }), null);
+	assert.equal(store.contents.size, 0);
+});
+
+test('focused daily creation surfaces storage failures without pretending success', async () => {
+	const store = journalStore();
+	store.files.create = async () => { throw new Error('磁盘只读'); };
+	await assert.rejects(ensureDayReviewForFocus(store.files, { kind: 'day', date: '2026-09-08' }), /磁盘只读/);
+	assert.equal(store.contents.size, 0);
+});
 
 test('discovery recognizes the four real journal and review kinds', () => {
 	assert.equal(record('day', '2026-09-10').kind, 'day');
@@ -75,8 +130,14 @@ test('daily record falls back to a legacy H1 title', () => {
 });
 
 test('daily record falls back to quick-note count without inventing unnamed diary text', () => {
-	assert.equal(record('day', '2026-09-10', '## 随时记\n- 09:20 一条\n- 12:30 二条').title, '随时记 · 2 条');
-	assert.equal(record('day', '2026-09-11', '## 今日日记\n').title, '');
+	assert.equal(record('day', '2026-09-10', '## 随时记\n- 09:20 一条\n- 12:30 二条').title, '随时记 · 2条');
+	assert.equal(record('day', '2026-09-11', '## 今日日记\n').title, '暂无正文');
+});
+
+test('daily recent title falls back from diary body to reflection and then empty copy', () => {
+	assert.equal(record('day', '2026-09-08', '## 今日日记\n第一段正文\n\n第二段').title, '第一段正文');
+	assert.equal(record('day', '2026-09-09', '## 今日回看\n今天的回看').title, '今天的回看');
+	assert.equal(record('day', '2026-09-10', '## 随时记\n\n## 今日日记\n\n## 今日回看\n').title, '暂无正文');
 });
 
 test('week month and year records search their review bodies', () => {
@@ -98,6 +159,20 @@ test('recent records show twelve by default and can grow by another twelve', () 
 	const records = Array.from({ length: 25 }, (_, index) => record('day', `2026-08-${String(index + 1).padStart(2, '0')}`));
 	assert.equal(recentReviewRecords(records).length, 12);
 	assert.equal(recentReviewRecords(records, 24).length, 24);
+});
+
+test('recent row time labels encode granularity without a second type line', () => {
+	assert.equal(recentReviewTimeLabel(record('day', '2026-09-10')), '09.10');
+	assert.equal(recentReviewTimeLabel(record('week', '2026-W37')), 'W37');
+	assert.equal(recentReviewTimeLabel(record('month', '2026-09')), '2026.09');
+	assert.equal(recentReviewTimeLabel(record('year', '2026')), '2026');
+});
+
+test('recent row titles keep real headings and provide compact month and year defaults', () => {
+	assert.equal(recentReviewTitle(record('week', '2026-W37')), '2026-W37 周记');
+	assert.equal(recentReviewTitle(record('month', '2026-09')), '9 月复盘');
+	assert.equal(recentReviewTitle(record('year', '2026')), '2026 年度复盘');
+	assert.equal(recentReviewTitle(record('month', '2026-09', '# 九月重新出发\n\n## 本月完成\n内容')), '九月重新出发');
 });
 
 test('recent sort does not depend on filesystem modification time', () => {

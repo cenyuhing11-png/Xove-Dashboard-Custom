@@ -90,6 +90,64 @@ test('result rows route back to the shared focus and record reader', () => {
 	assert.match(view, /row\.onkeydown.*event\.key === 'Enter'.*event\.key === ' '/);
 });
 
+test('a missing day record exposes one lightweight focused-date creation action', () => {
+	assert.match(view, /target\.kind === 'day' && !reviewFile[\s\S]*?this\.renderMissingDayReview\(content\)/);
+	assert.match(view, /text: '这一天尚未创建日记'/);
+	assert.match(view, /text: '创建这天日记 →'/);
+	assert.match(view, /mx-inline-action mx-journal-review-create/);
+});
+
+test('focused day creation reuses ensureJournal through the shared adapter and then redraws in place', () => {
+	const method = view.match(/private renderMissingDayReview[\s\S]*?(?=\n\tprivate renderReviewToolbar)/)?.[0] ?? '';
+	assert.match(method, /const focus = this\.timeState\.focus/);
+	assert.match(method, /focus\.kind !== 'day'/);
+	assert.match(method, /await ensureDayReviewForFocus\(this\.planFiles\(\), focus\)/);
+	assert.match(method, /await this\.renderPlanContent\(\)/);
+	assert.match(view, /createFolder: \(path: string\) => vault\.createFolder\(path\)/);
+	assert.match(view, /create: \(path: string, content: string\) => vault\.create\(path, content\)/);
+});
+
+test('focused day creation keeps route focus and visible month and never opens Markdown', () => {
+	const method = view.match(/private renderMissingDayReview[\s\S]*?(?=\n\tprivate renderReviewToolbar)/)?.[0] ?? '';
+	assert.doesNotMatch(method, /this\.(?:timeState|reviewView|mode)\s*=(?!=)/);
+	assert.doesNotMatch(method, /openSource|openFile|openLinkText|getLeaf|workspace/);
+	assert.match(method, /this\.timeState\.focus\.date === focus\.date/);
+});
+
+test('focused day creation reports failures and leaves the empty state mounted', () => {
+	const method = view.match(/private renderMissingDayReview[\s\S]*?(?=\n\tprivate renderReviewToolbar)/)?.[0] ?? '';
+	assert.match(method, /catch \(error\)/);
+	assert.match(method, /create\.disabled = false/);
+	assert.match(method, /new Notice\(`无法创建日记：/);
+});
+
+test('week month and year missing records do not gain a create action', () => {
+	const render = view.match(/private async renderReview\([\s\S]*?(?=\n\tprivate async renderLongTermPlans)/)?.[0] ?? '';
+	assert.match(render, /target\.kind === 'day' && !reviewFile/);
+	assert.doesNotMatch(render, /target\.kind !== 'day'.*renderMissingDayReview/);
+});
+
+test('recent rows use time plus one main text and suppress only their type subtitle', () => {
+	const recent = view.match(/private renderRecentReviews[\s\S]*?(?=\n\tprivate renderSearchResults)/)?.[0] ?? '';
+	assert.match(recent, /recentReviewTimeLabel\(record\)/);
+	assert.match(recent, /recentReviewTitle\(record\)/);
+	assert.match(recent, /showType: false/);
+	const search = view.match(/private renderSearchResults[\s\S]*?(?=\n\tprivate renderReviewSearch)/)?.[0] ?? '';
+	assert.doesNotMatch(search, /showType: false/);
+});
+
+test('recent row compacting removes the second-line height without cards', () => {
+	assert.match(css, /\.mx-journal-review-results\.is-recent \.mx-journal-review-result \{[^}]*align-items: center;[^}]*padding-block: 7px/);
+	assert.doesNotMatch(css, /\.mx-journal-review-results\.is-recent[^}]*height:/);
+	assert.doesNotMatch(css, /\.mx-journal-review-results\.is-recent[^}]*background:/);
+});
+
+test('missing day CTA is a compact inline action rather than a large empty card', () => {
+	assert.match(css, /\.mx-journal-review-missing-day \{[^}]*min-height: 0;[^}]*padding: 18px 0/);
+	assert.doesNotMatch(css, /\.mx-journal-review-missing-day \{[^}]*background:/);
+	assert.doesNotMatch(css, /\.mx-journal-review-create \{[^}]*font-size:/);
+});
+
 test('mini-calendar changes always return journal review to record mode', () => {
 	assert.match(view, /private setTimeState[\s\S]*?this\.mode === 'review'[\s\S]*?this\.reviewView = 'record'/);
 });

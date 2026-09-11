@@ -1,7 +1,8 @@
 import type { App } from 'obsidian';
-import { journalCalendarEntry, journalEntry, journalFrontmatterTitle, journalInfo } from './journal.ts';
+import { ensureJournal, journalCalendarEntry, journalEntry, journalFrontmatterTitle, journalInfo } from './journal.ts';
 import type { JournalKind } from './journal.ts';
 import { planInfo } from './planning.ts';
+import type { PlanFiles } from './planning.ts';
 import type { TimeFocus, TimeTraceState } from './timeTrace.ts';
 import { parseDateKey } from './timeTrace.ts';
 
@@ -156,6 +157,14 @@ export function dayReviewSections(markdown: string): MarkdownReviewSection[] {
 	return markdownReviewSections(markdown, ['随时记', '今日日记', '今日回看']);
 }
 
+/** Create only the daily journal represented by an explicit day focus. */
+export async function ensureDayReviewForFocus(files: PlanFiles, focus: TimeFocus): Promise<string | null> {
+	if (focus.kind !== 'day') return null;
+	const date = parseDateKey(focus.date);
+	if (!date) throw new Error('日记日期无效');
+	return ensureJournal(files, 'day', date);
+}
+
 function dateKeyValue(date: Date): string {
 	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
@@ -187,6 +196,33 @@ function sectionEntryCount(markdown: string): number {
 	return count;
 }
 
+function firstReviewHeading(markdown: string): string {
+	const lines = markdown.replace(/^\uFEFF/, '').split(/\r?\n/);
+	let frontmatter = lines[0]?.trim() === '---';
+	let fence = '';
+	for (let index = 0; index < lines.length; index++) {
+		const line = lines[index] ?? '';
+		if (frontmatter) {
+			if (index > 0 && /^(---|\.\.\.)\s*$/.test(line)) frontmatter = false;
+			continue;
+		}
+		const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line);
+		if (fence) { if (new RegExp(`^ {0,3}${fence[0]}{${fence.length},}\\s*$`).test(line)) fence = ''; continue; }
+		if (marker) { fence = marker[1] ?? ''; continue; }
+		const heading = /^ {0,3}#[ \t]+(.+?)[ \t]*#*[ \t]*$/.exec(line);
+		if (heading) return heading[1]?.trim() ?? '';
+	}
+	return '';
+}
+
+function firstMeaningfulReviewText(markdown: string): string {
+	for (const block of markdown.split(/\r?\n\s*\r?\n/)) {
+		const text = plainReviewText(block);
+		if (text) return text.slice(0, 96);
+	}
+	return '';
+}
+
 function recordFocus(kind: JournalKind, period: string, date: Date): TimeFocus {
 	if (kind === 'day') return { kind: 'day', date: period };
 	if (kind === 'week') return { kind: 'week', isoYear: Number(period.slice(0, 4)), isoWeek: Number(period.slice(6)), anchorDate: dateKeyValue(date) };
@@ -209,9 +245,11 @@ export function reviewRecordFromSource(source: ReviewRecordSource): ReviewRecord
 		: '';
 	const quickNotes = entry.kind === 'day' ? sections.find(section => section.title === '随时记') : undefined;
 	const quickNoteCount = quickNotes ? sectionEntryCount(quickNotes.markdown) : 0;
+	const dailySectionText = (title: string) => firstMeaningfulReviewText(sections.find(section => section.title === title)?.markdown ?? '');
+	const sourceHeading = entry.kind === 'day' ? '' : firstReviewHeading(source.markdown);
 	const title = entry.kind === 'day'
-		? actualDayTitle || (quickNoteCount ? `随时记 · ${quickNoteCount} 条` : '')
-		: entry.kind === 'week' ? `${entry.period} 周记` : entry.kind === 'month' ? '月度复盘' : '年度复盘';
+		? actualDayTitle || (quickNoteCount ? `随时记 · ${quickNoteCount}条` : '') || dailySectionText('今日日记') || dailySectionText('今日回看') || '暂无正文'
+		: sourceHeading || (entry.kind === 'week' ? `${entry.period} 周记` : entry.kind === 'month' ? '月度复盘' : '年度复盘');
 	const searchableText = [actualDayTitle, ...bodies].filter(Boolean).join(' ').trim();
 	return {
 		kind: entry.kind,
@@ -249,6 +287,19 @@ export async function discoverReviewRecords(app: App): Promise<ReviewRecord[]> {
 
 export function recentReviewRecords(records: readonly ReviewRecord[], limit = 12): ReviewRecord[] {
 	return sortReviewRecords(records).slice(0, Math.max(0, limit));
+}
+
+export function recentReviewTimeLabel(record: ReviewRecord): string {
+	if (record.kind === 'day') return record.period.slice(5).replace('-', '.');
+	if (record.kind === 'week') return `W${record.period.slice(6)}`;
+	if (record.kind === 'month') return record.period.replace('-', '.');
+	return record.period;
+}
+
+export function recentReviewTitle(record: ReviewRecord): string {
+	if (record.kind === 'month' && record.title === '月度复盘') return `${Number(record.period.slice(5))} 月复盘`;
+	if (record.kind === 'year' && record.title === '年度复盘') return `${record.period} 年度复盘`;
+	return record.title;
 }
 
 function searchSnippet(text: string, query: string): string {
