@@ -31,7 +31,7 @@ import { LongTermNarrativeModal } from './LongTermNarrativeModal';
 import { LongTermPlanDirectionModal } from './LongTermPlanDirectionModal';
 import { renderLongTermPlanSummaryRow } from './LongTermPlanRow';
 import { renderTimeTraceMiniCalendar } from '../components/timeTrace/TimeTraceMiniCalendar';
-import { focusDate, focusMatchesWeek, focusMonth, hasTimeTraceMarker, initialTimeTraceState, parseDateKey, selectDay, selectMonth, selectToday, selectWeek, shiftVisibleMonth } from '../data/timeTrace';
+import { focusDate, focusMatchesWeek, focusMonth, hasTimeTraceMarker, initialTimeTraceState, parseDateKey, selectDay } from '../data/timeTrace';
 import type { TimeFocus, TimeTraceState } from '../data/timeTrace';
 
 export const PLAN_VIEW = 'xove-dashboard-custom-plan-workspace';
@@ -159,8 +159,7 @@ export class PlanWorkspaceRenderer extends Component {
 	private setTimeState(state: TimeTraceState): void {
 		this.timeState = state;
 		if (this.mode === 'review') { this.clearReviewTimers(); this.reviewView = 'record'; this.reviewActionMessage = ''; }
-		if (state.focus.kind === 'month') this.calendarMode = 'month';
-		if (state.focus.kind === 'week') this.calendarMode = 'week';
+		this.calendarMode = state.focus.kind === 'week' ? 'week' : 'month';
 		void this.renderPlanContent();
 	}
 	private setDayFocus(date: Date): void { this.setTimeState(selectDay(this.timeState, date)); }
@@ -187,10 +186,12 @@ export class PlanWorkspaceRenderer extends Component {
 		container.empty();
 		this.renderSidebar(container);
 		const main = container.createDiv({ cls: 'po-main' });
-		if (this.mode === 'board' && snapshot) this.renderBoard(main, snapshot);
-		else if (this.mode === 'longTermPlan') await this.renderLongTermPlans(main, longTermPlans);
-		else if (this.mode === 'calendar') await this.renderCalendar(main, token);
-		else await this.renderReview(main, token);
+		const header = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar mx-time-trace-section-header', attr: { 'data-time-trace-header': this.mode } });
+		const body = main.createDiv({ cls: 'mx-time-trace-section-body', attr: { 'data-time-trace-body': this.mode } });
+		if (this.mode === 'board' && snapshot) this.renderBoard(header, body, snapshot);
+		else if (this.mode === 'longTermPlan') await this.renderLongTermPlans(header, body, longTermPlans);
+		else if (this.mode === 'calendar') await this.renderCalendar(header, body, token);
+		else await this.renderReview(header, body, token);
 	}
 
 	private markerResolver(): (focus: TimeFocus) => boolean {
@@ -230,11 +231,10 @@ export class PlanWorkspaceRenderer extends Component {
 		}
 	}
 
-	private renderBoard(main: HTMLElement, snapshot: Awaited<ReturnType<typeof readPlanWorkspace>>): void {
+	private renderBoard(header: HTMLElement, main: HTMLElement, snapshot: Awaited<ReturnType<typeof readPlanWorkspace>>): void {
 		const { year, month } = this.timeState.visible;
-		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar mx-time-trace-section-header' });
-		toolbar.createSpan({ cls: 'mx-plan-title', text: '周期计划' });
-		toolbar.createSpan({ cls: 'mx-plan-context', text: `${monthTitle(year, month)} · Q${snapshot.quarter}` });
+		header.createSpan({ cls: 'mx-plan-title', text: '周期计划' });
+		header.createSpan({ cls: 'mx-plan-context', text: `${monthTitle(year, month)} · Q${snapshot.quarter}` });
 		const top = main.createDiv({ cls: 'po-kanban mx-plan-summary' });
 		for (const card of [snapshot.annual, snapshot.quarterly, snapshot.monthly]) {
 			const column = top.createDiv({ cls: 'po-kanban__col' }); this.renderPlanCard(column, card, card.period === this.timeState.focus.kind);
@@ -418,11 +418,11 @@ export class PlanWorkspaceRenderer extends Component {
 		}
 	}
 
-	private async renderReview(main: HTMLElement, token: number): Promise<void> {
+	private async renderReview(header: HTMLElement, main: HTMLElement, token: number): Promise<void> {
 		const records = await discoverReviewRecords(this.app);
 		if (token !== this.generation || !main.isConnected) return;
-		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar mx-time-trace-section-header mx-journal-review-toolbar' });
-		this.renderReviewToolbar(toolbar, records);
+		header.addClass('mx-journal-review-toolbar');
+		this.renderReviewToolbar(header, records);
 		const content = main.createDiv({ cls: 'mx-journal-review-content' });
 		if (this.reviewView === 'recent') { this.renderRecentReviews(content, records); return; }
 		if (this.reviewView === 'search') { this.renderReviewSearch(content, records); return; }
@@ -461,17 +461,17 @@ export class PlanWorkspaceRenderer extends Component {
 		await this.renderReviewDocument(content.createDiv({ cls: 'mx-journal-review-pane is-reading' }), target.reviewLabel, reviewFile, `尚未创建${target.reviewLabel}`, target.kind === 'day', false);
 	}
 
-	private async renderLongTermPlans(main: HTMLElement, plans: LongTermPlan[]): Promise<void> {
+	private async renderLongTermPlans(header: HTMLElement, main: HTMLElement, plans: LongTermPlan[]): Promise<void> {
+		const focus = this.timeState.focus;
+		const month = focusMonth(this.timeState);
+		header.createSpan({ cls: 'mx-plan-title', text: '长期计划' });
+		header.createSpan({ cls: 'mx-plan-context', text: focus.kind === 'year' ? `${focus.year} 年` : `${month.year} 年 ${month.month} 月` });
 		const selected = plans.find(plan => plan.id === this.selectedLongTermPlanId);
 		if (selected) {
 			if (selected.stages.some(stage => !stage.id)) { await updateLongTermPlanMarkdown(this.app, selected, content => ensureLongTermStageIds(content)); await this.renderPlanContent(); return; }
 			this.renderLongTermDetail(main, selected, plans); return;
 		}
 		this.selectedLongTermPlanId = '';
-		const focus = this.timeState.focus;
-		const month = focusMonth(this.timeState);
-		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar mx-time-trace-section-header' }); toolbar.createSpan({ cls: 'mx-plan-title', text: '长期计划' });
-		toolbar.createSpan({ cls: 'mx-plan-context', text: focus.kind === 'year' ? `${focus.year} 年` : `${month.year} 年 ${month.month} 月` });
 		const visible = focus.kind === 'year' ? longTermPlansForYear(plans, focus.year) : longTermPlansForMonth(plans, month.year, month.month);
 		const list = main.createDiv({ cls: 'po-tasklist mx-long-term-list' });
 		if (!visible.length) { list.createDiv({ cls: 'po-empty mx-plan-empty', text: focus.kind === 'year' ? `${focus.year} 年暂无长期计划` : `${month.year} 年 ${month.month} 月暂无长期计划` }); return; }
@@ -570,44 +570,31 @@ export class PlanWorkspaceRenderer extends Component {
 		return journals;
 	}
 
-	private async renderCalendar(main: HTMLElement, token: number): Promise<void> {
+	private async renderCalendar(header: HTMLElement, main: HTMLElement, token: number): Promise<void> {
 		const { year, month } = this.timeState.visible;
+		this.calendarMode = this.timeState.focus.kind === 'week' ? 'week' : 'month';
+		header.createSpan({ cls: 'mx-plan-title', text: '综合日历' });
+		header.createSpan({ cls: 'mx-plan-context', text: this.calendarMode === 'month' ? monthTitle(year, month) : this.weekTitle() });
 		const tasks = this.plugin.embeddedTasks.all();
 		this.sourceLabels = new Map(processes(scanLearning(this.app), scanProjects(this.app), tasks).map(process => [process.sourceFile, taskSourceTypeLabel(process.contentType)]));
 		const journals = await this.readCalendarJournals();
 		if (token !== this.generation || !main.isConnected) return;
-		const bar = main.createDiv({ cls: 'po-toolbar po-cal__bar mx-time-trace-section-header' });
-		bar.createSpan({ cls: 'mx-plan-title', text: '综合日历' });
-		const seg = bar.createDiv({ cls: 'po-cal__seg' });
-		for (const [mode, label] of [['month', '月'], ['week', '周']] as const) {
-			const btn = seg.createEl('button', { cls: `po-cal__seg-btn${this.calendarMode === mode ? ' is-active' : ''}`, text: label });
-			btn.addEventListener('click', () => { this.calendarMode = mode; this.setTimeState(mode === 'month' ? selectMonth(this.timeState) : selectWeek(this.timeState, this.calendarDate())); });
-		}
-		bar.createSpan({ cls: 'po-cal__ttl', text: this.calendarMode === 'month' ? monthTitle(year, month) : this.weekTitle() });
-		const nav = bar.createDiv({ cls: 'po-cal__nav' });
-		const prev = nav.createEl('button', { cls: 'po-cal__btn', text: '‹' });
-		const today = nav.createEl('button', { cls: 'po-cal__btn', text: '今天' });
-		const next = nav.createEl('button', { cls: 'po-cal__btn', text: '›' });
-		prev.addEventListener('click', () => this.moveCalendar(-1)); today.addEventListener('click', () => this.setTimeState(selectToday(this.timeState))); next.addEventListener('click', () => this.moveCalendar(1));
 		const root = main.createDiv({ cls: 'po-cal' }); root.tabIndex = 0;
 		if (this.calendarMode === 'month') this.renderCalendarMonth(root, journals, tasks); else this.renderCalendarWeek(root, journals, tasks);
 		const selectedDate = this.calendarDate();
 		this.renderDayDetail(root, selectedDate, journals.get(dateKey(selectedDate)));
 	}
 
-	private moveCalendar(direction: -1 | 1): void {
-		if (this.calendarMode === 'month') {
-			this.setTimeState(shiftVisibleMonth(this.timeState, direction));
-		} else {
-			const next = this.calendarDate(); next.setDate(next.getDate() + direction * 7); this.setTimeState(selectWeek({ ...this.timeState, visible: { year: next.getFullYear(), month: next.getMonth() + 1 } }, next));
-		}
-	}
-
 	private weekDates(): Date[] {
 		const start = this.calendarDate(); start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
 		return Array.from({ length: 7 }, (_, index) => { const date = new Date(start); date.setDate(start.getDate() + index); return date; });
 	}
-	private weekTitle(): string { const dates = this.weekDates(); return `${dayLabel(dates[0]!)}–${dayLabel(dates[6]!)}`; }
+	private weekTitle(): string {
+		const dates = this.weekDates();
+		const focused = this.timeState.focus.kind === 'week' ? this.timeState.focus : undefined;
+		const fallback = isoWeek(dates[0]!);
+		return `${focused?.isoYear ?? fallback.year}-W${String(focused?.isoWeek ?? fallback.week).padStart(2, '0')} · ${dayLabel(dates[0]!)} — ${dayLabel(dates[6]!)}`;
+	}
 
 	private renderCalendarIncomplete(parent: HTMLElement, tasks: EmbeddedTask[], key: string): number {
 		const count = incompleteTaskCountOnDate(tasks, key);

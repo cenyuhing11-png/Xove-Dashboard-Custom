@@ -30,7 +30,7 @@ test('global plan navigation routes inside the supplied Mengxu view instead of o
 	assert.doesNotMatch(navigation, /setViewState\(\{ type: PROJECT_VIEW/);
 });
 test('plan board reuses original ProjectBoard primitives', () => { for (const cls of ['po-container', 'po-sidebar', 'po-kanban', 'po-kanban__col', 'po-kanban__card']) assert.ok(view.includes(cls)); });
-test('plan calendar reuses original calendar primitives', () => { for (const cls of ['po-cal__bar', 'po-cal__days', 'po-cal__week', 'po-cal__det']) assert.ok(view.includes(cls)); });
+test('plan calendar reuses original calendar body primitives', () => { for (const cls of ['po-cal__days', 'po-cal__week', 'po-cal__det']) assert.ok(view.includes(cls)); });
 test('plan workspace never creates plan markdown', () => { assert.equal(view.includes('ensurePlan'), false); assert.equal(view.includes('.vault.create('), false); });
 test('calendar checkboxes write through the shared Embedded Task checkbox', () => {
 	assert.match(view, /renderEmbeddedTaskCheckbox\(row, task, this\.plugin\.embeddedTasks\)/);
@@ -122,26 +122,64 @@ test('week board has no redundant section heading or quarter caption', () => { a
 test('sidebar removes its duplicate title and exposes four settled time-trace view names', () => {
 	assert.doesNotMatch(view, /mx-time-trace-title', text: '时迹'/);
 	assert.match(view, /\[\['board', '周期计划'\], \['longTermPlan', '长期计划'\], \['calendar', '综合日历'\], \['review', '日记回顾'\]\]/);
-	assert.match(view, /private renderBoard[\s\S]*mx-plan-title', text: '周期计划'/);
-	assert.match(view, /private async renderCalendar[\s\S]*mx-plan-title', text: '综合日历'/);
-	assert.match(view, /private async renderReview[\s\S]*mx-plan-title', text: '日记回顾'/);
+	for (const title of ['周期计划', '长期计划', '综合日历', '日记回顾']) assert.match(view, new RegExp(`mx-plan-title', text: '${title}'`));
 });
-test('all four time-trace headers share one full-width wrapper while body wrappers stay unchanged', () => {
+test('time trace main owns one persistent header slot and one body slot for every section', () => {
+	const content = view.match(/private async renderPlanContent[\s\S]*?(?=\n\tprivate markerResolver)/)?.[0] ?? '';
+	assert.equal((content.match(/mx-time-trace-section-header/g) ?? []).length, 1);
+	assert.equal((content.match(/mx-time-trace-section-body/g) ?? []).length, 1);
+	assert.match(content, /const main = container\.createDiv\(\{ cls: 'po-main' \}\);[\s\S]*const header = main\.createDiv[\s\S]*const body = main\.createDiv/);
+	for (const call of ['renderBoard(header, body', 'renderLongTermPlans(header, body', 'renderCalendar(header, body', 'renderReview(header, body']) assert.ok(content.includes(call));
+});
+test('section renderers fill the shared header instead of creating their own header containers', () => {
 	const board = view.match(/private renderBoard[\s\S]*?(?=\n\tprivate existingFile)/)?.[0] ?? '';
 	const review = view.match(/private async renderReview[\s\S]*?(?=\n\tprivate async renderLongTermPlans)/)?.[0] ?? '';
 	const longTerm = view.match(/private async renderLongTermPlans[\s\S]*?(?=\n\tprivate processForRef)/)?.[0] ?? '';
-	const calendar = view.match(/private async renderCalendar[\s\S]*?(?=\n\tprivate moveCalendar)/)?.[0] ?? '';
-	assert.match(board, /po-toolbar mx-plan-toolbar mx-time-trace-section-header/);
-	assert.match(longTerm, /po-toolbar mx-plan-toolbar mx-time-trace-section-header/);
-	assert.match(calendar, /main\.createDiv\(\{ cls: 'po-toolbar po-cal__bar mx-time-trace-section-header' \}\)/);
-	assert.match(review, /po-toolbar mx-plan-toolbar mx-time-trace-section-header mx-journal-review-toolbar/);
+	const calendar = view.match(/private async renderCalendar[\s\S]*?(?=\n\tprivate weekDates)/)?.[0] ?? '';
+	for (const section of [board, review, longTerm, calendar]) {
+		assert.match(section, /header\.createSpan|renderReviewToolbar\(header/);
+		assert.doesNotMatch(section, /createDiv\(\{ cls: '[^']*mx-time-trace-section-header/);
+	}
+	assert.match(review, /header\.addClass\('mx-journal-review-toolbar'\)/);
+	assert.equal((view.match(/mx-time-trace-section-header/g) ?? []).length, 1);
+});
+test('shared header refactor preserves every established section body wrapper', () => {
+	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+	const board = view.match(/private renderBoard[\s\S]*?(?=\n\tprivate existingFile)/)?.[0] ?? '';
+	const review = view.match(/private async renderReview[\s\S]*?(?=\n\tprivate async renderLongTermPlans)/)?.[0] ?? '';
+	const longTerm = view.match(/private async renderLongTermPlans[\s\S]*?(?=\n\tprivate processForRef)/)?.[0] ?? '';
+	const calendar = view.match(/private async renderCalendar[\s\S]*?(?=\n\tprivate weekDates)/)?.[0] ?? '';
 	assert.match(board, /main\.createDiv\(\{ cls: 'po-kanban mx-plan-summary' \}\)/);
 	assert.match(board, /main\.createDiv\(\{ cls: 'po-kanban mx-plan-weeks' \}\)/);
 	assert.match(longTerm, /main\.createDiv\(\{ cls: 'po-tasklist mx-long-term-list' \}\)/);
 	assert.match(calendar, /main\.createDiv\(\{ cls: 'po-cal' \}\)/);
 	assert.match(review, /main\.createDiv\(\{ cls: 'mx-journal-review-content' \}\)/);
-	assert.match(calendar, /\[\['month', '月'\], \['week', '周'\]\]/);
-	for (const control of ["text: '‹'", "text: '今天'", "text: '›'"]) assert.match(calendar, new RegExp(control));
+	assert.match(css, /\.mx-time-trace-section-body\s*\{\s*display:\s*contents;\s*\}/);
+});
+test('calendar removes its duplicate toolbar and renders only shared header metadata', () => {
+	const calendar = view.match(/private async renderCalendar[\s\S]*?(?=\n\tprivate weekDates)/)?.[0] ?? '';
+	assert.match(calendar, /header\.createSpan\(\{ cls: 'mx-plan-title', text: '综合日历' \}\)/);
+	assert.match(calendar, /header\.createSpan\(\{ cls: 'mx-plan-context'/);
+	for (const legacy of ['po-cal__bar', 'po-cal__seg', 'po-cal__nav', 'po-cal__ttl', "text: '‹'", "text: '今天'", "text: '›'"]) assert.equal(calendar.includes(legacy), false);
+	assert.doesNotMatch(view, /private moveCalendar/);
+});
+test('shared mini calendar is the only calendar period controller', () => {
+	assert.match(miniCalendar, /current\.onclick = \(\) => options\.onChange\(selectToday\(state, today\)\)/);
+	assert.match(miniCalendar, /previous\.onclick = \(\) => options\.onChange\(shiftVisibleMonth\(state, -1\)\)/);
+	assert.match(miniCalendar, /next\.onclick = \(\) => options\.onChange\(shiftVisibleMonth\(state, 1\)\)/);
+	assert.match(miniCalendar, /options\.onChange\(selectMonth\(state, value\)\)/);
+	assert.match(miniCalendar, /options\.onChange\(selectWeek\(state, week\.days\[0\]!\.date\)\)/);
+	assert.match(miniCalendar, /options\.onChange\(selectDay\(state, day\.date\)\)/);
+	const setTimeState = view.match(/private setTimeState[\s\S]*?(?=\n\tprivate setDayFocus)/)?.[0] ?? '';
+	assert.match(setTimeState, /state\.focus\.kind === 'week' \? 'week' : 'month'/);
+});
+test('calendar shared header reports month and ISO week ranges without controls', () => {
+	const calendar = view.match(/private async renderCalendar[\s\S]*?(?=\n\tprivate weekDates)/)?.[0] ?? '';
+	const weekTitle = view.match(/private weekTitle[\s\S]*?(?=\n\tprivate renderCalendarIncomplete)/)?.[0] ?? '';
+	assert.match(calendar, /this\.calendarMode === 'month' \? monthTitle\(year, month\) : this\.weekTitle\(\)/);
+	assert.match(weekTitle, /focused\?\.isoYear \?\? fallback\.year/);
+	assert.match(weekTitle, /focused\?\.isoWeek \?\? fallback\.week/);
+	assert.match(weekTitle, /· \$\{dayLabel\(dates\[0\]!\)\} — \$\{dayLabel\(dates\[6\]!\)\}/);
 });
 test('shared time-trace header owns one responsive-safe width padding and divider rule', () => {
 	const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
@@ -213,7 +251,7 @@ test('calendar navigation keeps the WorkbenchShell mounted', () => {
 });
 test('plan view mode switches patch content instead of rebuilding the shell', () => {
 	assert.match(view, /this\.mode = mode; void this\.renderPlanContent\(\)/);
-	assert.match(view, /this\.calendarMode = mode; this\.setTimeState\(mode === 'month'/);
+	assert.match(view, /this\.calendarMode = state\.focus\.kind === 'week' \? 'week' : 'month'/);
 });
 test('calendar task refresh subscription does not rebuild the outer view', () => {
 	assert.match(view, /embeddedTasks\.subscribe\(\(\) => \{ if \(this\.active && this\.mode === 'calendar'\) void this\.renderPlanContent\(\); \}\)/);
@@ -333,7 +371,7 @@ test('mini calendar selection today and markers remain visually distinct and neu
 	assert.match(css, /\.mx-mini-calendar-marker\s*\{[^}]*background: var\(--ad-text-mute\)/);
 });
 test('journal review reads the selected period while the shared calendar stays mounted', () => {
-	assert.match(view, /else await this\.renderReview\(main, token\)/);
+	assert.match(view, /else await this\.renderReview\(header, body, token\)/);
 	assert.match(view, /private async renderReview[\s\S]*text: '日记回顾'[\s\S]*journalReviewTarget\(this\.timeState\.focus\)/);
 	assert.equal(view.includes('最近日记'), false);
 	assert.equal(view.includes('过去的今天'), true);
@@ -349,10 +387,10 @@ test('marker semantics remain section-specific and read only', () => {
 	assert.doesNotMatch(resolver, /vault\.create|vault\.modify|ensurePlan/);
 });
 test('calendar reuses month week and day modes without adding a year mode', () => {
-	const calendar = view.match(/private async renderCalendar[\s\S]*?(?=\n\tprivate moveCalendar)/)?.[0] ?? '';
-	assert.match(calendar, /mode === 'month' \? selectMonth\(this\.timeState\) : selectWeek\(this\.timeState, this\.calendarDate\(\)\)/);
+	const calendar = view.match(/private async renderCalendar[\s\S]*?(?=\n\tprivate weekDates)/)?.[0] ?? '';
+	assert.match(calendar, /this\.calendarMode = this\.timeState\.focus\.kind === 'week' \? 'week' : 'month'/);
 	assert.match(view, /day\.addEventListener\('click', \(\) => this\.setDayFocus\(date\)\)/);
-	assert.match(calendar, /\[\['month', '月'\], \['week', '周'\]\]/);
+	assert.match(calendar, /this\.calendarMode === 'month'\) this\.renderCalendarMonth[\s\S]*else this\.renderCalendarWeek/);
 	assert.equal(calendar.includes("['year', '年']"), false);
 });
 test('time trace rename leaves technical PlanView and identifiers intact', () => {

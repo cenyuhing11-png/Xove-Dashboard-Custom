@@ -6,7 +6,7 @@ const view = readFileSync(new URL('../views/PlanView.ts', import.meta.url), 'utf
 const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
 
 test('review replaces the placeholder with the shared focus adapter and an async reader', () => {
-	assert.match(view, /else await this\.renderReview\(main, token\)/);
+	assert.match(view, /else await this\.renderReview\(header, body, token\)/);
 	assert.match(view, /journalReviewTarget\(this\.timeState\.focus\)/);
 	assert.doesNotMatch(view, /已选择：\$\{focusLabel\(this\.timeState\.focus\)\}/);
 });
