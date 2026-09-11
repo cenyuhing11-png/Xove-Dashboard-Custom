@@ -5,5 +5,5 @@
 	"minAppVersion": "1.8.0",
 	"description": "Turn your home tab into a customizable dashboard for capturing tasks, tracking projects, and reviewing your note activity.",
 	"author": "xw",
-	"isDesktopOnly": true
+	"isDesktopOnly": false
 }
