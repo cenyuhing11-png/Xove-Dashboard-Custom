@@ -1948,19 +1948,21 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-mini-calendar-weekdays { margin-bottom: 2px; color: var(--ad-text-dim); font-size: 9px; line-height: 18px; text-align: center; }
 .mx-mini-calendar-marker { position: absolute; right: 2px; bottom: 2px; width: 3px; height: 3px; border-radius: 50%; background: var(--ad-text-mute); pointer-events: none; }
 .mx-mini-calendar-scope .mx-mini-calendar-marker { right: 1px; bottom: 1px; }
-.mx-plan-context { margin-left: auto; color: var(--ad-text-dim); font-size: 11px; }
-.mx-plan-title { color: var(--ad-text); font-size: 12px; font-weight: 600; }
-.mx-time-trace-section-header { width: 100%; min-width: 0; margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--ad-line); box-sizing: border-box; }
+.mx-plan-context { margin-left: auto; color: var(--ad-text-dim); font-size: 11px; line-height: 16px; }
+.mx-plan-title { color: var(--ad-text); font-size: 12px; font-weight: 600; line-height: 16px; }
+.mx-time-trace-section-header { display: flex; align-items: center; width: 100%; min-width: 0; min-height: 33px; block-size: 33px; margin: 0; padding: 8px 10px; border-bottom: 1px solid var(--ad-line); box-sizing: border-box; }
 .mx-time-trace-section-body { display: contents; }
 .mx-plan-summary { flex: 1 1 0; min-height: 220px; padding-bottom: 5px; }
 .mx-plan-weeks { flex: 2 1 0; flex-wrap: nowrap; min-height: 300px; padding-top: 5px; overflow-x: auto; border-top: 1px solid var(--ad-line); }
 .mx-plan-weeks .po-kanban__col { flex: 1 0 180px; min-width: 180px; }
 .mx-plan-container .po-kanban__col.is-time-focus { border-color: var(--ad-text-mute); background: var(--ad-h1); }
 .mx-plan-empty { min-height: 74px; padding: 18px 8px; text-align: center; }
-.mx-journal-review-toolbar { gap: 8px; }
-.mx-journal-review-tools { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.mx-journal-review-toolbar { gap: 8px; flex-wrap: nowrap; }
+.mx-journal-review-tools { display: flex; align-items: center; gap: 2px; margin: 0 0 0 auto; }
 .dashboard-plugin button.mx-journal-review-tool,
-.dashboard-plugin button.mx-journal-review-mode { min-height: 26px; padding: 3px 7px; border: 0; border-radius: var(--ad-r1); background: transparent; box-shadow: none; color: var(--ad-text-mute); font-family: var(--ad-font); font-size: 11px; font-weight: 500; }
+.dashboard-plugin button.mx-journal-review-mode { border: 0; border-radius: var(--ad-r1); background: transparent; box-shadow: none; color: var(--ad-text-mute); font-family: var(--ad-font); font-size: 11px; font-weight: 500; }
+.dashboard-plugin button.mx-journal-review-tool { min-height: 16px; height: 16px; padding: 0 7px; line-height: 16px; }
+.dashboard-plugin button.mx-journal-review-mode { min-height: 26px; padding: 3px 7px; }
 .dashboard-plugin button.mx-journal-review-tool:hover,
 .dashboard-plugin button.mx-journal-review-mode:hover { background: var(--ad-h1); color: var(--ad-text); }
 .dashboard-plugin button.mx-journal-review-tool.is-active { color: var(--ad-text); }
@@ -1970,7 +1972,7 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .dashboard-plugin button.mx-journal-review-mode.is-active { color: var(--ad-text); }
 .dashboard-plugin button.mx-journal-review-mode.is-active::after { content: ''; position: absolute; right: 7px; bottom: 0; left: 7px; height: 1px; background: var(--ad-text-mute); }
 .mx-journal-review-edit { margin-left: auto; }
-.mx-journal-review-content { width: 100%; max-width: 1080px; min-width: 0; margin: 0 auto; padding: 4px 12px 28px; box-sizing: border-box; }
+.mx-journal-review-content { width: 100%; max-width: 1080px; min-width: 0; margin: 0 auto; padding: 10px 12px 28px; box-sizing: border-box; }
 .mx-journal-review-tool-title { margin: 12px 0 3px; font-size: 18px; line-height: 1.45; }
 .mx-journal-review-tool-context { margin: 0 0 5px; }
 .mx-journal-review-search { width: min(100%, 560px); margin: 9px 0 7px; box-sizing: border-box; }
@@ -2175,6 +2177,7 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 @container (max-width: 720px) {
   .mx-plan-container { flex-direction: column; min-height: 0; }
   .mx-plan-container .po-sidebar { width: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--ad-line); }
+  .mx-time-trace-section-header { block-size: auto; }
   .mx-journal-review-toolbar { flex-wrap: wrap; }
   .mx-journal-review-tools { flex-wrap: wrap; width: 100%; margin-left: 0; }
   .mx-journal-review-record-controls { flex-wrap: wrap; }

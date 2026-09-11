@@ -2,6 +2,7 @@ import { App, Modal } from 'obsidian';
 import { journalEntry, journalHistory } from '../data/journal';
 import type { JournalEntry, JournalKind } from '../data/journal';
 import { beginListModal, closeListModal, listEntry } from './viewPrimitives';
+import { reviewDisplayLabel, reviewDisplayTitle } from '../data/cycleDisplayLabels';
 
 export class JournalHistoryModal extends Modal {
 	private list!: HTMLElement;
@@ -11,7 +12,8 @@ export class JournalHistoryModal extends Modal {
 		beginListModal(this, this.mode === 'records' ? '最近记录' : '查看复盘');
 		if (this.mode === 'reviews') {
 			const actions = this.contentEl.createDiv({ cls: 'po-toolbar' });
-			for (const [kind, label] of [['month', '月度复盘'], ['year', '年度复盘']] as const) {
+			for (const kind of ['month', 'year'] as const) {
+				const label = reviewDisplayLabel(kind);
 				actions.createEl('button', { cls: 'ad-modal-btn', text: `＋ 新建${label}` }).onclick = () => { this.close(); void this.create(kind); };
 			}
 		}
@@ -32,9 +34,9 @@ export class JournalHistoryModal extends Modal {
 			if (entry) entries.push(entry);
 		}
 		const recent = journalHistory(entries, this.mode);
-		if (!recent.length) this.list.createEl('p', { cls: 'po-empty', text: this.mode === 'records' ? '暂无日记或周记' : '暂无月度或年度复盘' });
+		if (!recent.length) this.list.createEl('p', { cls: 'po-empty', text: this.mode === 'records' ? '暂无日记或周复盘' : '暂无月复盘或年复盘' });
 		for (const entry of recent) {
-			listEntry(this.list, entry.title, `${entry.label} · ${entry.period}`, () => { this.close(); void this.openNote(entry.path); });
+			listEntry(this.list, reviewDisplayTitle(entry.kind, entry.title), `${reviewDisplayLabel(entry.kind)} · ${entry.period}`, () => { this.close(); void this.openNote(entry.path); });
 		}
 	}
 	onClose(): void { this.off.forEach((off) => off()); this.off = []; closeListModal(this); }

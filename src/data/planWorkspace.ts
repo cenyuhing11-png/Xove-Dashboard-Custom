@@ -1,6 +1,7 @@
 import type { EmbeddedTask } from './embeddedTasks.ts';
 import { isoWeek, planInfo, readSection } from './planning.ts';
 import type { PlanFiles, PlanPeriod } from './planning.ts';
+import { planDisplayLabel } from './cycleDisplayLabels.ts';
 
 export type PlanWorkspaceMode = 'board' | 'longTermPlan' | 'calendar' | 'review';
 export type PlanCalendarMode = 'month' | 'week';
@@ -66,12 +67,12 @@ export async function readPlanWorkspace(files: Pick<PlanFiles, 'kind' | 'read'>,
 	const date = selectionDate(year, month);
 	const quarter = quarterForMonth(month);
 	const [annual, quarterly, monthly] = await Promise.all([
-		card(files, 'year', date, `${year} 年度`, '年度核心突破'),
-		card(files, 'quarter', date, `${year} Q${quarter}`, '当前季度主题', '季度重点'),
-		card(files, 'month', date, `${year} 年 ${month} 月`, '本月重点'),
+		card(files, 'year', date, `${year} ${planDisplayLabel('year')}`, '年度核心突破'),
+		card(files, 'quarter', date, `${year} Q${quarter} ${planDisplayLabel('quarter')}`, '当前季度主题', '季度重点'),
+		card(files, 'month', date, `${year} 年 ${month} ${planDisplayLabel('month')}`, '本月重点'),
 	]);
 	const weeks = await Promise.all(monthIsoWeeks(year, month).map(async value => {
-		const base = await card(files, 'week', value.start, `W${String(value.week).padStart(2, '0')}`, '本周重点');
+		const base = await card(files, 'week', value.start, `W${String(value.week).padStart(2, '0')} ${planDisplayLabel('week')}`, '本周重点');
 		return { ...base, ...value };
 	}));
 	return { selection: { year, month }, quarter, annual, quarterly, monthly, weeks };

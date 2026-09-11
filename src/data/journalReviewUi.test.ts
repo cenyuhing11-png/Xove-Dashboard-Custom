@@ -98,9 +98,9 @@ test('a missing day record exposes one lightweight focused-date creation action'
 
 test('all missing review kinds expose the settled lightweight creation copy', () => {
 	for (const copy of [
-		"week: ['本周尚未创建周记', '创建本周周记 →']",
-		"month: ['本月尚未创建月度复盘', '创建本月复盘 →']",
-		"year: ['本年度尚未创建年度复盘', '创建年度复盘 →']",
+		"week: ['本周尚未创建周复盘', '创建本周复盘 →']",
+		"month: ['本月尚未创建月复盘', '创建本月复盘 →']",
+		"year: ['本年度尚未创建年复盘', '创建本年复盘 →']",
 	]) assert.ok(view.includes(copy));
 });
 

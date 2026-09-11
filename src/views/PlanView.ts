@@ -373,9 +373,9 @@ export class PlanWorkspaceRenderer extends Component {
 	private renderMissingReview(parent: HTMLElement, target: ReturnType<typeof journalReviewTarget>): void {
 		const copy = {
 			day: ['这一天尚未创建日记', '创建这天日记 →'],
-			week: ['本周尚未创建周记', '创建本周周记 →'],
-			month: ['本月尚未创建月度复盘', '创建本月复盘 →'],
-			year: ['本年度尚未创建年度复盘', '创建年度复盘 →'],
+			week: ['本周尚未创建周复盘', '创建本周复盘 →'],
+			month: ['本月尚未创建月复盘', '创建本月复盘 →'],
+			year: ['本年度尚未创建年复盘', '创建本年复盘 →'],
 		}[target.kind];
 		const empty = parent.createDiv({ cls: 'mx-journal-review-missing-day' });
 		empty.createDiv({ cls: 'ad-modal-hint', text: copy[0] });

@@ -202,9 +202,9 @@ test('recent row time labels encode granularity without a second type line', () 
 });
 
 test('recent row titles keep real headings and provide compact month and year defaults', () => {
-	assert.equal(recentReviewTitle(record('week', '2026-W37')), '2026-W37 周记');
+	assert.equal(recentReviewTitle(record('week', '2026-W37')), '2026-W37 周复盘');
 	assert.equal(recentReviewTitle(record('month', '2026-09')), '9 月复盘');
-	assert.equal(recentReviewTitle(record('year', '2026')), '2026 年度复盘');
+	assert.equal(recentReviewTitle(record('year', '2026')), '2026 年复盘');
 	assert.equal(recentReviewTitle(record('month', '2026-09', '# 九月重新出发\n\n## 本月完成\n内容')), '九月重新出发');
 });
 

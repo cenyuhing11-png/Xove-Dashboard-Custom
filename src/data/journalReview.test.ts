@@ -15,32 +15,38 @@ test('day focus resolves canonical and legacy daily names without inventing a ti
 
 test('week focus shares the existing ISO journal and plan naming helpers', () => {
 	const target = journalReviewTarget({ kind: 'week', isoYear: 2026, isoWeek: 37, anchorDate: '2026-09-07' });
-	assert.equal(target.primary, '2026-W37 周记');
+	assert.equal(target.primary, '2026-W37 周复盘');
 	assert.equal(target.secondary, '2026.09.07 — 2026.09.13');
 	assert.deepEqual(target.reviewPaths, ['04-日记与复盘/02-周记/2026-W37 周记.md']);
 	assert.equal(target.planPath, '05-计划/05-周计划/2026-W37 周计划.md');
+	assert.equal(target.planLabel, '周计划');
+	assert.equal(target.reviewLabel, '周复盘');
 });
 
 test('week focus preserves ISO week-year naming across a calendar-year boundary', () => {
 	const target = journalReviewTarget({ kind: 'week', isoYear: 2020, isoWeek: 53, anchorDate: '2020-12-28' });
-	assert.equal(target.primary, '2020-W53 周记');
+	assert.equal(target.primary, '2020-W53 周复盘');
 	assert.equal(target.planPath, '05-计划/05-周计划/2020-W53 周计划.md');
 });
 
 test('month focus resolves the existing month review and plan paths', () => {
 	const target = journalReviewTarget({ kind: 'month', year: 2026, month: 9 });
 	assert.equal(target.primary, '2026 年 9 月');
-	assert.equal(target.secondary, '月度复盘');
+	assert.equal(target.secondary, '月复盘');
 	assert.deepEqual(target.reviewPaths, ['04-日记与复盘/03-月度复盘/2026-09 月度复盘.md']);
 	assert.equal(target.planPath, '05-计划/04-月度/2026-09 月度计划.md');
+	assert.equal(target.planLabel, '月计划');
+	assert.equal(target.reviewLabel, '月复盘');
 });
 
 test('year focus resolves the existing annual review and plan paths', () => {
 	const target = journalReviewTarget({ kind: 'year', year: 2026 });
 	assert.equal(target.primary, '2026 年');
-	assert.equal(target.secondary, '年度复盘');
+	assert.equal(target.secondary, '年复盘');
 	assert.deepEqual(target.reviewPaths, ['04-日记与复盘/04-年度复盘/2026 年度复盘.md']);
 	assert.equal(target.planPath, '05-计划/02-年度/2026 年度计划.md');
+	assert.equal(target.planLabel, '年计划');
+	assert.equal(target.reviewLabel, '年复盘');
 });
 
 test('review parser preserves markdown bodies but removes frontmatter and record H1', () => {

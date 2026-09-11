@@ -5,6 +5,7 @@ import { isoWeek, planInfo } from './planning.ts';
 import type { PlanFiles } from './planning.ts';
 import type { TimeFocus, TimeTraceState } from './timeTrace.ts';
 import { parseDateKey } from './timeTrace.ts';
+import { planDisplayLabel, reviewDisplayLabel, reviewDisplayTitle } from './cycleDisplayLabels.ts';
 
 export type JournalReviewMode = 'review' | 'compare';
 export type JournalReviewViewMode = 'record' | 'recent' | 'search' | 'pastToday';
@@ -105,25 +106,25 @@ export function journalReviewTarget(focus: TimeFocus): JournalReviewTarget {
 		const end = atNoon(date); end.setDate(end.getDate() + 6);
 		return {
 			kind: 'week', date,
-			primary: `${focus.isoYear}-W${String(focus.isoWeek).padStart(2, '0')} 周记`,
+			primary: `${focus.isoYear}-W${String(focus.isoWeek).padStart(2, '0')} ${reviewDisplayLabel('week')}`,
 			secondary: `${dottedDate(date)} — ${dottedDate(end)}`,
 			reviewPaths: reviewCandidates('week', date),
-			planPath: planInfo('week', date).path, planLabel: '周计划', reviewLabel: '周记',
+			planPath: planInfo('week', date).path, planLabel: planDisplayLabel('week'), reviewLabel: reviewDisplayLabel('week'),
 		};
 	}
 	if (focus.kind === 'month') {
 		return {
 			kind: 'month', date,
-			primary: `${focus.year} 年 ${focus.month} 月`, secondary: '月度复盘',
+			primary: `${focus.year} 年 ${focus.month} 月`, secondary: reviewDisplayLabel('month'),
 			reviewPaths: reviewCandidates('month', date),
-			planPath: planInfo('month', date).path, planLabel: '月度计划', reviewLabel: '月度复盘',
+			planPath: planInfo('month', date).path, planLabel: planDisplayLabel('month'), reviewLabel: reviewDisplayLabel('month'),
 		};
 	}
 	return {
 		kind: 'year', date,
-		primary: `${focus.year} 年`, secondary: '年度复盘',
+		primary: `${focus.year} 年`, secondary: reviewDisplayLabel('year'),
 		reviewPaths: reviewCandidates('year', date),
-		planPath: planInfo('year', date).path, planLabel: '年度计划', reviewLabel: '年度复盘',
+		planPath: planInfo('year', date).path, planLabel: planDisplayLabel('year'), reviewLabel: reviewDisplayLabel('year'),
 	};
 }
 
@@ -274,7 +275,7 @@ export function reviewRecordFromSource(source: ReviewRecordSource): ReviewRecord
 	const sourceHeading = entry.kind === 'day' ? '' : firstReviewHeading(source.markdown);
 	const title = entry.kind === 'day'
 		? actualDayTitle || (quickNoteCount ? `随时记 · ${quickNoteCount}条` : '') || dailySectionText('今日日记') || dailySectionText('今日回看') || '暂无正文'
-		: sourceHeading || (entry.kind === 'week' ? `${entry.period} 周记` : entry.kind === 'month' ? '月度复盘' : '年度复盘');
+		: reviewDisplayTitle(entry.kind, sourceHeading || (entry.kind === 'week' ? `${entry.period} ${reviewDisplayLabel('week')}` : reviewDisplayLabel(entry.kind)));
 	const searchableText = [actualDayTitle, ...bodies].filter(Boolean).join(' ').trim();
 	return {
 		kind: entry.kind,
@@ -284,7 +285,7 @@ export function reviewRecordFromSource(source: ReviewRecordSource): ReviewRecord
 		order: entry.order,
 		focus: recordFocus(entry.kind, entry.period, date),
 		title,
-		label: entry.label,
+		label: reviewDisplayLabel(entry.kind),
 		searchableText,
 		previewText: bodies.join(' ').slice(0, 180),
 		quickNoteCount,
@@ -322,9 +323,10 @@ export function recentReviewTimeLabel(record: ReviewRecord): string {
 }
 
 export function recentReviewTitle(record: ReviewRecord): string {
-	if (record.kind === 'month' && record.title === '月度复盘') return `${Number(record.period.slice(5))} 月复盘`;
-	if (record.kind === 'year' && record.title === '年度复盘') return `${record.period} 年度复盘`;
-	return record.title;
+	const title = reviewDisplayTitle(record.kind, record.title);
+	if (record.kind === 'month' && title === reviewDisplayLabel('month')) return `${Number(record.period.slice(5))} 月复盘`;
+	if (record.kind === 'year' && title === reviewDisplayLabel('year')) return `${record.period} 年复盘`;
+	return title;
 }
 
 function searchSnippet(text: string, query: string): string {

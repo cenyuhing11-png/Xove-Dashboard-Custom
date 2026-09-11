@@ -17,6 +17,7 @@ const dashboardView = readFileSync(new URL('../views/DashboardView.ts', import.m
 const projectView = readFileSync(new URL('../views/ProjectView.ts', import.meta.url), 'utf8');
 const miniCalendar = readFileSync(new URL('../components/timeTrace/TimeTraceMiniCalendar.ts', import.meta.url), 'utf8');
 const timeTrace = readFileSync(new URL('./timeTrace.ts', import.meta.url), 'utf8');
+const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
 
 test('global navigation names time trace directly after home', () => assert.match(shell, /label: '首页'[\s\S]*label: '时迹'[\s\S]*label: '进程'/));
 test('plan has a dedicated top-level view', () => assert.match(view, /PLAN_VIEW = 'xove-dashboard-custom-plan-workspace'/));
@@ -190,6 +191,25 @@ test('shared time-trace header owns one responsive-safe width padding and divide
 	assert.match(rule, /padding:\s*8px 10px/);
 	assert.match(rule, /border-bottom:\s*1px solid var\(--ad-line\)/);
 	assert.match(rule, /box-sizing:\s*border-box/);
+	assert.match(rule, /display:\s*flex/);
+	assert.match(rule, /align-items:\s*center/);
+	assert.match(rule, /block-size:\s*33px/);
+});
+
+test('journal tools fit the shared desktop header and wrap only in the existing narrow breakpoint', () => {
+	const toolRule = css.match(/\.dashboard-plugin button\.mx-journal-review-tool\s*\{([^}]+)\}/)?.[1] ?? '';
+	assert.match(toolRule, /height:\s*16px/);
+	assert.match(toolRule, /line-height:\s*16px/);
+	assert.match(css, /\.dashboard-plugin button\.mx-journal-review-mode\s*\{[^}]*min-height:\s*26px;[^}]*padding:\s*3px 7px/);
+	assert.match(css, /\.mx-journal-review-tools \{[^}]*align-items: center;[^}]*margin: 0 0 0 auto/);
+	assert.match(css, /@container \(max-width: 720px\)[\s\S]*?\.mx-time-trace-section-header \{ block-size: auto; \}[\s\S]*?\.mx-journal-review-toolbar \{ flex-wrap: wrap; \}/);
+});
+
+test('all time-trace bodies start at the established ten-pixel first-layer gap without width changes', () => {
+	assert.match(css, /\.po-kanban \{[^}]*padding: 10px/);
+	assert.match(css, /\.po-cal \{[^}]*padding: 10px/);
+	assert.match(css, /\.mx-long-term-list \{[^}]*padding: 10px/);
+	assert.match(css, /\.mx-journal-review-content \{[^}]*max-width: 1080px;[^}]*padding: 10px 12px 28px/);
 });
 test('month journals use an adaptive multiline cell while quick-note fallback stays compact', () => {
 	const month = view.match(/private renderCalendarMonth[\s\S]*?(?=\n\tprivate renderCalendarWeek)/)?.[0] ?? '';

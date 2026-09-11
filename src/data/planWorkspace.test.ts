@@ -33,6 +33,10 @@ test('workspace reads annual, quarterly and monthly sections without creating fi
 	values[planInfo('month', date).path] = '## 本月重点\n- M';
 	const result = await readPlanWorkspace(store(values), 2026, 9);
 	assert.deepEqual(result.annual.entries, ['A', 'B', 'C']); assert.deepEqual(result.quarterly.entries, ['Q1', 'Q2']); assert.deepEqual(result.monthly.entries, ['M']);
+	assert.equal(result.annual.title, '2026 年计划');
+	assert.equal(result.quarterly.title, '2026 Q3 季计划');
+	assert.equal(result.monthly.title, '2026 年 9 月计划');
+	assert.equal(result.weeks[0]!.title, 'W36 周计划');
 });
 test('quarter falls back to 季度重点', async () => { const date = new Date(2026, 8, 1, 12); const values = { [planInfo('quarter', date).path]: '## 季度重点\n- fallback' }; assert.deepEqual((await readPlanWorkspace(store(values), 2026, 9)).quarterly.entries, ['fallback']); });
 test('missing plans remain neutral read-only states', async () => { const result = await readPlanWorkspace(store({}), 2026, 9); assert.equal(result.annual.exists, false); assert.equal(result.monthly.entries.length, 0); assert.ok(result.weeks.every(week => !week.exists)); });
