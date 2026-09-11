@@ -14,8 +14,8 @@ import { processes } from '../data/processes';
 import { processContentTypeLabel, taskSourceTypeLabel } from '../data/processContentTypes';
 import { JOURNAL_ROOT, journalCalendarEntry, journalDateFromPath, journalInfo, readJournalTitle } from '../data/journal';
 import type { JournalCalendarEntry } from '../data/journal';
-import { dayReviewSections, journalReviewTarget, markdownReviewSections } from '../data/journalReview';
-import type { JournalReviewMode, MarkdownReviewSection } from '../data/journalReview';
+import { dayReviewSections, discoverReviewRecords, journalReviewTarget, markdownReviewSections, pastTodayReference, pastTodayReviewRecords, randomReviewRecord, recentReviewRecords, reviewRecordTimeLabel, searchReviewRecords, timeStateForReviewRecord } from '../data/journalReview';
+import type { JournalReviewMode, JournalReviewViewMode, MarkdownReviewSection, ReviewRecord } from '../data/journalReview';
 import { renderEmbeddedTaskCheckbox } from '../components/tasks/EmbeddedTaskCheckbox';
 import { scanLongTermPlans, setProcessLongTermPlan, updateLongTermPlanMarkdown } from '../data/longTermPlanVault';
 import { appendLongTermStage, assignLongTermProcessToStage, deleteLongTermStage, ensureLongTermStageIds, longTermPlanDetailMetadata, longTermPlansForMonth, longTermPlansForYear, moveLongTermStage, normalizeLongTermProcessRef, removeLongTermProcessFromStages, toggleLongTermStage, updateLongTermPlanDirections, updateLongTermStage } from '../data/longTermPlans';
@@ -57,6 +57,12 @@ export class PlanWorkspaceRenderer extends Component {
 	private mode: PlanWorkspaceMode = 'board';
 	private calendarMode: PlanCalendarMode = 'month';
 	private reviewMode: JournalReviewMode = 'review';
+	private reviewView: JournalReviewViewMode = 'record';
+	private reviewSearchQuery = '';
+	private reviewRecentLimit = 12;
+	private reviewSearchTimer?: number;
+	private reviewFocusTimer?: number;
+	private reviewActionMessage = '';
 	private sourceLabels = new Map<string, string>();
 	private workspaceEl?: HTMLElement;
 	private generation = 0;
@@ -70,7 +76,7 @@ export class PlanWorkspaceRenderer extends Component {
 	private narrativeDisclosure = new NarrativeDisclosure();
 
 	constructor(public readonly app: App, private plugin: Dashboard, private navigation?: { openProcess(process: Process): void; openGantt(process: Process): void; locateProcess?(process: Process): void }) { super(); }
-	getState() { return { selectedYear: this.timeState.visible.year, selectedMonth: this.timeState.visible.month, mode: this.mode, calendarMode: this.calendarMode, reviewMode: this.reviewMode, selectedDate: dateKey(focusDate(this.timeState)), selectedLongTermPlanId: this.selectedLongTermPlanId }; }
+	getState() { return { selectedYear: this.timeState.visible.year, selectedMonth: this.timeState.visible.month, mode: this.mode, calendarMode: this.calendarMode, reviewMode: this.reviewMode, reviewView: this.reviewView, selectedDate: dateKey(focusDate(this.timeState)), selectedLongTermPlanId: this.selectedLongTermPlanId }; }
 	async setState(state: Record<string, unknown>): Promise<void> {
 		const year = Number.isInteger(state.selectedYear) && Number(state.selectedYear) > 0 ? Number(state.selectedYear) : this.timeState.visible.year;
 		const month = Number.isInteger(state.selectedMonth) && Number(state.selectedMonth) >= 1 && Number(state.selectedMonth) <= 12 ? Number(state.selectedMonth) : this.timeState.visible.month;
@@ -79,6 +85,7 @@ export class PlanWorkspaceRenderer extends Component {
 		if (typeof state.selectedLongTermPlanId === 'string') this.selectedLongTermPlanId = state.selectedLongTermPlanId;
 		if (state.calendarMode === 'month' || state.calendarMode === 'week') this.calendarMode = state.calendarMode;
 		if (state.reviewMode === 'review' || state.reviewMode === 'compare') this.reviewMode = state.reviewMode;
+		if (state.reviewView === 'record' || state.reviewView === 'recent' || state.reviewView === 'search' || state.reviewView === 'pastToday') this.reviewView = state.reviewView;
 		if (typeof state.selectedDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(state.selectedDate)) {
 			const selected = parseDateKey(state.selectedDate);
 			if (selected) this.timeState = selectDay(this.timeState, selected);
@@ -109,8 +116,15 @@ export class PlanWorkspaceRenderer extends Component {
 		await this.plugin.embeddedTasks.ready;
 		await this.renderPlanContent();
 	}
+	private clearReviewTimers(): void {
+		if (this.reviewSearchTimer !== undefined) window.clearTimeout(this.reviewSearchTimer);
+		if (this.reviewFocusTimer !== undefined) window.clearTimeout(this.reviewFocusTimer);
+		this.reviewSearchTimer = undefined;
+		this.reviewFocusTimer = undefined;
+	}
 	deactivate(): void {
 		this.active = false;
+		this.clearReviewTimers();
 		this.miniCalendarDisposer?.(); this.miniCalendarDisposer = undefined;
 		this.quickTasks?.close(); this.quickTasks = undefined;
 		this.generation++;
@@ -134,6 +148,7 @@ export class PlanWorkspaceRenderer extends Component {
 
 	private setTimeState(state: TimeTraceState): void {
 		this.timeState = state;
+		if (this.mode === 'review') { this.clearReviewTimers(); this.reviewView = 'record'; this.reviewActionMessage = ''; }
 		if (state.focus.kind === 'month') this.calendarMode = 'month';
 		if (state.focus.kind === 'week') this.calendarMode = 'week';
 		void this.renderPlanContent();
@@ -276,30 +291,129 @@ export class PlanWorkspaceRenderer extends Component {
 		}
 	}
 
+	private openReviewRecord(record: ReviewRecord): void {
+		this.clearReviewTimers();
+		this.timeState = timeStateForReviewRecord(this.timeState, record);
+		this.reviewView = 'record';
+		this.reviewActionMessage = '';
+		void this.renderPlanContent();
+	}
+
+	private renderReviewResultRow(parent: HTMLElement, record: ReviewRecord, snippet = '', compactDay = false, timeLabel?: string): void {
+		const row = parent.createDiv({ cls: 'mx-journal-review-result', attr: { role: 'button', tabindex: '0' } });
+		row.createDiv({ cls: 'mx-journal-review-result-time', text: timeLabel ?? reviewRecordTimeLabel(record, compactDay) });
+		const body = row.createDiv({ cls: 'mx-journal-review-result-body' });
+		if (record.title) body.createDiv({ cls: 'mx-journal-review-result-title', text: record.title });
+		body.createDiv({ cls: 'ad-modal-hint mx-journal-review-result-type', text: record.label });
+		if (snippet) body.createDiv({ cls: 'mx-journal-review-result-snippet', text: snippet });
+		const open = () => this.openReviewRecord(record);
+		row.onclick = open;
+		row.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); } };
+	}
+
+	private renderRecentReviews(content: HTMLElement, records: ReviewRecord[]): void {
+		content.createEl('h1', { cls: 'ad-modal-title mx-journal-review-tool-title', text: '最近记录' });
+		const list = content.createDiv({ cls: 'mx-journal-review-results' });
+		const visible = recentReviewRecords(records, this.reviewRecentLimit);
+		if (!visible.length) { list.createDiv({ cls: 'po-empty mx-journal-review-tool-empty', text: '暂无记录' }); return; }
+		for (const record of visible) this.renderReviewResultRow(list, record, '', true);
+		if (records.length > visible.length) {
+			const more = content.createEl('button', { cls: 'mx-inline-action mx-journal-review-more', text: '显示更多', attr: { type: 'button' } });
+			more.onclick = () => { this.reviewRecentLimit += 12; void this.renderPlanContent(); };
+		}
+	}
+
+	private renderSearchResults(parent: HTMLElement, records: ReviewRecord[], query: string): void {
+		parent.empty();
+		if (!query.trim()) return;
+		const results = searchReviewRecords(records, query);
+		if (!results.length) { parent.createDiv({ cls: 'po-empty mx-journal-review-tool-empty', text: '没有找到相关记录' }); return; }
+		for (const result of results) this.renderReviewResultRow(parent, result.record, result.snippet);
+	}
+
+	private renderReviewSearch(content: HTMLElement, records: ReviewRecord[]): void {
+		content.createEl('h1', { cls: 'ad-modal-title mx-journal-review-tool-title', text: '搜索日记与复盘' });
+		const input = content.createEl('input', { cls: 'ad-modal-input mx-journal-review-search', attr: { type: 'search', placeholder: '搜索过去写过的内容……', 'aria-label': '搜索日记与复盘' } });
+		input.value = this.reviewSearchQuery;
+		const results = content.createDiv({ cls: 'mx-journal-review-results' });
+		const update = (query: string) => this.renderSearchResults(results, records, query);
+		update(this.reviewSearchQuery);
+		input.oninput = () => {
+			if (this.reviewSearchTimer !== undefined) window.clearTimeout(this.reviewSearchTimer);
+			this.reviewSearchTimer = window.setTimeout(() => {
+				this.reviewSearchTimer = undefined;
+				this.reviewSearchQuery = input.value;
+				update(this.reviewSearchQuery);
+			}, 200);
+		};
+		if (this.reviewFocusTimer !== undefined) window.clearTimeout(this.reviewFocusTimer);
+		this.reviewFocusTimer = window.setTimeout(() => { this.reviewFocusTimer = undefined; if (input.isConnected) input.focus(); }, 0);
+	}
+
+	private renderPastTodayReviews(content: HTMLElement, records: ReviewRecord[]): void {
+		const reference = pastTodayReference(this.timeState.focus, new Date());
+		content.createEl('h1', { cls: 'ad-modal-title mx-journal-review-tool-title', text: '过去的今天' });
+		content.createDiv({ cls: 'ad-modal-hint mx-journal-review-tool-context', text: `${reference.getMonth() + 1} 月 ${reference.getDate()} 日` });
+		const list = content.createDiv({ cls: 'mx-journal-review-results' });
+		const recordsForDay = pastTodayReviewRecords(records, reference);
+		if (!recordsForDay.length) { list.createDiv({ cls: 'po-empty mx-journal-review-tool-empty', text: '过去的这一天暂无记录' }); return; }
+		for (const record of recordsForDay) this.renderReviewResultRow(list, record, record.previewText, false, `${record.period.slice(0, 4)} 年`);
+	}
+
+	private renderReviewToolbar(toolbar: HTMLElement, records: ReviewRecord[]): void {
+		toolbar.createSpan({ cls: 'mx-plan-title', text: '日记回顾' });
+		const tools = toolbar.createDiv({ cls: 'mx-journal-review-tools' });
+		for (const [mode, label] of [['recent', '最近记录'], ['search', '搜索'], ['pastToday', '过去的今天']] as const) {
+			const button = tools.createEl('button', { cls: `mx-journal-review-tool${this.reviewView === mode ? ' is-active' : ''}`, text: label, attr: { type: 'button', 'aria-pressed': String(this.reviewView === mode) } });
+			button.onclick = () => {
+				this.clearReviewTimers();
+				this.reviewView = mode;
+				this.reviewActionMessage = '';
+				if (mode === 'recent') this.reviewRecentLimit = 12;
+				void this.renderPlanContent();
+			};
+			if (mode === 'search') {
+				const random = tools.createEl('button', { cls: 'mx-journal-review-tool', text: '随机回顾', attr: { type: 'button' } });
+				random.onclick = () => {
+					const record = randomReviewRecord(records);
+					if (record) this.openReviewRecord(record);
+					else { this.reviewView = 'record'; this.reviewActionMessage = '暂无可随机回顾的记录'; void this.renderPlanContent(); }
+				};
+			}
+		}
+	}
+
 	private async renderReview(main: HTMLElement, token: number): Promise<void> {
+		const records = await discoverReviewRecords(this.app);
+		if (token !== this.generation || !main.isConnected) return;
+		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar mx-journal-review-toolbar' });
+		this.renderReviewToolbar(toolbar, records);
+		const content = main.createDiv({ cls: 'mx-journal-review-content' });
+		if (this.reviewView === 'recent') { this.renderRecentReviews(content, records); return; }
+		if (this.reviewView === 'search') { this.renderReviewSearch(content, records); return; }
+		if (this.reviewView === 'pastToday') { this.renderPastTodayReviews(content, records); return; }
+
 		const target = journalReviewTarget(this.timeState.focus);
 		const reviewFile = this.existingFile(target.reviewPaths);
 		const planFile = target.planPath ? this.existingFile([target.planPath]) : undefined;
-		const toolbar = main.createDiv({ cls: 'po-toolbar mx-plan-toolbar mx-journal-review-toolbar' });
-		toolbar.createSpan({ cls: 'mx-plan-title', text: '日记回顾' });
-		if (target.kind !== 'day') {
-			const modes = toolbar.createDiv({ cls: 'po-cal__seg mx-journal-review-modes' });
-			for (const [mode, label] of [['review', '复盘'], ['compare', '计划 ↔ 复盘']] as const) {
-				const button = modes.createEl('button', { cls: `po-cal__seg-btn${this.reviewMode === mode ? ' is-active' : ''}`, text: label });
-				button.onclick = () => { this.reviewMode = mode; void this.renderPlanContent(); };
-			}
-		}
-		if (reviewFile) {
-			const edit = toolbar.createEl('button', { cls: 'mx-inline-action mx-journal-review-edit', text: '编辑原文', attr: { type: 'button' } });
-			edit.onclick = () => this.openSource(reviewFile);
-		}
-
-		const content = main.createDiv({ cls: 'mx-journal-review-content' });
+		if (this.reviewActionMessage) content.createDiv({ cls: 'ad-modal-hint mx-journal-review-action-message', text: this.reviewActionMessage });
 		const record = content.createDiv({ cls: 'mx-journal-review-record-head' });
 		record.createEl('h1', { cls: 'ad-modal-title', text: target.primary });
 		const dayTitle = target.kind === 'day' && reviewFile ? readJournalTitle(this.app, reviewFile) : '';
 		if (dayTitle) record.createDiv({ cls: 'mx-journal-review-record-title', text: dayTitle });
 		if (target.secondary) record.createDiv({ cls: 'ad-modal-hint', text: target.secondary });
+		const controls = content.createDiv({ cls: 'mx-journal-review-record-controls' });
+		if (target.kind !== 'day') {
+			const modes = controls.createDiv({ cls: 'mx-journal-review-modes', attr: { role: 'tablist', 'aria-label': '阅读模式' } });
+			for (const [mode, label] of [['review', '复盘'], ['compare', '计划 ↔ 复盘']] as const) {
+				const button = modes.createEl('button', { cls: `mx-journal-review-mode${this.reviewMode === mode ? ' is-active' : ''}`, text: label, attr: { type: 'button', role: 'tab', 'aria-selected': String(this.reviewMode === mode) } });
+				button.onclick = () => { this.reviewMode = mode; void this.renderPlanContent(); };
+			}
+		}
+		if (reviewFile) {
+			const edit = controls.createEl('button', { cls: 'mx-inline-action mx-journal-review-edit', text: '编辑原文', attr: { type: 'button' } });
+			edit.onclick = () => this.openSource(reviewFile);
+		}
 		if (token !== this.generation || !main.isConnected) return;
 
 		if (target.kind !== 'day' && this.reviewMode === 'compare') {

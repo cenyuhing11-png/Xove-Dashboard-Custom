@@ -1956,9 +1956,34 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
 .mx-plan-container .po-kanban__col.is-time-focus { border-color: var(--ad-text-mute); background: var(--ad-h1); }
 .mx-plan-empty { min-height: 74px; padding: 18px 8px; text-align: center; }
 .mx-journal-review-toolbar { gap: 8px; }
-.mx-journal-review-modes { margin-left: 8px; }
+.mx-journal-review-tools { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.dashboard-plugin button.mx-journal-review-tool,
+.dashboard-plugin button.mx-journal-review-mode { min-height: 26px; padding: 3px 7px; border: 0; border-radius: var(--ad-r1); background: transparent; box-shadow: none; color: var(--ad-text-mute); font-family: var(--ad-font); font-size: 11px; font-weight: 500; }
+.dashboard-plugin button.mx-journal-review-tool:hover,
+.dashboard-plugin button.mx-journal-review-mode:hover { background: var(--ad-h1); color: var(--ad-text); }
+.dashboard-plugin button.mx-journal-review-tool.is-active { color: var(--ad-text); }
+.mx-journal-review-record-controls { display: flex; align-items: center; gap: 8px; min-height: 31px; padding: 5px 0 3px; border-bottom: 1px solid var(--ad-line); }
+.mx-journal-review-modes { display: flex; align-items: center; gap: 4px; }
+.dashboard-plugin button.mx-journal-review-mode { position: relative; border-radius: 0; }
+.dashboard-plugin button.mx-journal-review-mode.is-active { color: var(--ad-text); }
+.dashboard-plugin button.mx-journal-review-mode.is-active::after { content: ''; position: absolute; right: 7px; bottom: 0; left: 7px; height: 1px; background: var(--ad-text-mute); }
 .mx-journal-review-edit { margin-left: auto; }
 .mx-journal-review-content { width: 100%; max-width: 1080px; min-width: 0; margin: 0 auto; padding: 4px 12px 28px; box-sizing: border-box; }
+.mx-journal-review-tool-title { margin: 12px 0 3px; font-size: 18px; line-height: 1.45; }
+.mx-journal-review-tool-context { margin: 0 0 5px; }
+.mx-journal-review-search { width: min(100%, 560px); margin: 9px 0 7px; box-sizing: border-box; }
+.mx-journal-review-results { display: flex; flex-direction: column; min-width: 0; }
+.mx-journal-review-result { display: grid; grid-template-columns: minmax(72px, 92px) minmax(0, 1fr); gap: 8px; padding: 9px 4px; border-bottom: 1px solid var(--ad-line); cursor: pointer; }
+.mx-journal-review-result:hover,
+.mx-journal-review-result:focus-visible { background: var(--ad-h1); outline: none; }
+.mx-journal-review-result-time { padding-top: 1px; color: var(--ad-text-dim); font-family: var(--ad-font-mono); font-size: 10px; line-height: 1.5; }
+.mx-journal-review-result-body { min-width: 0; }
+.mx-journal-review-result-title { overflow: hidden; color: var(--ad-text); font-size: 12px; font-weight: 600; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.mx-journal-review-result-type { margin: 1px 0 0; }
+.mx-journal-review-result-snippet { display: -webkit-box; margin-top: 3px; overflow: hidden; color: var(--ad-text-mute); font-size: 11px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.mx-journal-review-tool-empty { min-height: 0; padding: 22px 8px; }
+.mx-journal-review-more { display: block; margin: 9px auto 0; }
+.mx-journal-review-action-message { margin: 6px 0 0; }
 .mx-journal-review-record-head { padding: 10px 0 12px; border-bottom: 1px solid var(--ad-line); }
 .mx-journal-review-record-head > .ad-modal-title { margin: 0; font-size: 18px; line-height: 1.45; }
 .mx-journal-review-record-title { margin-top: 3px; color: var(--ad-text); font-size: 13px; font-weight: 600; }
@@ -2145,7 +2170,9 @@ input.mx-embedded-task-check:focus-visible + .mx-embedded-task-check-visual { ou
   .mx-plan-container { flex-direction: column; min-height: 0; }
   .mx-plan-container .po-sidebar { width: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--ad-line); }
   .mx-journal-review-toolbar { flex-wrap: wrap; }
-  .mx-journal-review-modes { order: 3; width: 100%; margin-left: 0; }
+  .mx-journal-review-tools { flex-wrap: wrap; width: 100%; margin-left: 0; }
+  .mx-journal-review-record-controls { flex-wrap: wrap; }
+  .mx-journal-review-result { grid-template-columns: minmax(64px, 80px) minmax(0, 1fr); }
   .mx-journal-review-content { padding-right: 8px; padding-left: 8px; }
   .mx-journal-review-compare { grid-template-columns: minmax(0, 1fr); }
   .mx-journal-review-pane.is-plan { padding-right: 0; }

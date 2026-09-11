@@ -292,8 +292,9 @@ test('mini calendar selection today and markers remain visually distinct and neu
 });
 test('journal review reads the selected period while the shared calendar stays mounted', () => {
 	assert.match(view, /else await this\.renderReview\(main, token\)/);
-	assert.match(view, /private async renderReview[\s\S]*journalReviewTarget\(this\.timeState\.focus\)[\s\S]*text: '日记回顾'/);
-	assert.equal(view.includes('最近日记'), false); assert.equal(view.includes('过去的今天'), false);
+	assert.match(view, /private async renderReview[\s\S]*text: '日记回顾'[\s\S]*journalReviewTarget\(this\.timeState\.focus\)/);
+	assert.equal(view.includes('最近日记'), false);
+	assert.equal(view.includes('过去的今天'), true);
 });
 test('marker semantics remain section-specific and read only', () => {
 	const resolver = view.match(/private markerResolver[\s\S]*?(?=\n\tprivate renderSidebar)/)?.[0] ?? '';

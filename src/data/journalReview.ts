@@ -1,10 +1,12 @@
-import { journalInfo } from './journal.ts';
+import type { App } from 'obsidian';
+import { journalCalendarEntry, journalEntry, journalFrontmatterTitle, journalInfo } from './journal.ts';
 import type { JournalKind } from './journal.ts';
 import { planInfo } from './planning.ts';
-import type { TimeFocus } from './timeTrace.ts';
+import type { TimeFocus, TimeTraceState } from './timeTrace.ts';
 import { parseDateKey } from './timeTrace.ts';
 
 export type JournalReviewMode = 'review' | 'compare';
+export type JournalReviewViewMode = 'record' | 'recent' | 'search' | 'pastToday';
 
 export interface JournalReviewTarget {
 	kind: JournalKind;
@@ -20,6 +22,32 @@ export interface JournalReviewTarget {
 export interface MarkdownReviewSection {
 	title: string;
 	markdown: string;
+}
+
+export interface ReviewRecordSource {
+	path: string;
+	basename: string;
+	markdown: string;
+	properties: unknown;
+}
+
+export interface ReviewRecord {
+	kind: JournalKind;
+	period: string;
+	path: string;
+	logicalDate: string;
+	order: number;
+	focus: TimeFocus;
+	title: string;
+	label: string;
+	searchableText: string;
+	previewText: string;
+	quickNoteCount: number;
+}
+
+export interface ReviewSearchResult {
+	record: ReviewRecord;
+	snippet: string;
 }
 
 function atNoon(date: Date): Date {
@@ -126,4 +154,147 @@ export function markdownReviewSections(markdown: string, allowed?: readonly stri
 
 export function dayReviewSections(markdown: string): MarkdownReviewSection[] {
 	return markdownReviewSections(markdown, ['随时记', '今日日记', '今日回看']);
+}
+
+function dateKeyValue(date: Date): string {
+	return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+/** Search text is deliberately Markdown-light and never includes frontmatter. */
+export function plainReviewText(markdown: string): string {
+	return markdown
+		.replace(/<!--[\s\S]*?-->/g, ' ')
+		.replace(/^ {0,3}(?:`{3,}|~{3,}).*$/gm, ' ')
+		.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+		.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+		.replace(/!?\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_match, target: string, alias?: string) => alias ?? target)
+		.replace(/^\s*#{1,6}\s+/gm, '')
+		.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/gm, '')
+		.replace(/[*_`~>|]+/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+function sectionEntryCount(markdown: string): number {
+	let count = 0;
+	let inParagraph = false;
+	for (const raw of markdown.split(/\r?\n/)) {
+		const line = plainReviewText(raw);
+		if (!line) { inParagraph = false; continue; }
+		if (/^\s*(?:[-*+]\s+|\d+[.)]\s+)/.test(raw)) { count++; inParagraph = false; continue; }
+		if (!inParagraph) { count++; inParagraph = true; }
+	}
+	return count;
+}
+
+function recordFocus(kind: JournalKind, period: string, date: Date): TimeFocus {
+	if (kind === 'day') return { kind: 'day', date: period };
+	if (kind === 'week') return { kind: 'week', isoYear: Number(period.slice(0, 4)), isoWeek: Number(period.slice(6)), anchorDate: dateKeyValue(date) };
+	if (kind === 'month') return { kind: 'month', year: Number(period.slice(0, 4)), month: Number(period.slice(5)) };
+	return { kind: 'year', year: Number(period) };
+}
+
+/** Build one read-only record from an existing, metadata-validated journal file. */
+export function reviewRecordFromSource(source: ReviewRecordSource): ReviewRecord | null {
+	const entry = journalEntry(source.path, source.basename, source.properties);
+	if (!entry) return null;
+	const date = new Date(entry.order);
+	const sections = entry.kind === 'day' ? dayReviewSections(source.markdown) : markdownReviewSections(source.markdown);
+	const bodies = sections.map(section => plainReviewText(section.markdown)).filter(Boolean);
+	const actualDayTitle = entry.kind === 'day'
+		? (journalFrontmatterTitle(source.properties) || (() => {
+			const calendar = journalCalendarEntry(source.path, source.markdown, source.properties);
+			return calendar?.titleSource === 'legacy-h1' ? calendar.title : '';
+		})())
+		: '';
+	const quickNotes = entry.kind === 'day' ? sections.find(section => section.title === '随时记') : undefined;
+	const quickNoteCount = quickNotes ? sectionEntryCount(quickNotes.markdown) : 0;
+	const title = entry.kind === 'day'
+		? actualDayTitle || (quickNoteCount ? `随时记 · ${quickNoteCount} 条` : '')
+		: entry.kind === 'week' ? `${entry.period} 周记` : entry.kind === 'month' ? '月度复盘' : '年度复盘';
+	const searchableText = [actualDayTitle, ...bodies].filter(Boolean).join(' ').trim();
+	return {
+		kind: entry.kind,
+		period: entry.period,
+		path: entry.path,
+		logicalDate: dateKeyValue(date),
+		order: entry.order,
+		focus: recordFocus(entry.kind, entry.period, date),
+		title,
+		label: entry.label,
+		searchableText,
+		previewText: bodies.join(' ').slice(0, 180),
+		quickNoteCount,
+	};
+}
+
+export function sortReviewRecords(records: readonly ReviewRecord[]): ReviewRecord[] {
+	return [...records].sort((a, b) => b.order - a.order || a.path.localeCompare(b.path, 'zh-CN'));
+}
+
+/** One transient Vault traversal shared by recent/search/random/past-today. */
+export async function discoverReviewRecords(app: App): Promise<ReviewRecord[]> {
+	const records: ReviewRecord[] = [];
+	for (const file of app.vault.getMarkdownFiles()) {
+		const properties = app.metadataCache.getFileCache(file)?.frontmatter;
+		if (!journalEntry(file.path, file.basename, properties)) continue;
+		try {
+			const markdown = await app.vault.cachedRead(file);
+			const record = reviewRecordFromSource({ path: file.path, basename: file.basename, markdown, properties });
+			if (record) records.push(record);
+		} catch { /* A temporarily unavailable iCloud file is simply absent from this view. */ }
+	}
+	return sortReviewRecords(records);
+}
+
+export function recentReviewRecords(records: readonly ReviewRecord[], limit = 12): ReviewRecord[] {
+	return sortReviewRecords(records).slice(0, Math.max(0, limit));
+}
+
+function searchSnippet(text: string, query: string): string {
+	const lower = text.toLocaleLowerCase();
+	const index = lower.indexOf(query.toLocaleLowerCase());
+	if (index < 0) return '';
+	const start = Math.max(0, index - 28);
+	const end = Math.min(text.length, index + query.length + 48);
+	return `${start ? '……' : ''}${text.slice(start, end).trim()}${end < text.length ? '……' : ''}`;
+}
+
+export function searchReviewRecords(records: readonly ReviewRecord[], rawQuery: string): ReviewSearchResult[] {
+	const query = rawQuery.trim();
+	if (!query) return [];
+	const needle = query.toLocaleLowerCase();
+	return sortReviewRecords(records).flatMap(record => {
+		if (!record.searchableText.toLocaleLowerCase().includes(needle)) return [];
+		return [{ record, snippet: searchSnippet(record.searchableText, query) }];
+	});
+}
+
+export function randomReviewRecord(records: readonly ReviewRecord[], random = Math.random): ReviewRecord | undefined {
+	const substantive = records.filter(record => !!record.searchableText.trim());
+	if (!substantive.length) return undefined;
+	const index = Math.min(substantive.length - 1, Math.max(0, Math.floor(random() * substantive.length)));
+	return substantive[index];
+}
+
+export function pastTodayReference(focus: TimeFocus, now = new Date()): Date {
+	return focus.kind === 'day' ? (parseDateKey(focus.date) ?? atNoon(now)) : atNoon(now);
+}
+
+export function pastTodayReviewRecords(records: readonly ReviewRecord[], reference: Date): ReviewRecord[] {
+	const monthDay = dateKeyValue(reference).slice(5);
+	const year = reference.getFullYear();
+	return sortReviewRecords(records.filter(record => record.kind === 'day' && record.period.slice(5) === monthDay && Number(record.period.slice(0, 4)) < year));
+}
+
+export function reviewRecordTimeLabel(record: ReviewRecord, compactDay = false): string {
+	if (record.kind === 'day') return compactDay ? record.period.slice(5).replace('-', '.') : record.period.replaceAll('-', '.');
+	if (record.kind === 'week') return record.period;
+	if (record.kind === 'month') return `${Number(record.period.slice(0, 4))} 年 ${Number(record.period.slice(5))} 月`;
+	return `${record.period} 年`;
+}
+
+export function timeStateForReviewRecord(state: TimeTraceState, record: ReviewRecord): TimeTraceState {
+	const date = parseDateKey(record.logicalDate) ?? new Date(record.order);
+	return { visible: { year: date.getFullYear(), month: date.getMonth() + 1 }, focus: record.focus };
 }
