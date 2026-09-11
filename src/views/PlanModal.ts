@@ -1,6 +1,6 @@
 import { Modal, Notice, TFile } from 'obsidian';
 import type { App } from 'obsidian';
-import { ensurePlan, isoWeek, planInfo } from '../data/planning';
+import { ensurePlan, existingPlanPath, isoWeek } from '../data/planning';
 import type { PlanPeriod } from '../data/planning';
 import { createLongTermPlan, longTermPlanPath } from '../data/longTermPlans';
 import type { NewLongTermPlan } from '../data/longTermPlans';
@@ -56,7 +56,7 @@ export class PlanModal extends Modal {
 				else if(this.type==='quarter') date=new Date(Number(fields.year!.value),(Number(fields.quarter!.value)-1)*3,1,12);
 				else if(this.type==='month'){const [year,month]=fields.month!.value.split('-').map(Number);date=new Date(year!,month!-1,1,12);}
 				else {const match=/^(\d{4})-W(\d{2})$/.exec(fields.week!.value);if(!match)throw new Error('请选择有效周');date=isoWeekDate(Number(match[1]),Number(match[2]));}
-				const info=planInfo(this.type,date); if(files.kind(info.path)==='file'){path=info.path;new Notice(`该${LABELS.find(([type])=>type===this.type)?.[1]}已存在，已打开现有计划`);} else path=await ensurePlan(files,this.type,date);
+				const existing=existingPlanPath(files,this.type,date); if(existing){path=existing;new Notice(`该${LABELS.find(([type])=>type===this.type)?.[1]}已存在，已打开现有计划`);} else path=await ensurePlan(files,this.type,date);
 			}
 			const file=this.app.vault.getAbstractFileByPath(path); this.close(); if(file instanceof TFile) await this.app.workspace.getLeaf('tab').openFile(file);
 		}catch(error){new Notice(String(error));}finally{this.saving=false;button.disabled=false;}

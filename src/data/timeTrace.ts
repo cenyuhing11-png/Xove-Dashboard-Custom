@@ -17,7 +17,7 @@ export const YEAR_PICKER_PAGE_SIZE = 12;
 export type TimeTraceMarkerMode = 'cycle' | 'longTerm' | 'calendar' | 'review';
 export interface TimeTraceMarkerSources {
 	planExists(period: 'year' | 'quarter' | 'month' | 'week', date: Date): boolean;
-	journalExists(period: 'year' | 'month' | 'week', date: Date): boolean;
+	journalExists(period: 'year' | 'quarter' | 'month' | 'week', date: Date): boolean;
 	dailyJournalExists(date: string): boolean;
 }
 
@@ -76,8 +76,8 @@ export function hasTimeTraceMarker(mode: TimeTraceMarkerMode, focus: TimeFocus, 
 	if (mode === 'longTerm') return false;
 	if (focus.kind === 'day') return (mode === 'calendar' || mode === 'review') && sources.dailyJournalExists(focus.date);
 	if (focus.kind === 'quarter') {
-		if (mode !== 'cycle') return false;
-		return sources.planExists('quarter', quarterStartDate(focus.year, focus.quarter));
+		const date = quarterStartDate(focus.year, focus.quarter);
+		return mode === 'cycle' ? sources.planExists('quarter', date) : mode === 'review' ? sources.journalExists('quarter', date) : false;
 	}
 	if (mode === 'calendar') return false;
 	const date = focus.kind === 'week'

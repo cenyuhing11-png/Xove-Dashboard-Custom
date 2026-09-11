@@ -1,7 +1,7 @@
-import type { App } from 'obsidian';
-import { ensureJournal, journalCalendarEntry, journalEntry, journalFrontmatterTitle, journalInfo } from './journal.ts';
+import type { App, TFile } from 'obsidian';
+import { ensureJournal, journalCalendarEntry, journalEntry, journalFrontmatterTitle, journalPaths } from './journal.ts';
 import type { JournalKind } from './journal.ts';
-import { isoWeek, planInfo } from './planning.ts';
+import { isoWeek, planPaths } from './planning.ts';
 import type { PlanFiles } from './planning.ts';
 import type { TimeFocus, TimeTraceState } from './timeTrace.ts';
 import { parseDateKey } from './timeTrace.ts';
@@ -12,12 +12,13 @@ export type JournalReviewMode = 'review' | 'compare';
 export type JournalReviewViewMode = 'record' | 'recent' | 'search' | 'pastToday';
 
 export interface JournalReviewTarget {
-	kind: JournalKind | 'quarter';
+	kind: JournalKind;
 	date: Date;
 	primary: string;
 	secondary?: string;
 	reviewPaths: string[];
 	planPath?: string;
+	planPaths?: string[];
 	planLabel?: string;
 	reviewLabel: string;
 }
@@ -93,10 +94,7 @@ function dottedDate(date: Date): string {
 }
 
 function reviewCandidates(kind: JournalKind, date: Date): string[] {
-	const canonical = journalInfo(kind, date);
-	return kind === 'day'
-		? [canonical.path, `${canonical.folder}/${canonical.period} 日记.md`]
-		: [canonical.path];
+	return journalPaths(kind, date);
 }
 
 export function journalReviewTarget(focus: TimeFocus): JournalReviewTarget {
@@ -115,7 +113,7 @@ export function journalReviewTarget(focus: TimeFocus): JournalReviewTarget {
 			primary: `${focus.isoYear}-W${String(focus.isoWeek).padStart(2, '0')} ${reviewDisplayLabel('week')}`,
 			secondary: `${dottedDate(date)} — ${dottedDate(end)}`,
 			reviewPaths: reviewCandidates('week', date),
-			planPath: planInfo('week', date).path, planLabel: planDisplayLabel('week'), reviewLabel: reviewDisplayLabel('week'),
+			planPath: planPaths('week', date)[0], planPaths: planPaths('week', date), planLabel: planDisplayLabel('week'), reviewLabel: reviewDisplayLabel('week'),
 		};
 	}
 	if (focus.kind === 'month') {
@@ -123,21 +121,22 @@ export function journalReviewTarget(focus: TimeFocus): JournalReviewTarget {
 			kind: 'month', date,
 			primary: `${focus.year} 年 ${focus.month} 月`, secondary: reviewDisplayLabel('month'),
 			reviewPaths: reviewCandidates('month', date),
-			planPath: planInfo('month', date).path, planLabel: planDisplayLabel('month'), reviewLabel: reviewDisplayLabel('month'),
+			planPath: planPaths('month', date)[0], planPaths: planPaths('month', date), planLabel: planDisplayLabel('month'), reviewLabel: reviewDisplayLabel('month'),
 		};
 	}
 	if (focus.kind === 'quarter') {
 		return {
 			kind: 'quarter', date,
 			primary: `${focus.year} Q${focus.quarter}`, secondary: '季复盘',
-			reviewPaths: [], reviewLabel: '季复盘',
+			reviewPaths: reviewCandidates('quarter', date),
+			planPath: planPaths('quarter', date)[0], planPaths: planPaths('quarter', date), planLabel: planDisplayLabel('quarter'), reviewLabel: reviewDisplayLabel('quarter'),
 		};
 	}
 	return {
 		kind: 'year', date,
 		primary: `${focus.year} 年`, secondary: reviewDisplayLabel('year'),
 		reviewPaths: reviewCandidates('year', date),
-		planPath: planInfo('year', date).path, planLabel: planDisplayLabel('year'), reviewLabel: reviewDisplayLabel('year'),
+		planPath: planPaths('year', date)[0], planPaths: planPaths('year', date), planLabel: planDisplayLabel('year'), reviewLabel: reviewDisplayLabel('year'),
 	};
 }
 
@@ -193,7 +192,6 @@ export function dayReviewSections(markdown: string): MarkdownReviewSection[] {
 
 /** Create the review represented by an explicit focus; never substitutes the current real date. */
 export async function ensureReviewForFocus(files: PlanFiles, focus: TimeFocus): Promise<string> {
-	if (focus.kind === 'quarter') throw new Error('季复盘存储体系尚未建立');
 	const date = reviewDateForFocus(focus);
 	if (!date) throw new Error(focus.kind === 'day' ? '日记日期无效' : '复盘周期无效');
 	return ensureJournal(files, focus.kind, date);
@@ -267,6 +265,7 @@ function recordFocus(kind: JournalKind, period: string, date: Date): TimeFocus {
 	if (kind === 'day') return { kind: 'day', date: period };
 	if (kind === 'week') return { kind: 'week', isoYear: Number(period.slice(0, 4)), isoWeek: Number(period.slice(6)), anchorDate: dateKeyValue(date) };
 	if (kind === 'month') return { kind: 'month', year: Number(period.slice(0, 4)), month: Number(period.slice(5)) };
+	if (kind === 'quarter') return { kind: 'quarter', year: Number(period.slice(0, 4)), quarter: Number(period.slice(6)) as 1 | 2 | 3 | 4 };
 	return { kind: 'year', year: Number(period) };
 }
 
@@ -313,9 +312,16 @@ export function sortReviewRecords(records: readonly ReviewRecord[]): ReviewRecor
 /** One transient Vault traversal shared by recent/search/random/past-today. */
 export async function discoverReviewRecords(app: App): Promise<ReviewRecord[]> {
 	const records: ReviewRecord[] = [];
+	const candidates = new Map<string, { file: TFile; properties: unknown; entry: NonNullable<ReturnType<typeof journalEntry>> }>();
 	for (const file of app.vault.getMarkdownFiles()) {
 		const properties = app.metadataCache.getFileCache(file)?.frontmatter;
-		if (!journalEntry(file.path, file.basename, properties)) continue;
+		const entry = journalEntry(file.path, file.basename, properties);
+		if (!entry) continue;
+		const key = `${entry.kind}:${entry.period}`;
+		const current = candidates.get(key);
+		if (!current || (entry.canonical && !current.entry.canonical) || (entry.canonical === current.entry.canonical && entry.path.length < current.entry.path.length)) candidates.set(key, { file, properties, entry });
+	}
+	for (const { file, properties } of candidates.values()) {
 		try {
 			const markdown = await app.vault.cachedRead(file);
 			const record = reviewRecordFromSource({ path: file.path, basename: file.basename, markdown, properties });
@@ -333,12 +339,14 @@ export function recentReviewTimeLabel(record: ReviewRecord): string {
 	if (record.kind === 'day') return record.period.slice(5).replace('-', '.');
 	if (record.kind === 'week') return `W${record.period.slice(6)}`;
 	if (record.kind === 'month') return record.period.replace('-', '.');
+	if (record.kind === 'quarter') return `${record.period.slice(0, 4)} Q${record.period.slice(6)}`;
 	return record.period;
 }
 
 export function recentReviewTitle(record: ReviewRecord): string {
 	const title = reviewDisplayTitle(record.kind, record.title);
 	if (record.kind === 'month' && title === reviewDisplayLabel('month')) return `${Number(record.period.slice(5))} 月复盘`;
+	if (record.kind === 'quarter' && title === reviewDisplayLabel('quarter')) return `Q${record.period.slice(6)} 季复盘`;
 	if (record.kind === 'year' && title === reviewDisplayLabel('year')) return `${record.period} 年复盘`;
 	return title;
 }
@@ -383,6 +391,7 @@ export function reviewRecordTimeLabel(record: ReviewRecord, compactDay = false):
 	if (record.kind === 'day') return compactDay ? record.period.slice(5).replace('-', '.') : record.period.replaceAll('-', '.');
 	if (record.kind === 'week') return record.period;
 	if (record.kind === 'month') return `${Number(record.period.slice(0, 4))} 年 ${Number(record.period.slice(5))} 月`;
+	if (record.kind === 'quarter') return `${record.period.slice(0, 4)} Q${record.period.slice(6)}`;
 	return `${record.period} 年`;
 }
 

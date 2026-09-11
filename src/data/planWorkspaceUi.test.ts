@@ -413,8 +413,8 @@ test('journal review reads the selected period while the shared calendar stays m
 test('marker semantics remain section-specific and read only', () => {
 	const resolver = view.match(/private markerResolver[\s\S]*?(?=\n\tprivate renderSidebar)/)?.[0] ?? '';
 	assert.match(resolver, /hasTimeTraceMarker\(mode, focus/);
-	assert.match(resolver, /planExists: \(period, date\) => exists\(planInfo\(period, date\)\.path\)/);
-	assert.match(resolver, /journalExists: \(period, date\) => exists\(journalInfo\(period, date\)\.path\)/);
+	assert.match(resolver, /planExists: \(period, date\) => planPaths\(period, date\)\.some\(exists\)/);
+	assert.match(resolver, /journalExists: \(period, date\) => journalPaths\(period, date\)\.some\(exists\)/);
 	assert.match(resolver, /dailyJournalExists: date => dailyDates\.has\(date\)/);
 	assert.match(timeTrace, /mode === 'longTerm'\) return false/);
 	assert.match(timeTrace, /focus\.kind === 'day'[\s\S]*mode === 'calendar' \|\| mode === 'review'/);

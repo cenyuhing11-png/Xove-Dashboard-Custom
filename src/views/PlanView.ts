@@ -5,14 +5,14 @@ import type { EmbeddedTask } from '../data/embeddedTasks';
 import { TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, groupEmbeddedForDisplay, taskDisplayMarker, taskSourceSubtitle } from '../data/embeddedTasks';
 import type { PlanWorkspaceCard, PlanWorkspaceMode, PlanCalendarMode } from '../data/planWorkspace';
 import { dateKey, incompleteTaskCountOnDate, readPlanWorkspace, taskCalendarSourceLabel, tasksOnDate } from '../data/planWorkspace';
-import { isoWeek, planInfo } from '../data/planning';
+import { isoWeek, planPaths } from '../data/planning';
 import { WorkbenchShell } from '../components/workbench/WorkbenchShell';
 import { renderLifeCompass } from '../components/workbench/LifeCompass';
 import { scanLearning } from '../data/learningVault';
 import { scanProjects } from '../data/projectVault';
 import { processes } from '../data/processes';
 import { processContentTypeLabel, taskSourceTypeLabel } from '../data/processContentTypes';
-import { JOURNAL_ROOT, journalCalendarEntry, journalDateFromPath, journalInfo, readJournalTitle } from '../data/journal';
+import { JOURNAL_ROOT, journalCalendarEntry, journalDateFromPath, journalPaths, readJournalTitle } from '../data/journal';
 import type { JournalCalendarEntry } from '../data/journal';
 import { dayReviewSections, discoverReviewRecords, ensureReviewForFocus, journalReviewTarget, markdownReviewSections, pastTodayReference, pastTodayReviewRecords, randomReviewRecord, recentReviewRecords, recentReviewTimeLabel, recentReviewTitle, reviewRecordTimeLabel, searchReviewRecords, timeStateForReviewRecord } from '../data/journalReview';
 import type { JournalReviewMode, JournalReviewViewMode, MarkdownReviewSection, ReviewRecord } from '../data/journalReview';
@@ -200,8 +200,8 @@ export class PlanWorkspaceRenderer extends Component {
 		const exists = (path: string) => this.app.vault.getAbstractFileByPath(path) instanceof TFile;
 		const mode = this.mode === 'board' ? 'cycle' : this.mode === 'longTermPlan' ? 'longTerm' : this.mode;
 		return focus => hasTimeTraceMarker(mode, focus, {
-			planExists: (period, date) => exists(planInfo(period, date).path),
-			journalExists: (period, date) => exists(journalInfo(period, date).path),
+			planExists: (period, date) => planPaths(period, date).some(exists),
+			journalExists: (period, date) => journalPaths(period, date).some(exists),
 			dailyJournalExists: date => dailyDates.has(date),
 		});
 	}
@@ -379,12 +379,11 @@ export class PlanWorkspaceRenderer extends Component {
 			day: ['这一天尚未创建日记', '创建这天日记 →'],
 			week: ['本周尚未创建周复盘', '创建本周复盘 →'],
 			month: ['本月尚未创建月复盘', '创建本月复盘 →'],
+			quarter: ['本季尚未创建季复盘', '创建本季复盘 →'],
 			year: ['本年度尚未创建年复盘', '创建本年复盘 →'],
-			quarter: ['本季尚未创建季复盘', ''],
 		}[target.kind];
 		const empty = parent.createDiv({ cls: 'mx-journal-review-missing-day' });
 		empty.createDiv({ cls: 'ad-modal-hint', text: copy[0] });
-		if (target.kind === 'quarter') return;
 		const create = empty.createEl('button', { cls: 'mx-inline-action mx-journal-review-create', text: copy[1], attr: { type: 'button' } });
 		create.onclick = async () => {
 			const focus = this.timeState.focus;
@@ -436,7 +435,7 @@ export class PlanWorkspaceRenderer extends Component {
 
 		const target = journalReviewTarget(this.timeState.focus);
 		const reviewFile = this.existingFile(target.reviewPaths);
-		const planFile = target.planPath ? this.existingFile([target.planPath]) : undefined;
+		const planFile = this.existingFile(target.planPaths ?? (target.planPath ? [target.planPath] : []));
 		if (this.reviewActionMessage) content.createDiv({ cls: 'ad-modal-hint mx-journal-review-action-message', text: this.reviewActionMessage });
 		const record = content.createDiv({ cls: 'mx-journal-review-record-head' });
 		record.createEl('h1', { cls: 'ad-modal-title', text: target.primary });
@@ -444,7 +443,7 @@ export class PlanWorkspaceRenderer extends Component {
 		if (dayTitle) record.createDiv({ cls: 'mx-journal-review-record-title', text: dayTitle });
 		if (target.secondary) record.createDiv({ cls: 'ad-modal-hint', text: target.secondary });
 		const controls = content.createDiv({ cls: 'mx-journal-review-record-controls' });
-		if (target.kind !== 'day' && target.kind !== 'quarter') {
+		if (target.kind !== 'day') {
 			const modes = controls.createDiv({ cls: 'mx-journal-review-modes', attr: { role: 'tablist', 'aria-label': '阅读模式' } });
 			for (const [mode, label] of [['review', '复盘'], ['compare', '计划 ↔ 复盘']] as const) {
 				const button = modes.createEl('button', { cls: `mx-journal-review-mode${this.reviewMode === mode ? ' is-active' : ''}`, text: label, attr: { type: 'button', role: 'tab', 'aria-selected': String(this.reviewMode === mode) } });
@@ -456,7 +455,6 @@ export class PlanWorkspaceRenderer extends Component {
 			edit.onclick = () => this.openSource(reviewFile);
 		}
 		if (token !== this.generation || !main.isConnected) return;
-		if (target.kind === 'quarter') { this.renderMissingReview(content, target); return; }
 		if (!reviewFile && (target.kind === 'day' || this.reviewMode === 'review')) { this.renderMissingReview(content, target); return; }
 
 		if (target.kind !== 'day' && this.reviewMode === 'compare') {

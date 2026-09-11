@@ -6,7 +6,7 @@ export interface JournalActions { open(kind: JournalKind): void; history(mode: '
 export function renderJournalCards(parent: HTMLElement, states: JournalState[], actions: JournalActions): void {
 	const diary = createSection(parent, '📓 日记 / 周复盘', true);
 	const review = createSection(parent, '🔄 月复盘 / 年复盘', true);
-	const labels = { day: '今日日记', week: '本周复盘', month: `本${reviewDisplayLabel('month')}`, year: reviewDisplayLabel('year') };
+	const labels = { day: '今日日记', week: `本${reviewDisplayLabel('week')}`, month: `本${reviewDisplayLabel('month')}`, quarter: `本${reviewDisplayLabel('quarter')}`, year: reviewDisplayLabel('year') };
 	for (const state of states) {
 		const { kind } = state;
 		const group = createGroup(kind === 'day' || kind === 'week' ? diary : review, labels[kind]);

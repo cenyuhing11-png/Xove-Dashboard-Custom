@@ -12,6 +12,7 @@ export const REVIEW_DISPLAY_LABELS: Record<JournalKind, string> = {
 	day: '日记',
 	week: CYCLE_DISPLAY_LABELS.week.review,
 	month: CYCLE_DISPLAY_LABELS.month.review,
+	quarter: CYCLE_DISPLAY_LABELS.quarter.review,
 	year: CYCLE_DISPLAY_LABELS.year.review,
 };
 
@@ -29,5 +30,6 @@ export function reviewDisplayTitle(kind: JournalKind, title: string): string {
 	return title
 		.replace(/周记$/, REVIEW_DISPLAY_LABELS.week)
 		.replace(/月度复盘$/, REVIEW_DISPLAY_LABELS.month)
+		.replace(/季度复盘$/, REVIEW_DISPLAY_LABELS.quarter)
 		.replace(/年度复盘$/, REVIEW_DISPLAY_LABELS.year);
 }

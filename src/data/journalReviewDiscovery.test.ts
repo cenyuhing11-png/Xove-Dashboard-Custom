@@ -22,18 +22,25 @@ import type { PlanFiles } from './planning.ts';
 
 const root = '04-日记与复盘';
 
-function source(kind: 'day' | 'week' | 'month' | 'year', period: string, markdown = '', extra: Record<string, unknown> = {}): ReviewRecordSource {
+type TestReviewKind = 'day' | 'week' | 'month' | 'quarter' | 'year';
+
+function source(kind: TestReviewKind, period: string, markdown = '', extra: Record<string, unknown> = {}, legacy = false): ReviewRecordSource {
 	const meta = kind === 'day'
 		? { 类型: '日记', 日期: period, ...extra }
 		: kind === 'week'
 			? { 类型: '周记', 期间: period, ...extra }
-			: { 类型: '复盘', 周期: kind === 'month' ? '月度' : '年度', 期间: period, ...extra };
-	const folder = { day: '01-日记', week: '02-周记', month: '03-月度复盘', year: '04-年度复盘' }[kind];
-	const basename = kind === 'day' ? period : `${period} ${{ week: '周记', month: '月度复盘', year: '年度复盘' }[kind]}`;
+			: { 类型: '复盘', 周期: kind === 'month' ? '月度' : kind === 'quarter' ? '季度' : '年度', 期间: period, ...extra };
+	const folder = legacy
+		? { day: '01-日记', week: '02-周记', month: '03-月度复盘', quarter: '04-季复盘', year: '04-年度复盘' }[kind]
+		: { day: '01-日记', week: '02-周复盘', month: '03-月复盘', quarter: '04-季复盘', year: '05-年复盘' }[kind];
+	const opener = legacy
+		? { day: '日记', week: '周记', month: '月度复盘', quarter: '季复盘', year: '年度复盘' }[kind]
+		: { day: '', week: '周复盘', month: '月复盘', quarter: '季复盘', year: '年复盘' }[kind];
+	const basename = kind === 'day' ? `${period}${legacy ? ' 日记' : ''}` : `${period} ${opener}`;
 	return { path: `${root}/${folder}/${basename}.md`, basename, markdown, properties: meta };
 }
 
-function record(kind: 'day' | 'week' | 'month' | 'year', period: string, markdown = '', extra: Record<string, unknown> = {}): ReviewRecord {
+function record(kind: TestReviewKind, period: string, markdown = '', extra: Record<string, unknown> = {}): ReviewRecord {
 	const value = reviewRecordFromSource(source(kind, period, markdown, extra));
 	assert.ok(value);
 	return value;
@@ -96,12 +103,13 @@ test('week review creation uses the selected ISO week rather than the current re
 	const date = new Date(2024, 3, 29, 12);
 	assert.equal(path, journalInfo('week', date).path);
 	assert.equal(store.contents.get(path), journalTemplate('week', date));
-	assert.match(path, /2024-W18 周记\.md$/);
+	assert.match(path, /2024-W18 周复盘\.md$/);
 });
 
-test('month and year review creation use their selected historical focus and shared templates', async () => {
+test('month quarter and year review creation use their selected historical focus and shared templates', async () => {
 	for (const [focus, kind, date] of [
 		[{ kind: 'month', year: 2025, month: 6 } as const, 'month' as const, new Date(2025, 5, 1, 12)],
+		[{ kind: 'quarter', year: 2025, quarter: 3 } as const, 'quarter' as const, new Date(2025, 6, 1, 12)],
 		[{ kind: 'year', year: 2023 } as const, 'year' as const, new Date(2023, 0, 1, 12)],
 	] as const) {
 		const store = journalStore();
@@ -119,14 +127,27 @@ test('focused review creation reuses existing files and rejects invalid periods'
 	assert.equal(store.contents.get(existing), '用户已有复盘');
 	await assert.rejects(ensureReviewForFocus(store.files, { kind: 'month', year: 2025, month: 13 }), /周期无效/);
 	await assert.rejects(ensureReviewForFocus(store.files, { kind: 'week', isoYear: 2025, isoWeek: 54, anchorDate: '2025-01-01' }), /周期无效/);
-	await assert.rejects(ensureReviewForFocus(store.files, { kind: 'quarter', year: 2025, quarter: 3 }), /季复盘存储体系尚未建立/);
 });
 
-test('discovery recognizes the four real journal and review kinds', () => {
+test('quarter review creation reuses an existing canonical note', async () => {
+	const existing = journalInfo('quarter', new Date(2026, 6, 1, 12)).path;
+	const store = journalStore({ [existing]: '用户已有季复盘' });
+	assert.equal(await ensureReviewForFocus(store.files, { kind: 'quarter', year: 2026, quarter: 3 }), existing);
+	assert.equal(store.contents.size, 1);
+});
+
+test('discovery recognizes all five journal and review kinds', () => {
 	assert.equal(record('day', '2026-09-10').kind, 'day');
 	assert.equal(record('week', '2026-W37').kind, 'week');
 	assert.equal(record('month', '2026-09').kind, 'month');
+	assert.equal(record('quarter', '2026-Q3').kind, 'quarter');
 	assert.equal(record('year', '2026').kind, 'year');
+});
+
+test('legacy week month and year review paths remain discoverable', () => {
+	for (const item of [source('week', '2026-W37', '', {}, true), source('month', '2026-09', '', {}, true), source('year', '2026', '', {}, true), source('day', '2026-09-10', '', {}, true)]) {
+		assert.ok(reviewRecordFromSource(item));
+	}
 });
 
 test('discovery rejects plans and journals outside the canonical folders', () => {
@@ -152,6 +173,25 @@ test('discovery is read-only and sorts one transient vault scan by logical time'
 	assert.equal('create' in app.vault, false);
 });
 
+test('discovery prefers canonical over legacy and never duplicates the same period', async () => {
+	const canonical = source('month', '2026-09', '## 本月做成了什么\n新文件');
+	const legacy = source('month', '2026-09', '## 本月做成了什么\n旧文件', {}, true);
+	const files = [legacy, canonical].map(item => ({ path: item.path, basename: item.basename, item }));
+	let reads = 0;
+	const app = {
+		vault: {
+			getMarkdownFiles: () => files,
+			cachedRead: async (file: typeof files[number]) => { reads++; return file.item.markdown; },
+		},
+		metadataCache: { getFileCache: (file: typeof files[number]) => ({ frontmatter: file.item.properties }) },
+	};
+	const found = await discoverReviewRecords(app as never);
+	assert.equal(found.length, 1);
+	assert.equal(found[0]!.path, canonical.path);
+	assert.match(found[0]!.searchableText, /新文件/);
+	assert.equal(reads, 1);
+});
+
 test('daily record uses frontmatter title and the settled three reading sections', () => {
 	const item = record('day', '2026-09-10', '## 今日任务\n- [ ] 私密待办\n\n## 随时记\n- 09:20 灵感\n\n## 今日日记\n正文\n\n## 今日回看\n反思', { 标题: '秋天的一天' });
 	assert.equal(item.title, '秋天的一天');
@@ -174,9 +214,10 @@ test('daily recent title falls back from diary body to reflection and then empty
 	assert.equal(record('day', '2026-09-10', '## 随时记\n\n## 今日日记\n\n## 今日回看\n').title, '暂无正文');
 });
 
-test('week month and year records search their review bodies', () => {
+test('week month quarter and year records search their review bodies', () => {
 	assert.match(record('week', '2026-W37', '## 本周感受\n周内容').searchableText, /周内容/);
 	assert.match(record('month', '2026-09', '## 本月完成\n月内容').searchableText, /月内容/);
+	assert.match(record('quarter', '2026-Q3', '## 本季最重要的成果\n季内容').searchableText, /季内容/);
 	assert.match(record('year', '2026', '## 年度收获\n年内容').searchableText, /年内容/);
 });
 
@@ -184,9 +225,9 @@ test('plain text extraction preserves visible aliases while removing markdown de
 	assert.equal(plainReviewText('- **看完** [[原名|显示名]] 和 [网页](https://example.com)'), '看完 显示名 和 网页');
 });
 
-test('recent records merge all four kinds and sort newest first', () => {
-	const records = [record('year', '2025'), record('week', '2026-W36'), record('day', '2026-09-10'), record('month', '2026-08')];
-	assert.deepEqual(recentReviewRecords(records).map(item => item.period), ['2026-09-10', '2026-W36', '2026-08', '2025']);
+test('recent records merge all five kinds and sort newest first', () => {
+	const records = [record('year', '2025'), record('week', '2026-W36'), record('day', '2026-09-10'), record('quarter', '2026-Q3'), record('month', '2026-08')];
+	assert.deepEqual(recentReviewRecords(records).map(item => item.period), ['2026-09-10', '2026-W36', '2026-08', '2026-Q3', '2025']);
 });
 
 test('recent records show twelve by default and can grow by another twelve', () => {
@@ -199,13 +240,16 @@ test('recent row time labels encode granularity without a second type line', () 
 	assert.equal(recentReviewTimeLabel(record('day', '2026-09-10')), '09.10');
 	assert.equal(recentReviewTimeLabel(record('week', '2026-W37')), 'W37');
 	assert.equal(recentReviewTimeLabel(record('month', '2026-09')), '2026.09');
+	assert.equal(recentReviewTimeLabel(record('quarter', '2026-Q3')), '2026 Q3');
 	assert.equal(recentReviewTimeLabel(record('year', '2026')), '2026');
 });
 
-test('recent row titles keep real headings and provide compact month and year defaults', () => {
+test('recent row titles keep real headings and provide compact quarter month and year defaults', () => {
 	assert.equal(recentReviewTitle(record('week', '2026-W37')), '2026-W37 周复盘');
+	assert.equal(recentReviewTitle(record('quarter', '2026-Q3')), 'Q3 季复盘');
 	assert.equal(recentReviewTitle(record('month', '2026-09')), '9 月复盘');
 	assert.equal(recentReviewTitle(record('year', '2026')), '2026 年复盘');
+	assert.equal(recentReviewTitle(record('quarter', '2026-Q3', '# 第三季总结\n\n## 本季最重要的成果\n内容')), '第三季总结');
 	assert.equal(recentReviewTitle(record('month', '2026-09', '# 九月重新出发\n\n## 本月完成\n内容')), '九月重新出发');
 });
 
@@ -232,13 +276,14 @@ test('search excludes daily task section', () => {
 	assert.equal(searchReviewRecords([item], '机密任务').length, 0);
 });
 
-test('search includes weekly monthly and yearly review bodies', () => {
+test('search includes weekly monthly quarterly and yearly review bodies', () => {
 	const records = [
 		record('week', '2026-W37', '## 感受\n共同关键词'),
 		record('month', '2026-09', '## 完成\n共同关键词'),
+		record('quarter', '2026-Q3', '## 成果\n共同关键词'),
 		record('year', '2026', '## 收获\n共同关键词'),
 	];
-	assert.deepEqual(searchReviewRecords(records, '共同关键词').map(item => item.record.kind), ['week', 'month', 'year']);
+	assert.deepEqual(searchReviewRecords(records, '共同关键词').map(item => item.record.kind), ['week', 'month', 'quarter', 'year']);
 });
 
 test('search returns an empty result for blank queries', () => {
@@ -271,13 +316,20 @@ test('random review excludes empty template placeholders', () => {
 	assert.equal(randomReviewRecord([empty], () => 0), undefined);
 });
 
+test('random review includes written quarter reviews and excludes empty quarter templates', () => {
+	const empty = record('quarter', '2026-Q2', '## 本季最重要的成果\n\n## 哪些重点没有实现\n');
+	const written = record('quarter', '2026-Q3', '## 本季最重要的成果\n真正完成的内容');
+	assert.equal(randomReviewRecord([empty, written], () => 0)?.period, '2026-Q3');
+	assert.equal(randomReviewRecord([empty], () => 0), undefined);
+});
+
 test('past today uses selected day month/day and excludes the reference year', () => {
 	const records = [record('day', '2026-09-10'), record('day', '2025-09-10'), record('day', '2024-09-10'), record('day', '2025-09-11')];
 	assert.deepEqual(pastTodayReviewRecords(records, new Date(2026, 8, 10, 12)).map(item => item.period), ['2025-09-10', '2024-09-10']);
 });
 
-test('past today ignores weekly monthly and yearly records', () => {
-	const records = [record('week', '2025-W37'), record('month', '2025-09'), record('year', '2025')];
+test('past today ignores weekly monthly quarterly and yearly records', () => {
+	const records = [record('week', '2025-W37'), record('month', '2025-09'), record('quarter', '2025-Q3'), record('year', '2025')];
 	assert.deepEqual(pastTodayReviewRecords(records, new Date(2026, 8, 10, 12)), []);
 });
 
@@ -291,11 +343,12 @@ test('past today reference follows day focus and otherwise uses real today', () 
 	assert.equal(pastTodayReference({ kind: 'month', year: 2025, month: 2 }, new Date(2026, 8, 11)).getDate(), 11);
 });
 
-test('opening a review record maps all four kinds back to the shared TimeFocus', () => {
+test('opening a review record maps all five kinds back to the shared TimeFocus', () => {
 	const state = { visible: { year: 2026, month: 9 }, focus: { kind: 'day', date: '2026-09-11' } as const };
 	assert.equal(timeStateForReviewRecord(state, record('day', '2025-09-10')).focus.kind, 'day');
 	assert.equal(timeStateForReviewRecord(state, record('week', '2025-W37')).focus.kind, 'week');
 	assert.equal(timeStateForReviewRecord(state, record('month', '2025-09')).focus.kind, 'month');
+	assert.equal(timeStateForReviewRecord(state, record('quarter', '2025-Q3')).focus.kind, 'quarter');
 	assert.equal(timeStateForReviewRecord(state, record('year', '2025')).focus.kind, 'year');
 });
 
@@ -303,5 +356,6 @@ test('record labels stay compact and truthful in result lists', () => {
 	assert.equal(reviewRecordTimeLabel(record('day', '2026-09-10'), true), '09.10');
 	assert.equal(reviewRecordTimeLabel(record('week', '2026-W37')), '2026-W37');
 	assert.equal(reviewRecordTimeLabel(record('month', '2026-09')), '2026 年 9 月');
+	assert.equal(reviewRecordTimeLabel(record('quarter', '2026-Q3')), '2026 Q3');
 	assert.equal(reviewRecordTimeLabel(record('year', '2026')), '2026 年');
 });

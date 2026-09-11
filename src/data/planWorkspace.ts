@@ -1,5 +1,6 @@
 import type { EmbeddedTask } from './embeddedTasks.ts';
 import { isoWeek, planInfo, readSection } from './planning.ts';
+import { existingPlanPath } from './planning.ts';
 import type { PlanFiles, PlanPeriod } from './planning.ts';
 import { planDisplayLabel } from './cycleDisplayLabels.ts';
 import { quarterOfMonth } from './quarters.ts';
@@ -47,18 +48,16 @@ export function monthIsoWeeks(year: number, month: number): Array<{ isoYear: num
 }
 
 async function card(files: Pick<PlanFiles, 'kind' | 'read'>, period: PlanPeriod, date: Date, title: string, primary: string, fallback?: string): Promise<PlanWorkspaceCard> {
-	const info = planInfo(period, date);
 	try {
-		const kind = files.kind(info.path);
-		if (!kind) return { period, title, path: info.path, exists: false, entries: [] };
-		if (kind !== 'file') throw new Error('计划路径不是文件');
-		const markdown = await files.read(info.path);
+		const path = existingPlanPath(files, period, date);
+		if (!path) return { period, title, path: planInfo(period, date).path, exists: false, entries: [] };
+		const markdown = await files.read(path);
 		let section = readSection(markdown, primary);
 		if (!section.content.length && fallback) section = readSection(markdown, fallback);
 		const entries = (section.items.length ? section.items : section.content).slice(0, 3);
-		return { period, title, path: info.path, exists: true, entries };
+		return { period, title, path, exists: true, entries };
 	} catch {
-		return { period, title, path: info.path, exists: true, entries: [], error: '暂时无法读取计划' };
+		return { period, title, path: planInfo(period, date).path, exists: true, entries: [], error: '暂时无法读取计划' };
 	}
 }
 
@@ -66,7 +65,7 @@ export async function readPlanWorkspace(files: Pick<PlanFiles, 'kind' | 'read'>,
 	const date = selectionDate(year, month);
 	const quarter = quarterForMonth(month);
 	const [annual, quarterly, monthly] = await Promise.all([
-		card(files, 'year', date, `${year} ${planDisplayLabel('year')}`, '年度核心突破'),
+		card(files, 'year', date, `${year} ${planDisplayLabel('year')}`, '今年最想实现的突破', '年度核心突破'),
 		card(files, 'quarter', date, `${year} Q${quarter} ${planDisplayLabel('quarter')}`, '当前季度主题', '季度重点'),
 		card(files, 'month', date, `${year} 年 ${month} ${planDisplayLabel('month')}`, '本月重点'),
 	]);

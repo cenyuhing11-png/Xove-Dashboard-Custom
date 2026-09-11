@@ -1,29 +1,55 @@
 import { isoWeek, planInfo } from './planning.ts';
 import type { PlanFiles } from './planning';
 import { ensureSafeNote } from './safeNote.ts';
-import { JOURNAL_ROOT, JOURNAL_FOLDERS } from './vaultPaths.ts';
+import { JOURNAL_ROOT, JOURNAL_FOLDERS, LEGACY_JOURNAL_FOLDERS } from './vaultPaths.ts';
 import type { EmbeddedTask } from './embeddedTasks.ts';
 import { groupEmbeddedForDisplay } from './embeddedTasks.ts';
 import { applyFrontmatterUpdates } from './frontmatterWriter.ts';
+import { reviewDisplayLabel } from './cycleDisplayLabels.ts';
 import type { App, TFile } from 'obsidian';
 export { JOURNAL_ROOT } from './vaultPaths.ts';
 
-export type JournalKind = 'day' | 'week' | 'month' | 'year';
-export const JOURNAL_KINDS: JournalKind[] = ['day', 'week', 'month', 'year'];
-const folders: Record<JournalKind, string> = { day: '日记', week: '周记', month: '月度复盘', year: '年度复盘' };
+export type JournalKind = 'day' | 'week' | 'month' | 'quarter' | 'year';
+export const JOURNAL_KINDS: JournalKind[] = ['day', 'week', 'month', 'quarter', 'year'];
+const legacyOpeners: Record<JournalKind, string> = { day: '日记', week: '周记', month: '月度复盘', quarter: '季复盘', year: '年度复盘' };
+const canonicalOpeners: Record<JournalKind, string> = { day: '', week: '周复盘', month: '月复盘', quarter: '季复盘', year: '年复盘' };
+const legacyFolders: Partial<Record<JournalKind, string>> = { ...LEGACY_JOURNAL_FOLDERS };
+
 export function journalInfo(kind: JournalKind, date = new Date()) {
 	const year = date.getFullYear();
 	const month = `${year}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 	const day = `${month}-${String(date.getDate()).padStart(2, '0')}`;
 	const period = kind === 'day' ? day : planInfo(kind, date).key;
 	const folder = `${JOURNAL_ROOT}/${JOURNAL_FOLDERS[kind]}`;
-	const name = kind === 'day' ? period : `${period} ${folders[kind]}`;
+	const name = kind === 'day' ? period : `${period} ${canonicalOpeners[kind]}`;
 	return { kind, period, folder, path: `${folder}/${name}.md`, name };
 }
 
-function legacyDailyPath(date = new Date()): string {
-	const info = journalInfo('day', date);
-	return `${info.folder}/${info.period} 日记.md`;
+export function legacyJournalInfo(kind: JournalKind, date = new Date()) {
+	const canonical = journalInfo(kind, date);
+	const folder = legacyFolders[kind] ?? JOURNAL_FOLDERS[kind];
+	const name = kind === 'day'
+		? `${canonical.period} 日记.md`
+		: canonical.kind === 'week'
+			? `${canonical.period} 周记.md`
+			: `${canonical.period} ${legacyOpeners[kind]}.md`;
+	return { ...canonical, folder: `${JOURNAL_ROOT}/${folder}`, path: `${JOURNAL_ROOT}/${folder}/${name}`, name: name.slice(0, -3) };
+}
+
+/** Canonical first, then the legacy day/week/month/year path when distinct. */
+export function journalPaths(kind: JournalKind, date = new Date()): string[] {
+	return [...new Set([journalInfo(kind, date).path, legacyJournalInfo(kind, date).path])];
+}
+
+export function existingJournalPath(files: Pick<PlanFiles, 'kind'>, kind: JournalKind, date = new Date()): string | undefined {
+	let blocked = false;
+	for (const path of journalPaths(kind, date)) {
+		const kindAtPath = files.kind(path);
+		if (kindAtPath === 'file') return path;
+		if (kindAtPath === 'folder') blocked = true;
+	}
+	if (blocked) throw new Error('笔记路径被文件夹占用');
+	return undefined;
 }
 export function journalTemplate(kind: JournalKind, date = new Date()): string {
 	const info = journalInfo(kind, date);
@@ -33,14 +59,16 @@ export function journalTemplate(kind: JournalKind, date = new Date()): string {
 		day: `类型: 日记\n日期: ${info.period}\n标题:`,
 		week: `类型: 周记\n期间: ${info.period}\n关联计划: "[[${planInfo('week', date).name}]]"`,
 		month: `类型: 复盘\n周期: 月度\n期间: ${info.period}\n关联计划: "[[${planInfo('month', date).name}]]"`,
+		quarter: `类型: 复盘\n周期: 季度\n期间: ${info.period}\n关联计划: "[[${planInfo('quarter', date).name}]]"`,
 		year: `类型: 复盘\n周期: 年度\n期间: ${info.period}\n关联计划: "[[${planInfo('year', date).name}]]"`,
 	};
-	const titles = { day: `${year}年${month}月${date.getDate()}日`, week: info.name.replace('-', ' '), month: `${year}年${month}月复盘`, year: `${year}年度复盘` };
+	const titles = { day: `${year}年${month}月${date.getDate()}日`, week: info.name.replace('-', ' '), month: `${year}年${month}月复盘`, quarter: `${year} Q${Math.floor(date.getMonth() / 3) + 1} 季复盘`, year: `${year}年复盘` };
 	const sections: Record<JournalKind, string[]> = {
 		day: ['今日任务', '随时记', '今日日记', '今日回看'],
-		week: ['本周发生了什么', '本周完成', '学习与思考', '项目与成果', '本周感受', '下周'],
-		month: ['本月计划回顾', '本月完成', '学习与成长', '项目与成果', '内容与输出', '财务与生活', '做得好的', '需要调整', '下月重点'],
-		year: ['年度目标回顾', '这一年发生了什么', '事业与设计', '内容与影响力', '学习与认知', '财务', '生活', '今年最重要的收获', '需要调整的事情', '下一年'],
+		week: ['这周实际推进了什么', '做成了什么', '哪些没有推进', '为什么会有偏差', '下周怎么调整'],
+		month: ['这个月实际到了什么状态', '本月做成了什么', '哪些重点没有完成', '哪些事情值得记住', '偏差来自哪里', '下个月怎么调整'],
+		quarter: ['这个季度实际到了什么状态', '本季最重要的成果', '哪些重点没有实现', '哪些判断是对的', '哪些判断需要修正', '下一季度最该调整什么'],
+		year: ['这一年我最终到了什么状态', '今年真正做成了什么', '最重要的变化是什么', '哪些目标没有实现', '哪些选择是对的', '哪些事情以后不再重复', '明年最值得继续的是什么'],
 	};
 	const heading = kind === 'day' ? '' : `# ${titles[kind]}\n\n`;
 	return `---\n${headers[kind]}\n---\n\n${heading}${sections[kind].map((title) => `## ${title}\n`).join('\n')}\n`;
@@ -230,25 +258,22 @@ export function journalCalendarEntry(path: string, content: string, properties: 
 	return { date, path, title, titleSource, quickNoteCount, summary: firstJournalParagraph(sectionLines(document, '今日日记')) };
 }
 export async function ensureJournal(files: PlanFiles, kind: JournalKind, date = new Date()): Promise<string> {
+	const existing = existingJournalPath(files, kind, date);
+	if (existing) return existing;
 	const info = journalInfo(kind, date);
-	if (kind === 'day' && files.kind(info.path) !== 'file') {
-		const legacyPath = legacyDailyPath(date);
-		if (files.kind(legacyPath) === 'file') return legacyPath;
-	}
 	return ensureSafeNote(files, info.path, [JOURNAL_ROOT, info.folder], journalTemplate(kind, date));
 }
 export interface JournalState { kind: JournalKind; exists: boolean; blocked: boolean }
 export function journalStates(files: Pick<PlanFiles, 'kind'>, date = new Date()): JournalState[] {
 	return JOURNAL_KINDS.map((kind) => {
-		const entry = files.kind(journalInfo(kind, date).path);
-		const legacy = kind === 'day' ? files.kind(legacyDailyPath(date)) : undefined;
-		return { kind, exists: entry === 'file' || legacy === 'file', blocked: entry === 'folder' || legacy === 'folder' };
+		const states = journalPaths(kind, date).map(path => files.kind(path));
+		return { kind, exists: states.includes('file'), blocked: states.includes('folder') };
 	});
 }
-export interface JournalEntry { kind: JournalKind; path: string; title: string; period: string; label: string; order: number }
+export interface JournalEntry { kind: JournalKind; path: string; title: string; period: string; label: string; order: number; canonical: boolean }
 
 function periodDate(kind: JournalKind, period: string): Date | null {
-	const pattern = kind === 'day' ? /^(\d{4})-(\d{2})-(\d{2})$/ : kind === 'week' ? /^(\d{4})-W(\d{2})$/ : kind === 'month' ? /^(\d{4})-(\d{2})$/ : /^(\d{4})$/;
+	const pattern = kind === 'day' ? /^(\d{4})-(\d{2})-(\d{2})$/ : kind === 'week' ? /^(\d{4})-W(\d{2})$/ : kind === 'month' ? /^(\d{4})-(\d{2})$/ : kind === 'quarter' ? /^(\d{4})-Q([1-4])$/ : /^(\d{4})$/;
 	const match = pattern.exec(period);
 	if (!match) return null;
 	const year = Number(match[1]);
@@ -260,6 +285,7 @@ function periodDate(kind: JournalKind, period: string): Date | null {
 		const iso = isoWeek(monday);
 		return iso.year === year && iso.week === week ? monday : null;
 	}
+	if (kind === 'quarter') return new Date(year, (Number(match[2]) - 1) * 3, 1, 12);
 	const month = kind === 'year' ? 1 : Number(match[2]);
 	const day = kind === 'day' ? Number(match[3]) : 1;
 	const date = new Date(year, month - 1, day, 12);
@@ -270,15 +296,31 @@ function periodDate(kind: JournalKind, period: string): Date | null {
 export function journalEntry(path: string, title: string, properties: unknown): JournalEntry | null {
 	if (!properties || typeof properties !== 'object' || Array.isArray(properties)) return null;
 	const fm = properties as Record<string, unknown>;
-	const kind = fm['类型'] === '日记' ? 'day' : fm['类型'] === '周记' ? 'week' : fm['类型'] === '复盘' && fm['周期'] === '月度' ? 'month' : fm['类型'] === '复盘' && fm['周期'] === '年度' ? 'year' : null;
-	if (!kind || !path.startsWith(`${JOURNAL_ROOT}/${JOURNAL_FOLDERS[kind]}/`)) return null;
+	const cycle = fm['周期'];
+	const kind = fm['类型'] === '日记' ? 'day' : fm['类型'] === '周记' ? 'week' : fm['类型'] === '复盘' && cycle === '周度' ? 'week' : fm['类型'] === '复盘' && cycle === '月度' ? 'month' : fm['类型'] === '复盘' && cycle === '季度' ? 'quarter' : fm['类型'] === '复盘' && cycle === '年度' ? 'year' : null;
+	if (!kind) return null;
+	const legacyFolder = legacyFolders[kind];
+	const folders = [JOURNAL_FOLDERS[kind], ...(legacyFolder ? [legacyFolder] : [])];
+	if (!folders.some(folder => path.startsWith(`${JOURNAL_ROOT}/${folder}/`))) return null;
 	const value = fm[kind === 'day' ? '日期' : '期间'];
 	const period = typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : '';
 	const date = periodDate(kind, period);
 	if (!date) return null;
-	return { kind, path, title, period, label: folders[kind], order: date.getTime() };
+	return { kind, path, title, period, label: reviewDisplayLabel(kind), order: date.getTime(), canonical: path === journalInfo(kind, date).path };
 }
+
+/** Prefer the canonical path when both legacy and canonical notes exist. */
+function preferJournalEntries(entries: readonly JournalEntry[]): JournalEntry[] {
+	const preferred = new Map<string, JournalEntry>();
+	for (const entry of entries) {
+		const key = `${entry.kind}:${entry.period}`;
+		const current = preferred.get(key);
+		if (!current || (entry.canonical && !current.canonical) || (entry.canonical === current.canonical && entry.path.length < current.path.length)) preferred.set(key, entry);
+	}
+	return [...preferred.values()];
+}
+
 export function journalHistory(entries: JournalEntry[], mode: 'records' | 'reviews'): JournalEntry[] {
-	return entries.filter((entry) => mode === 'records' ? entry.kind === 'day' || entry.kind === 'week' : entry.kind === 'month' || entry.kind === 'year')
+	return preferJournalEntries(entries).filter((entry) => mode === 'records' ? entry.kind === 'day' || entry.kind === 'week' : entry.kind === 'month' || entry.kind === 'year')
 		.sort((a, b) => b.order - a.order || a.path.localeCompare(b.path, 'zh-CN')).slice(0, 30);
 }

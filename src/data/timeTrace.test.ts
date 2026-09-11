@@ -182,7 +182,7 @@ test('initial state uses the current visible year without persisted state', () =
 
 const markerSources = (plans: string[] = [], journals: string[] = [], days: string[] = []) => ({
 	planExists: (period: 'year' | 'quarter' | 'month' | 'week', date: Date) => plans.includes(`${period}:${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`),
-	journalExists: (period: 'year' | 'month' | 'week', date: Date) => journals.includes(`${period}:${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`),
+	journalExists: (period: 'year' | 'quarter' | 'month' | 'week', date: Date) => journals.includes(`${period}:${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`),
 	dailyJournalExists: (date: string) => days.includes(date),
 });
 
@@ -202,19 +202,21 @@ test('calendar day markers come only from existing daily journals', () => {
 	const sources = markerSources([], [], ['2026-09-10']);
 	assert.equal(hasTimeTraceMarker('calendar', { kind: 'day', date: '2026-09-10' }, sources), true);
 	assert.equal(hasTimeTraceMarker('calendar', { kind: 'month', year: 2026, month: 9 }, sources), false);
+	assert.equal(hasTimeTraceMarker('calendar', { kind: 'quarter', year: 2026, quarter: 3 }, markerSources(['quarter:2026-7-1'], ['quarter:2026-7-1'])), false);
 });
 
-test('review markers represent day week month and year journals', () => {
-	const sources = markerSources([], ['week:2026-9-7', 'month:2026-9-1', 'year:2026-1-1'], ['2026-09-10']);
+test('review markers represent day week month quarter and year journals', () => {
+	const sources = markerSources([], ['week:2026-9-7', 'month:2026-9-1', 'quarter:2026-7-1', 'year:2026-1-1'], ['2026-09-10']);
 	assert.equal(hasTimeTraceMarker('review', { kind: 'day', date: '2026-09-10' }, sources), true);
 	assert.equal(hasTimeTraceMarker('review', { kind: 'week', isoYear: 2026, isoWeek: 37, anchorDate: '2026-09-07' }, sources), true);
 	assert.equal(hasTimeTraceMarker('review', { kind: 'month', year: 2026, month: 9 }, sources), true);
 	assert.equal(hasTimeTraceMarker('review', { kind: 'year', year: 2026 }, sources), true);
-	assert.equal(hasTimeTraceMarker('review', { kind: 'quarter', year: 2026, quarter: 3 }, sources), false);
+	assert.equal(hasTimeTraceMarker('review', { kind: 'quarter', year: 2026, quarter: 3 }, sources), true);
 });
 
 test('long-term plans deliberately expose no mini-calendar markers', () => {
 	const everything = markerSources(['year:2026-1-1'], ['year:2026-1-1'], ['2026-09-10']);
 	assert.equal(hasTimeTraceMarker('longTerm', { kind: 'year', year: 2026 }, everything), false);
+	assert.equal(hasTimeTraceMarker('longTerm', { kind: 'quarter', year: 2026, quarter: 3 }, markerSources(['quarter:2026-7-1'], ['quarter:2026-7-1'])), false);
 	assert.equal(hasTimeTraceMarker('longTerm', { kind: 'day', date: '2026-09-10' }, everything), false);
 });

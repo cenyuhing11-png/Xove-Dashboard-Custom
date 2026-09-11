@@ -8,7 +8,7 @@ import type { PlanFiles } from './planning';
 const date = new Date(2026,8,6);
 const cases = [
 	...(['year','quarter','month','week'] as const).map(p=>({path:planInfo(p,date).path,open:(f:PlanFiles)=>ensurePlan(f,p,date)})),
-	...(['day','week','month','year'] as const).map(p=>({path:journalInfo(p,date).path,open:(f:PlanFiles)=>ensureJournal(f,p,date)})),
+	...(['day','week','month','quarter','year'] as const).map(p=>({path:journalInfo(p,date).path,open:(f:PlanFiles)=>ensureJournal(f,p,date)})),
 	{path:directionInfo('设计').path,open:(f:PlanFiles)=>ensureDirection(f,'设计')},
 ];
 for (const c of cases) test(`renamed existing note found without overwrite: ${c.path}`,async()=>{
@@ -17,7 +17,7 @@ for (const c of cases) test(`renamed existing note found without overwrite: ${c.
 });
 test('folder prefixes never enter names or metadata',()=>{
 	for(const p of ['year','quarter','month','week'] as const){assert.ok(!planInfo(p,date).name.includes('02-年度'));assert.ok(!/^周期: \d\d-/m.test(planTemplate(p,date)));}
-	for(const p of ['day','week','month','year'] as const) assert.ok(!journalTemplate(p,date).includes('复盘/0'));
+	for(const p of ['day','week','month','quarter','year'] as const) assert.ok(!journalTemplate(p,date).includes('复盘/0'));
 	assert.ok(journalTemplate('week',date).includes('[[2026-W36 周计划]]'));
 });
 test('history recognizes moved diary and review',()=>{
