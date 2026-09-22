@@ -9,7 +9,7 @@ import { planDisplayLabel, reviewDisplayLabel, reviewDisplayTitle } from './cycl
 import { quarterStartDate } from './quarters.ts';
 
 export type JournalReviewMode = 'review' | 'compare';
-export type JournalReviewViewMode = 'record' | 'overview' | 'recent' | 'search' | 'pastToday';
+export type JournalReviewViewMode = 'record' | 'plans' | 'overview' | 'recent' | 'search' | 'pastToday';
 
 export interface JournalReviewTarget {
 	kind: JournalKind;
@@ -95,6 +95,27 @@ function dottedDate(date: Date): string {
 
 function reviewCandidates(kind: JournalKind, date: Date): string[] {
 	return journalPaths(kind, date);
+}
+
+/** Compact UI heading only; paths, schemas and record labels remain unchanged. */
+/** Header follows the shared focus; overview follows its displayed month. */
+export function journalPlanningReviewHeaderTime(state: TimeTraceState, view: JournalReviewViewMode): string {
+ const focus = state.focus;
+ if (view === 'overview' || (view === 'plans' && focus.kind === 'day')) return `${state.visible.year} 年 ${state.visible.month} 月`;
+ if (focus.kind === 'month') return `${focus.year} 年 ${focus.month} 月`;
+ return timeTraceRecordHeading(focus);
+}
+
+export function timeTraceRecordHeading(focus: TimeFocus): string {
+ const start = atNoon(focusTargetDate(focus));
+ if (focus.kind === 'day') return `${start.getFullYear()} 年 ${start.getMonth() + 1} 月 ${start.getDate()} 日`;
+ const end = new Date(start);
+ let key: string;
+ if (focus.kind === 'week') { end.setDate(end.getDate() + 6); key = `${focus.isoYear}-W${String(focus.isoWeek).padStart(2, '0')}`; }
+ else if (focus.kind === 'month') { end.setMonth(end.getMonth() + 1, 0); key = `${focus.year}-${String(focus.month).padStart(2, '0')}`; }
+ else if (focus.kind === 'quarter') { end.setMonth(end.getMonth() + 3, 0); key = `${focus.year}-Q${focus.quarter}`; }
+ else { end.setMonth(11, 31); key = String(focus.year); }
+ return `${key} · ${dottedDate(start)}—${dottedDate(end)}`;
 }
 
 export function journalReviewTarget(focus: TimeFocus): JournalReviewTarget {
