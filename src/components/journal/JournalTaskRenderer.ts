@@ -15,11 +15,11 @@ export function renderJournalTaskSummary(parent: HTMLElement, app: App, store: E
 	const tasks = store.all();
 	const sourceLabels = new Map(processes(scanLearning(app), scanProjects(app), tasks)
 		.map(process => [process.sourceFile, taskSourceTypeLabel(process.contentType)]));
-	const { date, groups } = journalTasks(tasks, path);
+	const { date, groups } = journalTasks(tasks.filter(task => task.sourceType !== 'daily'), path);
 	parent.empty();
 	if (!date) return;
 	const total = TASK_DISPLAY_CATEGORIES.reduce((sum, category) => sum + groups[category].length, 0);
-	if (!total) { parent.createDiv({ cls: 'wb-empty', text: '今日暂无任务' }); return; }
+	if (!total) { if (!store.bySource(path).length) parent.createDiv({ cls: 'wb-empty', text: '今日暂无任务' }); return; }
 	for (const category of TASK_DISPLAY_CATEGORIES) {
 		const categoryTasks = groups[category];
 		if (!categoryTasks.length) continue;
@@ -43,4 +43,11 @@ function renderJournalTask(parent: HTMLElement, task: EmbeddedTask, app: App, st
 		const file = app.vault.getAbstractFileByPath(task.sourceFile);
 		if (file instanceof TFile) void app.workspace.getLeaf('tab').openFile(file);
 	});
+}
+
+/** A daily row is a projection of this journal's actual Markdown, never an extra aggregate copy. */
+export function renderJournalDailyTask(parent: HTMLElement, task: EmbeddedTask, store: EmbeddedTaskStore): void {
+	parent.empty();
+	renderEmbeddedTaskCheckbox(parent, task, store);
+	parent.createSpan({ cls: 'po-cal__task-name', text: task.text });
 }

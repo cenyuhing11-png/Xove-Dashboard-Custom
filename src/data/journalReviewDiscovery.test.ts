@@ -24,7 +24,7 @@ const root = '04-日记与复盘';
 
 type TestReviewKind = 'day' | 'week' | 'month' | 'quarter' | 'year';
 
-function source(kind: TestReviewKind, period: string, markdown = '', extra: Record<string, unknown> = {}, legacy = false): ReviewRecordSource {
+function source(kind: TestReviewKind, period: string, markdown = kind === 'day' ? '## 今日日记\n记录' : '', extra: Record<string, unknown> = {}, legacy = false): ReviewRecordSource {
 	const meta = kind === 'day'
 		? { 类型: '日记', 日期: period, ...extra }
 		: kind === 'week'
@@ -40,7 +40,7 @@ function source(kind: TestReviewKind, period: string, markdown = '', extra: Reco
 	return { path: `${root}/${folder}/${basename}.md`, basename, markdown, properties: meta };
 }
 
-function record(kind: TestReviewKind, period: string, markdown = '', extra: Record<string, unknown> = {}): ReviewRecord {
+function record(kind: TestReviewKind, period: string, markdown = kind === 'day' ? '## 今日日记\n记录' : '', extra: Record<string, unknown> = {}): ReviewRecord {
 	const value = reviewRecordFromSource(source(kind, period, markdown, extra));
 	assert.ok(value);
 	return value;
@@ -145,7 +145,7 @@ test('discovery recognizes all five journal and review kinds', () => {
 });
 
 test('legacy week month and year review paths remain discoverable', () => {
-	for (const item of [source('week', '2026-W37', '', {}, true), source('month', '2026-09', '', {}, true), source('year', '2026', '', {}, true), source('day', '2026-09-10', '', {}, true)]) {
+	for (const item of [source('week', '2026-W37', '', {}, true), source('month', '2026-09', '', {}, true), source('year', '2026', '', {}, true), source('day', '2026-09-10', '## 今日日记\n记录', {}, true)]) {
 		assert.ok(reviewRecordFromSource(item));
 	}
 });
@@ -205,13 +205,13 @@ test('daily record falls back to a legacy H1 title', () => {
 
 test('daily record falls back to quick-note count without inventing unnamed diary text', () => {
 	assert.equal(record('day', '2026-09-10', '## 随时记\n- 09:20 一条\n- 12:30 二条').title, '随时记 · 2条');
-	assert.equal(record('day', '2026-09-11', '## 今日日记\n').title, '暂无正文');
+	assert.equal(reviewRecordFromSource(source('day', '2026-09-11', '## 今日日记\n')), null);
 });
 
 test('daily recent title falls back from diary body to reflection and then empty copy', () => {
 	assert.equal(record('day', '2026-09-08', '## 今日日记\n第一段正文\n\n第二段').title, '第一段正文');
 	assert.equal(record('day', '2026-09-09', '## 今日回看\n今天的回看').title, '今天的回看');
-	assert.equal(record('day', '2026-09-10', '## 随时记\n\n## 今日日记\n\n## 今日回看\n').title, '暂无正文');
+	assert.equal(reviewRecordFromSource(source('day', '2026-09-10', '## 随时记\n\n## 今日日记\n\n## 今日回看\n')), null);
 });
 
 test('week month quarter and year records search their review bodies', () => {

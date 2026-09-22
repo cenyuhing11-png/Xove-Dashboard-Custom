@@ -1,5 +1,8 @@
 import { App, Notice, Plugin, TFile, TFolder } from 'obsidian';
-import { DAILY_TASK_FILE, DAILY_TASK_TEMPLATE, EmbeddedTaskIndex } from './embeddedTasks';
+import { EmbeddedTaskIndex } from './embeddedTasks';
+
+import { ensureCanonicalDailyJournal } from './journal';
+import { quickJournalFiles } from './quickJournalVault';
 
 export class EmbeddedTaskStore extends EmbeddedTaskIndex {
 	private listeners = new Set<() => void>();
@@ -15,30 +18,25 @@ export class EmbeddedTaskStore extends EmbeddedTaskIndex {
 			paths: () => app.vault.getMarkdownFiles().map(f => f.path),
 			read: path => app.vault.read(file(path)),
 			process: async (path, update) => { await app.vault.process(file(path), update); },
-			ensureDaily: async () => {
-				const existing = app.vault.getAbstractFileByPath(DAILY_TASK_FILE);
-				if (existing instanceof TFile) return;
-				if (existing) throw new Error('日常任务路径被目录占用');
-				const root = '05-计划';
-				if (!app.vault.getAbstractFileByPath(root)) {
-					try { await app.vault.createFolder(root); }
-					catch (e) { if (!(app.vault.getAbstractFileByPath(root) instanceof TFolder)) throw e; }
-				}
-				try { await app.vault.create(DAILY_TASK_FILE, DAILY_TASK_TEMPLATE); }
-				catch (e) { if (!(app.vault.getAbstractFileByPath(DAILY_TASK_FILE) instanceof TFile)) throw e; }
-			},
+			ensureDaily: async date => { await ensureCanonicalDailyJournal(quickJournalFiles(app), date); },
 		}, () => crypto.randomUUID());
-		const schedule = () => {
+		const dirty = new Set<string>();
+		const schedule = (entry: { path: string }, oldPath?: string) => {
+			dirty.add(entry.path); if (oldPath) dirty.add(oldPath);
+			if (entry instanceof TFolder) {
+				for (const file of app.vault.getMarkdownFiles()) if (file.path.startsWith(`${entry.path}/`)) dirty.add(file.path);
+				for (const task of this.all()) if (task.sourceFile.startsWith(`${oldPath ?? entry.path}/`)) dirty.add(task.sourceFile);
+			}
 			clearTimeout(this.timer);
-			this.timer = setTimeout(() => { void this.refresh().catch(e => new Notice(`任务索引更新失败：${String(e)}`)); }, 150);
+			this.timer = setTimeout(() => { const paths = [...dirty]; dirty.clear(); void this.refresh(paths).catch(e => new Notice(`任务索引更新失败：${String(e)}`)); }, 150);
 		};
-		owner.registerEvent(app.vault.on('create', schedule));
-		owner.registerEvent(app.vault.on('modify', schedule));
-		owner.registerEvent(app.vault.on('delete', schedule));
-		owner.registerEvent(app.vault.on('rename', schedule));
+		owner.registerEvent(app.vault.on('create', entry => schedule(entry)));
+		owner.registerEvent(app.vault.on('modify', entry => schedule(entry)));
+		owner.registerEvent(app.vault.on('delete', entry => schedule(entry)));
+		owner.registerEvent(app.vault.on('rename', (entry, oldPath) => schedule(entry, oldPath)));
 		owner.register(() => { clearTimeout(this.timer); this.listeners.clear(); });
 		this.ready = this.refresh().catch(e => { new Notice(`任务索引初始化失败：${String(e)}`); });
 	}
-	override async refresh(): Promise<void> { await super.refresh(); this.listeners.forEach(fn => fn()); }
+	override async refresh(changed?: readonly string[]): Promise<void> { await super.refresh(changed); this.listeners.forEach(fn => fn()); }
 	subscribe(fn: () => void): () => void { this.listeners.add(fn); return () => this.listeners.delete(fn); }
 }

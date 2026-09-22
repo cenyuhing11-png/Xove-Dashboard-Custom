@@ -351,7 +351,7 @@ test('quarter is a lightweight same-row scope derived from visible month without
 	assert.match(css, /\.mx-mini-calendar-quarter \{[^}]*font-family: var\(--ad-font-mono\)/);
 });
 test('one shared mini calendar renderer is mounted once by the sidebar', () => {
-	assert.equal((view.match(/renderTimeTraceMiniCalendar\(list/g) ?? []).length, 1);
+	assert.equal((view.match(/renderTimeTraceMiniCalendar\(tools/g) ?? []).length, 1);
 	assert.match(view, /state: this\.timeState[\s\S]*hasMarker: this\.markerResolver\(\)[\s\S]*onChange: state => this\.setTimeState\(state\)/);
 });
 test('month arrows move only the visible month and preserve focus', () => {
@@ -456,7 +456,7 @@ test('journal task summary renders real unchecked and checked Embedded Task cont
 test('journal task summary keeps per-category progress, hides empty groups and maps projects to creation', () => {
 	assert.match(journalTaskRenderer, /if \(!categoryTasks\.length\) continue/);
 	assert.match(journalTaskRenderer, /categoryTasks\.filter\(task => task\.completed\)\.length} \/ \$\{categoryTasks\.length}/);
-	assert.match(journalTaskRenderer, /journalTasks\(tasks, path\)/);
+	assert.match(journalTaskRenderer, /journalTasks\(tasks\.filter\(task => task\.sourceType !== 'daily'\), path\)/);
 });
 test('all task detail headings share the centralized short user labels', () => {
 	for (const [key, label] of [['learning', '学习'], ['creation', '创作'], ['daily', '日常']]) assert.match(embeddedTasks, new RegExp(`${key}: '${label}'`));

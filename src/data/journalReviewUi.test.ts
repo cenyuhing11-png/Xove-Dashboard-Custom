@@ -102,7 +102,7 @@ test('result rows route back to the shared focus and record reader', () => {
 
 test('a missing day record exposes one lightweight focused-date creation action', () => {
 	assert.match(view, /!reviewFile && \(target\.kind === 'day' \|\| this\.reviewMode === 'review'\)[\s\S]*?this\.renderMissingReview\(content, target\)/);
-	assert.match(view, /day: \['这一天尚未创建日记', '创建这天日记 →'\]/);
+	assert.match(view, /\['这一天尚未创建日记', '创建这天日记 →'\]/);
 	assert.match(view, /mx-inline-action mx-journal-review-create/);
 });
 
@@ -185,7 +185,7 @@ test('review discovery is read-only and never auto-creates records', () => {
 	const adapter = readFileSync(new URL('./journalReview.ts', import.meta.url), 'utf8');
 	const discovery = adapter.match(/export async function discoverReviewRecords[\s\S]*?\n}/)?.[0] ?? '';
 	assert.match(discovery, /getMarkdownFiles/);
-	assert.match(discovery, /cachedRead/);
+	assert.match(discovery, /readJournalContent/);
 	assert.doesNotMatch(discovery, /vault\.(?:create|modify|process|rename|delete)/);
 });
 

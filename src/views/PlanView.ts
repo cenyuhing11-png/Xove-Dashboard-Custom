@@ -1,3 +1,4 @@
+import { meaningfulJournalDates, readJournalContent, hasMeaningfulJournalContent } from '../data/journal';
 import { Component, ItemView, MarkdownRenderer, Menu, Notice, TFile, WorkspaceLeaf } from 'obsidian';
 import type { App, ViewStateResult } from 'obsidian';
 import type Dashboard from '../main';
@@ -78,6 +79,9 @@ export class PlanWorkspaceRenderer extends Component {
 	private sectionDisposers: Array<() => void> = [];
 	private miniCalendarDisposer?: () => void;
 	private selectedLongTermPlanId = '';
+	private mobileCalendarExpanded = false;
+	private meaningfulDays = new Set<string>();
+	private preparedReviewPath = '';
 	private expandedLongTermPlanId = '';
 	private expandedLongTermStageIds = new Set<string>();
 	private quickTasks?: ProcessTasksModal;
@@ -159,6 +163,7 @@ export class PlanWorkspaceRenderer extends Component {
 
 	private setTimeState(state: TimeTraceState): void {
 		this.timeState = state;
+		this.preparedReviewPath = '';
 		if (this.mode === 'review') { this.clearReviewTimers(); this.reviewView = 'record'; this.reviewActionMessage = ''; }
 		this.calendarMode = state.focus.kind === 'week' ? 'week' : 'month';
 		void this.renderPlanContent();
@@ -182,6 +187,7 @@ export class PlanWorkspaceRenderer extends Component {
 		const snapshot = this.mode === 'board'
 			? await readPlanWorkspace(this.planFiles(), year, month)
 			: undefined;
+		this.meaningfulDays = await meaningfulJournalDates(this.app);
 		const longTermPlans = this.mode === 'longTermPlan' ? await scanLongTermPlans(this.app) : [];
 		if (token !== this.generation || container !== this.workspaceEl) return;
 		container.empty();
@@ -196,7 +202,7 @@ export class PlanWorkspaceRenderer extends Component {
 	}
 
 	private markerResolver(): (focus: TimeFocus) => boolean {
-		const dailyDates = new Set(this.app.vault.getMarkdownFiles().map(file => journalDateFromPath(file.path)).filter((date): date is string => !!date));
+		const dailyDates = this.meaningfulDays;
 		const exists = (path: string) => this.app.vault.getAbstractFileByPath(path) instanceof TFile;
 		const mode = this.mode === 'board' ? 'cycle' : this.mode === 'longTermPlan' ? 'longTerm' : this.mode;
 		return focus => hasTimeTraceMarker(mode, focus, {
@@ -206,17 +212,27 @@ export class PlanWorkspaceRenderer extends Component {
 		});
 	}
 
+	private isMobilePhone(): boolean {
+		return document.body.classList.contains('is-mobile') && document.body.classList.contains('is-phone');
+	}
+
 	private renderSidebar(container: HTMLElement): void {
-		const side = container.createDiv({ cls: 'po-sidebar' });
-		const list = side.createDiv({ cls: 'po-sidebar__list' });
+		const side = container.createDiv({ cls: 'po-sidebar mx-time-trace-sidebar' });
+		const list = side.createDiv({ cls: 'po-sidebar__list mx-time-trace-nav' });
 		for (const [mode, label] of [['board', '周期计划'], ['longTermPlan', '长期计划'], ['calendar', '综合日历'], ['review', '日记回顾']] as const) {
-			const item = list.createDiv({ cls: `po-sidebar__item${this.mode === mode ? ' is-active' : ''}`, text: label, attr: { role: 'button', tabindex: '0' } });
+			const item = list.createDiv({ cls: `po-sidebar__item${this.mode === mode ? ' is-active' : ''} mx-time-trace-nav-item`, text: label, attr: { role: 'button', tabindex: '0' } });
 			const selectMode = () => { this.mode = mode; void this.renderPlanContent(); };
 			item.addEventListener('click', selectMode);
 			item.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectMode(); } });
 		}
 		list.createDiv({ cls: 'mx-time-trace-divider', attr: { 'aria-hidden': 'true' } });
-		this.miniCalendarDisposer = renderTimeTraceMiniCalendar(list, { state: this.timeState, hasMarker: this.markerResolver(), onChange: state => this.setTimeState(state) });
+		const tools = list.createDiv({ cls: 'mx-time-trace-time-tools' });
+		this.miniCalendarDisposer = renderTimeTraceMiniCalendar(tools, {
+			state: this.timeState, hasMarker: this.markerResolver(),
+			collapsed: this.isMobilePhone() && !this.mobileCalendarExpanded,
+			onToggleCollapsed: () => { this.mobileCalendarExpanded = !this.mobileCalendarExpanded; void this.renderPlanContent(); },
+			onChange: state => this.setTimeState(state),
+		});
 	}
 
 	private renderPlanCard(column: HTMLElement, card: PlanWorkspaceCard, focused = false): void {
@@ -376,7 +392,7 @@ export class PlanWorkspaceRenderer extends Component {
 
 	private renderMissingReview(parent: HTMLElement, target: ReturnType<typeof journalReviewTarget>): void {
 		const copy = {
-			day: ['这一天尚未创建日记', '创建这天日记 →'],
+			day: this.existingFile(target.reviewPaths) ? ['这一天还没有日记内容', '开始写这天日记 →'] : ['这一天尚未创建日记', '创建这天日记 →'],
 			week: ['本周尚未创建周复盘', '创建本周复盘 →'],
 			month: ['本月尚未创建月复盘', '创建本月复盘 →'],
 			quarter: ['本季尚未创建季复盘', '创建本季复盘 →'],
@@ -391,7 +407,7 @@ export class PlanWorkspaceRenderer extends Component {
 			const reviewMode = this.reviewMode;
 			create.disabled = true;
 			try {
-				await ensureReviewForFocus(this.planFiles(), focus);
+				this.preparedReviewPath = await ensureReviewForFocus(this.planFiles(), focus);
 				if (this.mode === 'review' && this.reviewView === 'record' && this.reviewMode === reviewMode && sameTimeFocus(this.timeState.focus, focus)) await this.renderPlanContent();
 			} catch (error) {
 				create.disabled = false;
@@ -455,6 +471,7 @@ export class PlanWorkspaceRenderer extends Component {
 			edit.onclick = () => this.openSource(reviewFile);
 		}
 		if (token !== this.generation || !main.isConnected) return;
+		if (target.kind === 'day' && reviewFile && this.preparedReviewPath !== reviewFile.path && !hasMeaningfulJournalContent(await readJournalContent(this.app, reviewFile), this.app.metadataCache.getFileCache(reviewFile)?.frontmatter)) { this.renderMissingReview(content, target); return; }
 		if (!reviewFile && (target.kind === 'day' || this.reviewMode === 'review')) { this.renderMissingReview(content, target); return; }
 
 		if (target.kind !== 'day' && this.reviewMode === 'compare') {
@@ -567,7 +584,7 @@ export class PlanWorkspaceRenderer extends Component {
 		const files = this.app.vault.getMarkdownFiles().filter(file => journalDateFromPath(file.path))
 			.sort((a, b) => a.path.length - b.path.length || a.path.localeCompare(b.path, 'zh-CN'));
 		const entries = await Promise.all(files.map(async file => {
-			try { return journalCalendarEntry(file.path, await this.app.vault.cachedRead(file), this.app.metadataCache.getFileCache(file)?.frontmatter); }
+			try { return journalCalendarEntry(file.path, await readJournalContent(this.app, file), this.app.metadataCache.getFileCache(file)?.frontmatter); }
 			catch { return null; }
 		}));
 		const journals = new Map<string, JournalCalendarEntry>();

@@ -26,6 +26,37 @@ import { quickJournalFiles } from './data/quickJournalVault';
 import { QuickJournalModal } from './views/QuickJournalModal';
 import type { Process } from './data/processes';
 
+console.info('[Mengxu MobileDiag] module:loaded');
+
+function mobileDiag(step: string, extra?: unknown): void {
+	if (extra === undefined) console.info(`[Mengxu MobileDiag] ${step}`);
+	else console.info(`[Mengxu MobileDiag] ${step}`, extra);
+}
+
+function mobileDiagStage<T>(step: string, run: () => T): T {
+	mobileDiag(`${step}:start`);
+	try {
+		const result = run();
+		mobileDiag(`${step}:done`);
+		return result;
+	} catch (error) {
+		console.error(`[Mengxu MobileDiag] FAIL ${step}`, error);
+		throw error;
+	}
+}
+
+async function mobileDiagAsyncStage<T>(step: string, run: () => Promise<T>): Promise<T> {
+	mobileDiag(`${step}:start`);
+	try {
+		const result = await run();
+		mobileDiag(`${step}:done`);
+		return result;
+	} catch (error) {
+		console.error(`[Mengxu MobileDiag] FAIL ${step}`, error);
+		throw error;
+	}
+}
+
 /** 番茄钟运行时状态（与主页卡片共享，状态栏实时显示） */
 export interface PomoState {
 	mode: 'work' | 'break';
@@ -59,47 +90,66 @@ export default class Dashboard extends Plugin {
 	private pomoAudio: HTMLAudioElement | null = null;
 
 	async onload(): Promise<void> {
-		await this.loadSettings();
-		this.embeddedTasks = new EmbeddedTaskStore(this.app, this);
-		this.shellTaskStore = new TaskStore(this.app, () => this.settings);
-		this.quickJournal = new QuickJournalService(quickJournalFiles(this.app));
-		this.registerMarkdownPostProcessor((el, ctx) => mountJournalTaskSummary(el, ctx, this.app, this.embeddedTasks));
-		this.registerEditorExtension(journalTitleLivePreviewExtension(this.app));
-		this.registerEditorExtension(journalTaskLivePreviewExtension(this.app, this.embeddedTasks));
-		this.registerEditorExtension(journalLayoutLivePreviewExtension());
-
-		this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
-		this.registerView(DIRECTION_VIEW, (leaf) => new DirectionView(leaf, this));
-		this.registerView(PROJECT_VIEW, (leaf) => new ProjectView(leaf, this.embeddedTasks, () => this.settings.theme, this));
-		this.registerView(PLAN_VIEW, (leaf) => new PlanView(leaf, this));
-
-		this.addRibbonIcon('layout-dashboard', '打开梦序', () => {
-			void this.activateView();
-		});
-
-		this.addCommand({
-			id: 'open-dashboard',
-			name: '打开梦序',
-			callback: () => {
-				void this.activateView();
-			},
-		});
-		this.addCommand({
-			id: 'quick-journal',
-			name: '梦序：随时记',
-			callback: () => this.openQuickJournal(),
-		});
-
-		this.addSettingTab(new DashboardSettingTab(this.app, this));
-
-		// 番茄钟状态栏：右下角显示 🍅/☕ + 剩余时间（未开始时不显示）
-		this.pomoStatusEl = this.addStatusBarItem();
-		this.pomoStatusEl.addClass('ad-pomo-status');
-		this.pomoStatusEl.hide();
-		this.registerInterval(window.setInterval(() => this.tickPomoStatusBar(), 500));
-
-		// 更新日志弹窗：非首次启动且版本有更新时提示（延迟到渲染完成后，不阻塞启动）
-		void this.maybeShowUpdateModal();
+		mobileDiag('01 onload:start');
+		try {
+			await mobileDiagAsyncStage('02 load-settings', () => this.loadSettings());
+			mobileDiagStage('03 services', () => {
+				this.embeddedTasks = new EmbeddedTaskStore(this.app, this);
+				this.shellTaskStore = new TaskStore(this.app, () => this.settings);
+				this.quickJournal = new QuickJournalService(quickJournalFiles(this.app));
+			});
+			mobileDiagStage('04 markdown-processor', () => {
+				this.registerMarkdownPostProcessor((el, ctx) => mountJournalTaskSummary(el, ctx, this.app, this.embeddedTasks));
+			});
+			mobileDiagStage('05 editor-extensions', () => {
+				this.registerEditorExtension(journalTitleLivePreviewExtension(this.app));
+				this.registerEditorExtension(journalTaskLivePreviewExtension(this.app, this.embeddedTasks));
+				this.registerEditorExtension(journalLayoutLivePreviewExtension());
+			});
+			mobileDiagStage('06 views', () => {
+				this.registerView(VIEW_TYPE, (leaf) => new DashboardView(leaf, this));
+				this.registerView(DIRECTION_VIEW, (leaf) => new DirectionView(leaf, this));
+				this.registerView(PROJECT_VIEW, (leaf) => new ProjectView(leaf, this.embeddedTasks, () => this.settings.theme, this));
+				this.registerView(PLAN_VIEW, (leaf) => new PlanView(leaf, this));
+			});
+			mobileDiagStage('07 commands', () => {
+				this.addRibbonIcon('layout-dashboard', '打开梦序', () => {
+					void this.activateView();
+				});
+				this.addCommand({
+					id: 'open-dashboard',
+					name: '打开梦序',
+					callback: () => {
+						void this.activateView();
+					},
+				});
+				this.addCommand({
+					id: 'quick-journal',
+					name: '梦序：随时记',
+					callback: () => this.openQuickJournal(),
+				});
+			});
+			mobileDiagStage('08 settings-tab', () => this.addSettingTab(new DashboardSettingTab(this.app, this)));
+			mobileDiagStage('09 status-bar', () => {
+				// 番茄钟状态栏：右下角显示 🍅/☕ + 剩余时间（未开始时不显示）
+				this.pomoStatusEl = this.addStatusBarItem();
+				this.pomoStatusEl.addClass('ad-pomo-status');
+				this.pomoStatusEl.hide();
+				this.registerInterval(window.setInterval(() => this.tickPomoStatusBar(), 500));
+			});
+			// 更新日志弹窗：非首次启动且版本有更新时提示（延迟到渲染完成后，不阻塞启动）
+			mobileDiag('10 update-modal:queued');
+			void this.maybeShowUpdateModal();
+			mobileDiag('11 onload:complete');
+		} catch (error) {
+			console.error('[Mengxu MobileDiag] ONLOAD_FATAL', error);
+			if (error instanceof Error) {
+				console.error('[Mengxu MobileDiag] ONLOAD_FATAL name', error.name);
+				console.error('[Mengxu MobileDiag] ONLOAD_FATAL message', error.message);
+				console.error('[Mengxu MobileDiag] ONLOAD_FATAL stack', error.stack);
+			}
+			throw error;
+		}
 	}
 
 	/** 状态栏每 500ms 刷新一次剩余时间 */

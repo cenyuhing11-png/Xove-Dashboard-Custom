@@ -1,10 +1,14 @@
+import { dailyTaskPath, todayTaskDate } from './embeddedTasks.ts';
+import { journalTemplate as dailyTemplate } from './journal.ts';
+const DAILY_TASK_FILE = dailyTaskPath('2026-09-06');
+const DAILY_TASK_TEMPLATE = dailyTemplate('day', new Date('2026-09-06T12:00:00'));
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildSync } from 'esbuild';
 import { runInNewContext } from 'node:vm';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { DAILY_TASK_FILE, EmbeddedTaskIndex, parseEmbeddedTasks } from './embeddedTasks.ts';
+import { EmbeddedTaskIndex, parseEmbeddedTasks } from './embeddedTasks.ts';
 import { readFileSync } from 'node:fs';
 
 // A small Obsidian DOM/API double exercises the actual modal event handlers.
@@ -72,7 +76,7 @@ function fixture() {
 	const learning = '01-学习与资料/已有项目.md';
 	files.set(project, '---\n类型: 项目\n---\n## 项目任务\n');
 	files.set(learning, '---\n类型: 学习主题\n---\n## 学习任务\n');
-	files.set(DAILY_TASK_FILE, '## 日常待办\n');
+	files.set(DAILY_TASK_FILE, '## 今日任务\n');
 	dirs.add('03-项目与成果');
 	const app = {
 		vault: {
@@ -128,9 +132,9 @@ for (const [type, key] of [['daily', DAILY_TASK_FILE], ['project', 'project'], [
 		set(m, '任务内容', '具体行动'); set(m, '归属', type === 'daily' ? 'daily' : 'process'); set(m, '日期（可选）', '2026-09-06');
 		if (type !== 'daily') set(m, '所属进程', f[type]);
 		await button(m, '创建任务').onclick();
-		const path = key === DAILY_TASK_FILE ? key : f[key]; const tasks = parseEmbeddedTasks(path, f.files.get(path)!);
+		const path = type === 'daily' ? DAILY_TASK_FILE : type === 'project' ? f.project : f.learning; const tasks = parseEmbeddedTasks(path, f.files.get(path)!);
 		assert.equal(tasks.length, 1); assert.equal(tasks[0]!.text, '具体行动'); assert.equal(tasks[0]!.date, '2026-09-06');
-		assert.equal(tasks[0]!.sourceHeading, type === 'daily' ? '日常待办' : type === 'learning' ? '学习任务' : '项目任务');
+		assert.equal(tasks[0]!.sourceHeading, type === 'daily' ? '今日任务' : type === 'learning' ? '学习任务' : '项目任务');
 		assert.equal(f.files.size, 3); assert.equal(m.closed, true);
 	});
 }
@@ -142,7 +146,7 @@ test('task optional date and preset project retained through the original contro
 });
 test('task switching back to daily clears stale project destination', async () => {
 	const f = fixture(); const m = new f.Task(f.app, f.store, f.project); m.onOpen();
-	set(m, '所属进程', f.learning); set(m, '归属', 'daily'); set(m, '任务内容', '日常行动'); await button(m, '创建任务').onclick();
+	set(m, '所属进程', f.learning); set(m, '归属', 'daily'); set(m, '日期（可选）', '2026-09-06'); set(m, '任务内容', '日常行动'); await button(m, '创建任务').onclick();
 	assert.equal(parseEmbeddedTasks(DAILY_TASK_FILE, f.files.get(DAILY_TASK_FILE)!).length, 1); assert.equal(parseEmbeddedTasks(f.project, f.files.get(f.project)!).length, 0);
 });
 test('task missing source and invalid content leave modal open and re-enable create', async () => {

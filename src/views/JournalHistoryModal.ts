@@ -1,5 +1,5 @@
 import { App, Modal } from 'obsidian';
-import { journalEntry, journalHistory } from '../data/journal';
+import { hasMeaningfulJournalContent, readJournalContent, journalEntry, journalHistory } from '../data/journal';
 import type { JournalEntry, JournalKind } from '../data/journal';
 import { beginListModal, closeListModal, listEntry } from './viewPrimitives';
 import { reviewDisplayLabel, reviewDisplayTitle } from '../data/cycleDisplayLabels';
@@ -7,6 +7,7 @@ import { reviewDisplayLabel, reviewDisplayTitle } from '../data/cycleDisplayLabe
 export class JournalHistoryModal extends Modal {
 	private list!: HTMLElement;
 	private off: Array<() => void> = [];
+	private generation = 0;
 	constructor(app: App, private mode: 'records' | 'reviews', private openNote: (path: string) => Promise<void>, private create: (kind: JournalKind) => Promise<void>) { super(app); }
 	onOpen(): void {
 		beginListModal(this, this.mode === 'records' ? '最近记录' : '查看复盘');
@@ -26,18 +27,20 @@ export class JournalHistoryModal extends Modal {
 		this.off = [() => this.app.metadataCache.offref(changed), () => this.app.metadataCache.offref(resolved), () => this.app.vault.offref(deleted), () => this.app.vault.offref(renamed)];
 		this.render();
 	}
-	private render(): void {
-		this.list.empty();
+	private async render(): Promise<void> {
+		const generation = ++this.generation;
 		const entries: JournalEntry[] = [];
 		for (const file of this.app.vault.getMarkdownFiles()) {
 			const entry = journalEntry(file.path, file.basename, this.app.metadataCache.getFileCache(file)?.frontmatter);
-			if (entry) entries.push(entry);
+			try { if (entry && (entry.kind !== 'day' || hasMeaningfulJournalContent(await readJournalContent(this.app, file), this.app.metadataCache.getFileCache(file)?.frontmatter))) entries.push(entry); } catch { /* Temporarily unavailable files are absent from history. */ }
 		}
+		if (generation !== this.generation) return;
+		this.list.empty();
 		const recent = journalHistory(entries, this.mode);
 		if (!recent.length) this.list.createEl('p', { cls: 'po-empty', text: this.mode === 'records' ? '暂无日记或周复盘' : '暂无月复盘或年复盘' });
 		for (const entry of recent) {
 			listEntry(this.list, reviewDisplayTitle(entry.kind, entry.title), `${reviewDisplayLabel(entry.kind)} · ${entry.period}`, () => { this.close(); void this.openNote(entry.path); });
 		}
 	}
-	onClose(): void { this.off.forEach((off) => off()); this.off = []; closeListModal(this); }
+	onClose(): void { this.generation++; this.off.forEach((off) => off()); this.off = []; closeListModal(this); }
 }

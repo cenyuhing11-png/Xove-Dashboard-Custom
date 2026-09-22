@@ -1,5 +1,5 @@
 import { App, Modal, Notice, TFile } from 'obsidian';
-import { DAILY_TASK_FILE, groupEmbeddedForDisplay, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, taskSourceSubtitle } from '../data/embeddedTasks';
+import { embeddedSource, groupEmbeddedForDisplay, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, taskSourceSubtitle } from '../data/embeddedTasks';
 import type { EmbeddedTask } from '../data/embeddedTasks';
 import type { EmbeddedTaskStore } from '../data/embeddedTaskVault';
 import { scanProjects } from '../data/projectVault';
@@ -28,11 +28,31 @@ export function renderEmbeddedRows(parent: HTMLElement, tasks: EmbeddedTask[], a
 		const subtitle = taskSourceSubtitle(task, detail);
 		if (task.date || subtitle) {
 			const meta = body.createDiv({ cls: 'mx-task-meta' });
-			if (task.date) meta.createSpan({ text: `📅 ${task.date}${subtitle ? ' · ' : ''}` });
+			if (task.date && task.sourceType === 'daily') {
+				meta.createEl('button', { cls: 'mx-task-link', text: `📅 ${task.date}`, attr: { 'aria-label': `修改 ${task.text} 日期` } }).onclick = () => new EmbeddedTaskDateModal(app, store, task).open();
+			} else if (task.date) meta.createSpan({ text: `📅 ${task.date}${subtitle ? ' · ' : ''}` });
 			if (subtitle) meta.createEl('button', { text: `↳ ${subtitle}`, cls: 'mx-task-link', attr: { title: task.sourceFile } }).onclick = open;
 		}
 	}
 }
+class EmbeddedTaskDateModal extends Modal {
+	constructor(app: App, private store: EmbeddedTaskStore, private task: EmbeddedTask) { super(app); }
+	onOpen(): void {
+		const body = beginListModal(this, '修改任务日期');
+		const date = body.createEl('input', { cls: 'ad-modal-input', attr: { type: 'date', value: this.task.date ?? '', 'aria-label': '任务日期' } });
+		const actions = body.createDiv({ cls: 'ad-modal-btns' });
+		actions.createEl('button', { cls: 'ad-modal-btn', text: '取消' }).onclick = () => this.close();
+		const save = actions.createEl('button', { cls: 'ad-modal-btn ad-modal-btn--primary', text: '保存' });
+		save.onclick = async () => {
+			save.disabled = true;
+			try { await this.store.changeDate(this.task, date.value); this.close(); }
+			catch (error) { new Notice(String(error)); }
+			finally { save.disabled = false; }
+		};
+	}
+	onClose(): void { closeListModal(this); }
+}
+
 export class NewEmbeddedTaskModal extends Modal {
 	constructor(app: App, private store: EmbeddedTaskStore, private presetPath?: string) { super(app); }
 	onOpen(): void {
@@ -44,7 +64,7 @@ export class NewEmbeddedTaskModal extends Modal {
 		// The same read-only Process Adapter as the overview excludes ordinary learning resources.
 		const candidates = () => processes(scanLearning(this.app), scanProjects(this.app), [])
 			.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN') || a.processType.localeCompare(b.processType) || a.sourceFile.localeCompare(b.sourceFile, 'zh-CN'));
-		let assignment: 'daily' | 'process' = this.presetPath && this.presetPath !== DAILY_TASK_FILE ? 'process' : 'daily';
+		let assignment: 'daily' | 'process' = this.presetPath && embeddedSource(this.presetPath) !== 'daily' ? 'process' : 'daily';
 		let path = candidates().find(p => p.sourceFile === this.presetPath)?.sourceFile ?? '';
 		let saving = false;
 		const titleField = contentEl.createDiv({ cls: 'ad-modal-field' });
@@ -77,7 +97,7 @@ export class NewEmbeddedTaskModal extends Modal {
 		const dateField = contentEl.createDiv({ cls: 'ad-modal-field' });
 		dateField.createEl('label', { cls: 'ad-modal-label', text: '日期（可选）' });
 		const dateInput = dateField.createEl('input', { cls: 'ad-modal-input', attr: { type: 'date', 'aria-label': '日期（可选）' } });
-		contentEl.createEl('div', { cls: 'ad-modal-hint', text: 'v1：计划执行 / 截止日期；不填则不进入今日执行' });
+		contentEl.createEl('div', { cls: 'ad-modal-hint', text: '日常任务未填日期时安排在今天；进程任务未填日期时不进入今日执行' });
 		const btns = contentEl.createDiv({ cls: 'ad-modal-btns' });
 		btns.createEl('button', { cls: 'ad-modal-btn', text: '取消' }).onclick = () => this.close();
 		const create = btns.createEl('button', { cls: 'ad-modal-btn ad-modal-btn--primary', text: '创建任务' });
@@ -85,7 +105,8 @@ export class NewEmbeddedTaskModal extends Modal {
 			if (saving) return;
 			saving = true; updateCreate();
 			try {
-				const target = assignment === 'daily' ? DAILY_TASK_FILE : candidates().find(p => p.sourceFile === path)?.sourceFile;
+				const target = candidates().find(p => p.sourceFile === path)?.sourceFile;
+				if (assignment === 'daily') { await this.store.addDaily(textInput.value, dateInput.value || undefined); this.close(); new Notice('任务已写入日记'); return; }
 				if (!target) { renderPicker(); throw new Error('请先选择有效的所属进程'); }
 				await this.store.add(target, textInput.value, dateInput.value || undefined);
 				this.close(); new Notice('任务已写入来源笔记');
