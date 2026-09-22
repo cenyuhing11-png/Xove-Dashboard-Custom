@@ -3029,3 +3029,28 @@ body.is-mobile.is-phone .mx-quick-journal-footer {
   border-top: 1px solid var(--ad-line);
   background: var(--background-primary);
 }
+
+/* Journal & Review: stable, plain-Markdown inline editing. */
+.mx-journal-inline-section { margin: 22px 0; min-width: 0; }
+.mx-journal-inline-heading { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+.mx-journal-inline-field { min-width: 0; }
+textarea.mx-journal-inline-input { width: 100%; min-height: 38px; max-height: 480px; resize: vertical; overflow-y: auto; background: transparent; color: var(--text-normal); border: 0; border-bottom: 1px solid var(--background-modifier-border); border-radius: 0; box-shadow: none; padding: 8px 2px; font: inherit; line-height: 1.7; white-space: pre-wrap; }
+textarea.mx-journal-inline-input:focus { border-bottom-color: var(--interactive-accent); box-shadow: none; }
+.mx-journal-inline-field.is-title textarea { font-size: 18px; font-weight: 500; }
+.mx-journal-inline-state { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-height: 22px; font-size: 11px; color: var(--text-muted); }
+.mx-journal-inline-state button[hidden] { display: none; }
+.mx-journal-inline-error, .has-save-error .mx-journal-inline-state { color: var(--text-error); }
+.mx-journal-inline-entries { font-size: 14px; overflow-wrap: anywhere; }
+.mx-journal-review-raw { margin-left: auto; font-size: 11px; opacity: .65; }
+.mx-journal-overview-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.mx-journal-overview-grid { display: grid; width: 100%; min-width: 0; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.mx-journal-overview-weekday { text-align: center; color: var(--text-muted); font-size: 12px; }
+button.mx-journal-overview-day { display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; min-width: 0; min-height: 92px; height: auto; padding: 8px; background: transparent; border: 1px solid var(--background-modifier-border); box-shadow: none; overflow: hidden; }
+.mx-journal-overview-day.is-out { opacity: .45; }
+.mx-journal-overview-date { font-size: 12px; }
+.mx-journal-overview-summary { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; white-space: normal; overflow-wrap: anywhere; text-align: left; font-size: 12px; line-height: 1.45; margin-top: 5px; max-width: 100%; }
+body.is-mobile.is-phone .mx-journal-overview-grid { width: 100%; min-width: 0; gap: 2px; }
+body.is-mobile.is-phone button.mx-journal-overview-day { min-height: 76px; padding: 5px 3px; }
+body.is-mobile.is-phone .mx-journal-inline-input { font-size: 16px; max-height: min(480px, 50dvh); scroll-margin-block: 80px; }
+body.is-mobile.is-phone .mx-journal-review-content { min-width: 0; overflow-wrap: anywhere; }
+body.is-mobile.is-phone .mx-journal-review-tools { flex-wrap: wrap; }

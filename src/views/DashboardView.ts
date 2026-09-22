@@ -919,6 +919,7 @@ export class DashboardView extends ItemView {
 
 	/** Switch only the workbench content area; the shell and compass stay mounted. */
 	async setSection(section: WorkbenchSection): Promise<void> {
+		if (this.currentSection === 'timeTrace' && !await this.planRenderer.flushInlineEdits()) return;
 		if (!this.boardEl) return;
 		if (section === 'direction') {
 			try { if (!this.selectedDirection) throw new Error('未选择人生方向'); directionInfo(this.selectedDirection); }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const view = readFileSync(new URL('../views/PlanView.ts', import.meta.url), 'utf8');
+const editor = readFileSync(new URL('../components/journal/JournalInlineEditor.ts', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
 
 test('review replaces the placeholder with the shared focus adapter and an async reader', () => {
@@ -28,33 +29,20 @@ test('week month quarter and year expose review and plan comparison modes', () =
 	assert.match(view, /mx-journal-review-pane is-review/);
 });
 
-test('quarter review uses the same reader creation and compare path as other review kinds', () => {
-	assert.match(view, /quarter: \['本季尚未创建季复盘', '创建本季复盘 →'\]/);
-	assert.doesNotMatch(view, /target\.kind === 'quarter'\) return/);
-	assert.doesNotMatch(view, /target\.kind === 'quarter'\) \{ this\.renderMissingReview\(content, target\); return; \}/);
-	const adapter = readFileSync(new URL('./journalReview.ts', import.meta.url), 'utf8');
-	assert.match(adapter, /kind: 'quarter'[\s\S]*primary: `\$\{focus\.year\} Q\$\{focus\.quarter\}`[\s\S]*secondary: '季复盘'[\s\S]*reviewPaths: reviewCandidates\('quarter', date\)/);
-	assert.doesNotMatch(adapter, /季复盘存储体系尚未建立/);
-	assert.match(adapter, /export interface ReviewRecord \{\s*kind: JournalKind;/);
+test('quarter review uses shared inline document with focus-derived creation', () => {
+assert.match(view, /ensureReviewForFocus\(this\.planFiles\(\), focus\)/); assert.match(editor, /editableJournalSections\(kind\)/); assert.doesNotMatch(view, /target\.kind === 'quarter'\) return/);
 });
 
-test('record header uses the frontmatter title only when a daily title exists', () => {
-	assert.match(view, /target\.kind === 'day' && reviewFile \? readJournalTitle/);
-	assert.match(view, /if \(dayTitle\) record\.createDiv/);
-	assert.doesNotMatch(view, /未命名日记/);
+test('record header exposes a lightweight editable title for day only', () => {
+assert.match(editor, /kind === 'day'.*this\.field\(parent, \{ kind: 'title' \}/); assert.match(editor, /给今天一个标题/); assert.doesNotMatch(view, /未命名日记/);
 });
 
-test('single-record reading does not repeat the document label below its record header', () => {
-	assert.match(view, /target\.kind === 'day', false\)/);
-	assert.match(view, /if \(showHeader\)/);
+test('single-record inline editing does not repeat the document label', () => {
+assert.match(view, /record\.createEl\('h1'/); assert.match(view, /editor\.mount\(editorParent, target\.kind\)/); assert.doesNotMatch(editor, /createEl\('h1'/);
 });
 
-test('review is read-only and opens exact source files in normal Obsidian tabs', () => {
-	const review = view.match(/private existingFile[\s\S]*?(?=\n\tprivate async renderLongTermPlans)/)?.[0] ?? '';
-	assert.match(review, /getAbstractFileByPath/);
-	assert.match(review, /cachedRead/);
-	assert.match(review, /getLeaf\('tab'\)\.openFile/);
-	assert.doesNotMatch(review, /vault\.(?:create|modify|process|rename|delete)/);
+test('raw source escape hatch opens exact files while writes use atomic adapter', () => {
+assert.match(view, /getLeaf\('tab'\)\.openFile/); assert.match(editor, /app\.vault\.process\(file, update\)/); assert.doesNotMatch(editor, /saveData|localStorage/);
 });
 
 test('review mode is restored with existing PlanWorkspace renderer state', () => {
@@ -66,7 +54,7 @@ test('review mode is restored with existing PlanWorkspace renderer state', () =>
 
 test('review header exposes lightweight recent search random and past-today tools in order', () => {
 	const toolbar = view.match(/private renderReviewToolbar[\s\S]*?(?=\n\tprivate async renderReview\()/)?.[0] ?? '';
-	assert.match(toolbar, /\[\['recent', '最近记录'\], \['search', '搜索'\], \['pastToday', '过去的今天'\]\]/);
+	assert.match(toolbar, /\[\['overview', '日记一览'\], \['recent', '最近记录'\], \['search', '搜索'\], \['pastToday', '过去的今天'\]\]/);
 	assert.match(toolbar, /button\.onclick[\s\S]*?if \(mode === 'search'\)[\s\S]*?text: '随机回顾'/);
 	assert.match(toolbar, /mx-journal-review-tool/);
 	assert.doesNotMatch(toolbar, /Modal|sidebar|createDiv\(\{ cls: 'po-sidebar/);
@@ -75,7 +63,7 @@ test('review header exposes lightweight recent search random and past-today tool
 test('random review is an action that opens one record rather than a persistent view mode', () => {
 	assert.match(view, /JournalReviewViewMode/);
 	const adapter = readFileSync(new URL('./journalReview.ts', import.meta.url), 'utf8');
-	assert.match(adapter, /'record' \| 'recent' \| 'search' \| 'pastToday'/);
+	assert.match(adapter, /'record' \| 'overview' \| 'recent' \| 'search' \| 'pastToday'/);
 	assert.doesNotMatch(adapter, /JournalReviewViewMode[^\n]*random/);
 	assert.match(view, /const record = randomReviewRecord\(records\)/);
 	assert.match(view, /if \(record\) this\.openReviewRecord\(record\)/);
@@ -100,52 +88,28 @@ test('result rows route back to the shared focus and record reader', () => {
 	assert.match(view, /row\.onkeydown.*event\.key === 'Enter'.*event\.key === ' '/);
 });
 
-test('a missing day record exposes one lightweight focused-date creation action', () => {
-	assert.match(view, /!reviewFile && \(target\.kind === 'day' \|\| this\.reviewMode === 'review'\)[\s\S]*?this\.renderMissingReview\(content, target\)/);
-	assert.match(view, /\['这一天尚未创建日记', '创建这天日记 →'\]/);
-	assert.match(view, /mx-inline-action mx-journal-review-create/);
+test('a missing day record mounts empty editors without mandatory creation CTA', () => {
+assert.match(view, /这一天还没有日记内容，开始写这天日记/); assert.match(view, /editor\.mount\(editorParent, target\.kind\)/); assert.doesNotMatch(view, /renderMissingReview/);
 });
 
-test('all missing review kinds expose the settled lightweight creation copy', () => {
-	for (const copy of [
-		"week: ['本周尚未创建周复盘', '创建本周复盘 →']",
-		"month: ['本月尚未创建月复盘', '创建本月复盘 →']",
-		"year: ['本年度尚未创建年复盘', '创建本年复盘 →']",
-	]) assert.ok(view.includes(copy));
+test('all missing review kinds share lightweight start-writing copy', () => {
+assert.match(view, /开始写\$\{target\.reviewLabel\}/); assert.match(editor, /for \(const title of editableJournalSections\(kind\)\)/);
 });
 
-test('focused review creation reuses ensureJournal through the shared adapter and redraws in place', () => {
-	const method = view.match(/private renderMissingReview[\s\S]*?(?=\n\tprivate renderReviewToolbar)/)?.[0] ?? '';
-	assert.match(method, /const focus = this\.timeState\.focus/);
-	assert.match(method, /focus\.kind !== target\.kind/);
-	assert.match(method, /await ensureReviewForFocus\(this\.planFiles\(\), focus\)/);
-	assert.match(method, /await this\.renderPlanContent\(\)/);
-	assert.match(view, /createFolder: \(path: string\) => vault\.createFolder\(path\)/);
-	assert.match(view, /create: \(path: string, content: string\) => vault\.create\(path, content\)/);
+test('focused review lazy creation uses explicit captured focus', () => {
+assert.match(view, /const focus = this\.timeState\.focus/); assert.match(view, /journalInlineFiles\(this\.app, \(\) => path, async \(\) => \{ path = await ensureReviewForFocus/); assert.match(editor, /await this\.doc\.read\(\)/);
 });
 
-test('focused review creation keeps route focus visible month and record or compare mode', () => {
-	const method = view.match(/private renderMissingReview[\s\S]*?(?=\n\tprivate renderReviewToolbar)/)?.[0] ?? '';
-	assert.doesNotMatch(method, /this\.(?:timeState|reviewView|mode)\s*=(?!=)/);
-	assert.doesNotMatch(method, /openSource|openFile|openLinkText|getLeaf|workspace/);
-	assert.match(method, /const reviewMode = this\.reviewMode/);
-	assert.match(method, /this\.reviewMode === reviewMode/);
-	assert.match(method, /sameTimeFocus\(this\.timeState\.focus, focus\)/);
+test('inline refresh keeps mounted editor and refreshes sidebar separately', () => {
+assert.match(view, /this\.inlineKey === editorKey/); assert.match(view, /await this\.inlineEditor\.refresh\(\); return/); assert.match(view, /container\.prepend\(side\)/);
 });
 
-test('focused review creation reports failures and leaves the empty state mounted', () => {
-	const method = view.match(/private renderMissingReview[\s\S]*?(?=\n\tprivate renderReviewToolbar)/)?.[0] ?? '';
-	assert.match(method, /catch \(error\)/);
-	assert.match(method, /create\.disabled = false/);
-	assert.match(method, /new Notice\(`无法创建\$\{target\.reviewLabel\}：/);
+test('inline save errors retain textarea with visible status and retry', () => {
+assert.match(editor, /保存失败/); assert.match(editor, /保留当前输入/); assert.match(editor, /retry\.onclick.*draft\.flush/);
 });
 
-test('compare mode provides the same review CTA only in the missing right pane', () => {
-	const render = view.match(/private async renderReview\([\s\S]*?(?=\n\tprivate async renderLongTermPlans)/)?.[0] ?? '';
-	const planLine = render.split('\n').find(line => line.includes("is-plan'")) ?? '';
-	assert.match(planLine, /尚未创建\$\{target\.planLabel \?\? '对应计划'\}/);
-	assert.doesNotMatch(planLine, /renderMissingReview/);
-	assert.match(render, /is-review'[\s\S]*?parent => this\.renderMissingReview\(parent, target\)/);
+test('compare mode leaves plan read-only and mounts editor only on review side', () => {
+assert.match(view, /renderReviewDocument\(compare\.createDiv\(\{ cls: 'mx-journal-review-pane is-plan'/); assert.match(view, /editorParent = compare\.createDiv\(\{ cls: 'mx-journal-review-pane is-review'/); assert.match(view, /editor\.mount\(editorParent, target\.kind\)/);
 });
 
 test('recent rows use time plus one main text and suppress only their type subtitle', () => {
@@ -163,22 +127,16 @@ test('recent row compacting removes the second-line height without cards', () =>
 	assert.doesNotMatch(css, /\.mx-journal-review-results\.is-recent[^}]*background:/);
 });
 
-test('missing day CTA is a compact inline action rather than a large empty card', () => {
-	assert.match(css, /\.mx-journal-review-missing-day \{[^}]*min-height: 0;[^}]*padding: 18px 0/);
-	assert.doesNotMatch(css, /\.mx-journal-review-missing-day \{[^}]*background:/);
-	assert.doesNotMatch(css, /\.mx-journal-review-create \{[^}]*font-size:/);
+test('inline fields have transparent body styling and no fixed footer', () => {
+assert.match(css, /textarea\.mx-journal-inline-input \{[^}]*background: transparent/); assert.match(css, /\.mx-journal-inline-state \{[^}]*font-size: 11px/); assert.doesNotMatch(css, /\.mx-journal-inline-state \{[^}]*position: fixed/);
 });
 
 test('mini-calendar changes always return journal review to record mode', () => {
 	assert.match(view, /private setTimeState[\s\S]*?this\.mode === 'review'[\s\S]*?this\.reviewView = 'record'/);
 });
 
-test('edit source remains a record-only action and is absent from tool result pages', () => {
-	const render = view.match(/private async renderReview\([\s\S]*?(?=\n\tprivate async renderLongTermPlans)/)?.[0] ?? '';
-	const branch = render.indexOf("if (this.reviewView === 'recent')");
-	const edit = render.indexOf("text: '编辑原文'");
-	assert.ok(branch >= 0 && edit > branch);
-	assert.match(render, /if \(reviewFile\)/);
+test('open source remains a subdued record-only escape hatch', () => {
+const render=view.slice(view.indexOf('private async renderReview('),view.indexOf('private async renderJournalOverview')); assert.ok(render.indexOf("text: '打开原文'")>render.indexOf("this.reviewView === 'recent'")); assert.match(render, /if \(!await this\.flushInlineEdits\(\)\) return/);
 });
 
 test('review discovery is read-only and never auto-creates records', () => {
