@@ -10,6 +10,7 @@ export interface TimeTraceMiniCalendarOptions {
 	onToggleCollapsed?(): void;
 	hasMarker(focus: TimeFocus): boolean;
 	onChange(state: TimeTraceState): void;
+	onFocus?(state: TimeTraceState): void;
 }
 
 function marker(parent: HTMLElement, visible: boolean): void { if (visible) parent.createSpan({ cls: 'mx-mini-calendar-marker', attr: { 'aria-hidden': 'true' } }); }
@@ -17,29 +18,24 @@ function marker(parent: HTMLElement, visible: boolean): void { if (visible) pare
 /** One shared year/quarter/month/week/day selector for every Time Trace section. */
 export function renderTimeTraceMiniCalendar(parent: HTMLElement, options: TimeTraceMiniCalendarOptions): () => void {
 	const { state } = options;
+	const enterFocus = (next: TimeTraceState) => (options.onFocus ?? options.onChange)(next);
 	const today = options.today ?? new Date();
 	const todayKey = dateKey(today);
 	const current = parent.createEl('button', { cls: 'po-sidebar__item mx-time-trace-today', text: '今天', attr: { type: 'button' } });
-	current.onclick = () => options.onChange(selectToday(state, today));
+	current.onclick = () => enterFocus(selectToday(state, today));
 
 	const nav = parent.createDiv({ cls: 'mx-mini-calendar-nav' });
 	const previous = nav.createEl('button', { cls: 'po-cal__btn', text: '‹', attr: { type: 'button', 'aria-label': '上一月' } });
 	previous.onclick = () => options.onChange(shiftVisibleMonth(state, -1));
 	const title = nav.createDiv({ cls: 'mx-mini-calendar-title' });
 	const yearFocus: TimeFocus = { kind: 'year', year: state.visible.year };
-	const year = title.createEl('button', { cls: `mx-mini-calendar-scope${focusMatchesYear(state.focus, state.visible.year) ? ' is-selected' : ''}`, text: `${state.visible.year} 年`, attr: { type: 'button', 'aria-pressed': String(focusMatchesYear(state.focus, state.visible.year)), 'aria-haspopup': 'dialog', 'aria-expanded': 'false' } });
-	year.createSpan({ cls: 'mx-mini-calendar-chevron', text: '⌄', attr: { 'aria-hidden': 'true' } });
+	const year = title.createEl('button', { cls: `mx-mini-calendar-scope${focusMatchesYear(state.focus, state.visible.year) ? ' is-selected' : ''}`, text: `${state.visible.year} 年`, attr: { type: 'button', 'aria-pressed': String(focusMatchesYear(state.focus, state.visible.year)), 'data-scope-label': 'year' } });
+	const yearArrow = title.createEl('button', { cls: 'mx-mini-calendar-scope mx-mini-calendar-chevron', text: '⌄', attr: { type: 'button', 'data-scope-arrow': 'year', 'aria-label': '选择年份', 'aria-haspopup': 'dialog', 'aria-expanded': 'false' } });
 	marker(year, options.hasMarker(yearFocus));
 	const monthFocus: TimeFocus = { kind: 'month', ...state.visible };
-	const month = title.createEl('button', { cls: `mx-mini-calendar-scope${focusMatchesMonth(state.focus, state.visible.year, state.visible.month) ? ' is-selected' : ''}`, text: `${state.visible.month} 月`, attr: { type: 'button', 'aria-pressed': String(focusMatchesMonth(state.focus, state.visible.year, state.visible.month)), 'aria-haspopup': 'dialog', 'aria-expanded': 'false' } });
-	month.createSpan({ cls: 'mx-mini-calendar-chevron', text: '⌄', attr: { 'aria-hidden': 'true' } });
+	const month = title.createEl('button', { cls: `mx-mini-calendar-scope${focusMatchesMonth(state.focus, state.visible.year, state.visible.month) ? ' is-selected' : ''}`, text: `${state.visible.month} 月`, attr: { type: 'button', 'aria-pressed': String(focusMatchesMonth(state.focus, state.visible.year, state.visible.month)), 'data-scope-label': 'month' } });
+	const monthArrow = title.createEl('button', { cls: 'mx-mini-calendar-scope mx-mini-calendar-chevron', text: '⌄', attr: { type: 'button', 'data-scope-arrow': 'month', 'aria-label': '选择月份', 'aria-haspopup': 'dialog', 'aria-expanded': 'false' } });
 	marker(month, options.hasMarker(monthFocus));
-	title.createSpan({ cls: 'mx-mini-calendar-separator', text: '·', attr: { 'aria-hidden': 'true' } });
-	const quarterValue = quarterOfMonth(state.visible.month);
-	const quarterFocus: TimeFocus = { kind: 'quarter', year: state.visible.year, quarter: quarterValue };
-	const quarter = title.createEl('button', { cls: `mx-mini-calendar-scope mx-mini-calendar-quarter${focusMatchesQuarter(state.focus, state.visible.year, quarterValue) ? ' is-selected' : ''}`, text: `Q${quarterValue}`, attr: { type: 'button', 'aria-label': `选择 ${state.visible.year} Q${quarterValue}`, 'aria-pressed': String(focusMatchesQuarter(state.focus, state.visible.year, quarterValue)) } });
-	marker(quarter, options.hasMarker(quarterFocus));
-	quarter.onclick = () => options.onChange(selectQuarter(state));
 	const next = nav.createEl('button', { cls: 'po-cal__btn', text: '›', attr: { type: 'button', 'aria-label': '下一月' } });
 	next.onclick = () => options.onChange(shiftVisibleMonth(state, 1));
 	const toggle = nav.createEl('button', { cls: 'mx-mini-calendar-toggle', text: options.collapsed ? '⌄' : '⌃', attr: { type: 'button', 'aria-label': options.collapsed ? '展开日历' : '收起日历', 'aria-expanded': String(!options.collapsed) } });
@@ -48,8 +44,8 @@ export function renderTimeTraceMiniCalendar(parent: HTMLElement, options: TimeTr
 	let picker: HTMLElement | undefined;
 	let pickerKind: 'year' | 'month' | undefined;
 	const syncExpanded = (): void => {
-		year.setAttribute('aria-expanded', String(pickerKind === 'year'));
-		month.setAttribute('aria-expanded', String(pickerKind === 'month'));
+		yearArrow.setAttribute('aria-expanded', String(pickerKind === 'year'));
+		monthArrow.setAttribute('aria-expanded', String(pickerKind === 'month'));
 	};
 	const closePicker = (): void => {
 		document.removeEventListener('pointerdown', onOutsidePointer, true);
@@ -58,7 +54,7 @@ export function renderTimeTraceMiniCalendar(parent: HTMLElement, options: TimeTr
 	};
 	const onOutsidePointer = (event: PointerEvent): void => {
 		const target = event.target as Node | null;
-		if (target && (picker?.contains(target) || year.contains(target) || month.contains(target))) return;
+		if (target && (picker?.contains(target) || yearArrow.contains(target) || monthArrow.contains(target))) return;
 		closePicker();
 	};
 	const onEscape = (event: KeyboardEvent): void => {
@@ -106,23 +102,29 @@ export function renderTimeTraceMiniCalendar(parent: HTMLElement, options: TimeTr
 		if (kind === 'year') renderYearPicker(0); else renderMonthPicker();
 		installPickerListeners();
 	};
-	year.onclick = event => { event.stopPropagation(); openPicker('year'); };
-	month.onclick = event => { event.stopPropagation(); openPicker('month'); };
+	year.onclick = event => { event.preventDefault(); event.stopPropagation(); closePicker(); enterFocus(selectYear(state, state.visible.year)); };
+	yearArrow.onclick = event => { event.preventDefault(); event.stopPropagation(); openPicker('year'); };
+	month.onclick = event => { event.preventDefault(); event.stopPropagation(); closePicker(); enterFocus(selectMonth(state, state.visible.month)); };
+	monthArrow.onclick = event => { event.preventDefault(); event.stopPropagation(); openPicker('month'); };
 
 	const body = parent.createDiv({ cls: 'mx-mini-calendar-body' });
 	const weekdays = body.createDiv({ cls: 'mx-mini-calendar-weekdays' });
-	weekdays.createSpan({ text: '' });
+	const quarterValue = quarterOfMonth(state.visible.month);
+	const quarterFocus: TimeFocus = { kind: 'quarter', year: state.visible.year, quarter: quarterValue };
+	const quarter = weekdays.createEl('button', { cls: `mx-mini-calendar-scope mx-mini-calendar-quarter${focusMatchesQuarter(state.focus, state.visible.year, quarterValue) ? ' is-selected' : ''}`, text: `Q${quarterValue}`, attr: { type: 'button', 'aria-label': `选择 ${state.visible.year} Q${quarterValue}`, 'aria-pressed': String(focusMatchesQuarter(state.focus, state.visible.year, quarterValue)) } });
+	marker(quarter, options.hasMarker(quarterFocus));
+	quarter.onclick = () => enterFocus(selectQuarter(state));
 	for (const name of ['一', '二', '三', '四', '五', '六', '日']) weekdays.createSpan({ text: name });
 	const grid = body.createDiv({ cls: 'mx-mini-calendar-grid' });
 	for (const week of miniCalendarWeeks(state.visible.year, state.visible.month)) {
 		const weekFocus: TimeFocus = { kind: 'week', isoYear: week.isoYear, isoWeek: week.isoWeek, anchorDate: week.anchorDate };
 		const weekButton = grid.createEl('button', { cls: `mx-mini-calendar-week${focusMatchesWeek(state.focus, week.isoYear, week.isoWeek) ? ' is-selected' : ''}`, text: `W${String(week.isoWeek).padStart(2, '0')}`, attr: { type: 'button', 'aria-pressed': String(focusMatchesWeek(state.focus, week.isoYear, week.isoWeek)) } });
-		marker(weekButton, options.hasMarker(weekFocus)); weekButton.onclick = () => options.onChange(selectWeek(state, week.days[0]!.date));
+		marker(weekButton, options.hasMarker(weekFocus)); weekButton.onclick = () => enterFocus(selectWeek(state, week.days[0]!.date));
 		for (const day of week.days) {
 			const dayFocus: TimeFocus = { kind: 'day', date: day.key };
 			const selected = focusMatchesDay(state.focus, day.key);
-			const button = grid.createEl('button', { cls: `mx-mini-calendar-day${day.inMonth ? '' : ' is-out'}${day.key === todayKey ? ' is-today' : ''}${selected ? ' is-selected' : ''}`, text: String(day.date.getDate()), attr: { type: 'button', 'aria-label': day.key, 'aria-pressed': String(selected) } });
-			marker(button, options.hasMarker(dayFocus)); button.onclick = () => options.onChange(selectDay(state, day.date));
+			const button = grid.createEl('button', { cls: `mx-mini-calendar-day${day.inMonth ? '' : ' is-out'}${day.key === todayKey ? ' is-today' : ''}${selected && day.key !== todayKey ? ' is-selected' : ''}`, text: String(day.date.getDate()), attr: { type: 'button', 'aria-label': day.key, 'aria-pressed': String(selected) } });
+			marker(button, options.hasMarker(dayFocus)); button.onclick = () => enterFocus(selectDay(state, day.date));
 		}
 	}
 	parent.toggleClass('is-calendar-collapsed', !!options.collapsed);

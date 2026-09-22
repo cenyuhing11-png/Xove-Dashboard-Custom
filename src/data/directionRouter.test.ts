@@ -60,7 +60,7 @@ test('switching direction cancels stale rendering without rebuilding shell', () 
 	assert.doesNotMatch(router, /new WorkbenchShell|renderLifeCompass|containerEl\.empty/);
 });
 test('home timeTrace process and inbox navigation remain unchanged', () => {
-	for (const pair of [["'home'", "setSection('home')"], ["'plan'", "setSection('timeTrace')"], ["'all'", "setSection('process')"], ["'opportunity'", "setSection('inbox')"]]) assert.ok(dashboard.includes(`action === ${pair[0]}) await this.${pair[1]}`));
+	for (const pair of [["'home'", "setSection('home')"], ["'all'", "setSection('process')"], ["'opportunity'", "setSection('inbox')"]]) assert.ok(dashboard.includes(`action === ${pair[0]}) await this.${pair[1]}`));
 });
 test('process route reuses one session-local ProjectBoard instead of resetting its view state', () => {
 	assert.match(router, /if \(!this\.processSource\)[\s\S]*?this\.processBoard = new ProjectBoard\(this\.processSource\)/);

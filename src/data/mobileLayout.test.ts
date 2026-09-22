@@ -34,7 +34,7 @@ test('phone navigation has four columns and actions retain the deployed three by
 });
 
 test('phone time tabs and calendar retain full width with a separate week number column', () => {
-	assert.match(rule('body.is-mobile.is-phone .mx-time-trace-nav'), /repeat\(4, minmax\(0, 1fr\)\)/);
+	assert.match(rule('body.is-mobile.is-phone .mx-time-trace-nav'), /repeat\(3, minmax\(0, 1fr\)\)/);
 	assert.match(rule('body.is-mobile.is-phone .mx-mini-calendar-grid'), /width: 100%;[\s\S]*max-width: none;[\s\S]*22px repeat\(7, minmax\(0, 1fr\)\)/);
 	assert.match(rule('.mx-mini-calendar-toggle'), /display: none/);
 });
@@ -138,4 +138,21 @@ test('closing removes both exact viewport listeners and modal classes and permit
 	assert.deepEqual(h.removed, ['mx-quick-journal-modal', 'mx-quick-journal-content', 'mx-quick-journal-container']);
 	assert.ok(h.closed()); h.modal.detachViewportListeners(); h.modal.attachViewportListeners();
 	assert.equal(h.listeners.get('resize')?.size, 1); h.modal.onClose();
+});
+
+test('phone TimeTrace shares Process dashboard page scrolling instead of a separate date pane',()=>{
+ const css=readFileSync(new URL('../../styles.css',import.meta.url),'utf8');
+ const base=css.match(/\.dashboard-plugin \{([\s\S]*?)\}/)![1]!;
+ assert.match(base,/height: 100%/);assert.match(base,/overflow-y: auto/);
+ assert.match(css,/\.mx-project-overview \.po-container \{ height: auto; min-height: 0/);
+ const mobile=css.slice(css.indexOf('/* Phone TimeTrace uses the same dashboard'));
+ const outer=mobile.match(/:has\(\.mx-plan-container\) \{([^}]+)\}/)![1]!;
+ assert.doesNotMatch(outer,/height:|overflow-y:|position:|flex:/);assert.match(outer,/padding-bottom: calc\(60px \+ env\(safe-area-inset-bottom/);
+ for(const selector of ['.mx-plan-workspace','.mx-plan-container','.mx-plan-container > .po-main','.mx-time-trace-section-body','.mx-journal-review-content','.mx-journal-review-compare','.mx-journal-review-pane','.mx-journal-week-list'])assert.ok(mobile.includes(`body.is-mobile.is-phone .dashboard-plugin ${selector}`));
+ assert.match(mobile,/height: auto;\s*max-height: none;\s*min-height: 0;\s*flex: 0 0 auto;\s*overflow: visible/);
+ for(const name of ['mx-time-trace-section-header','mx-overview-weekdays'])assert.match(mobile,new RegExp('\\.'+name+' \\{\\s*position: static;'));
+ assert.doesNotMatch(mobile,/overflow-y: auto|100vh|100dvh|position: fixed|position: sticky/);
+ assert.match(css,/body:not\(\.is-phone\) \.dashboard-plugin:has\(\.is-journal-overview\) \{[^}]*overflow: hidden/);
+ assert.match(css,/\.is-journal-overview > \.po-main > \.mx-time-trace-section-body \{[^}]*overflow-y: auto/);
+ assert.match(css,/textarea\.mx-journal-inline-input \{[^}]*resize: none; overflow-y: hidden/);
 });

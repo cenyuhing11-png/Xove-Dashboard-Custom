@@ -89,3 +89,23 @@ test('empty real sections remain visible for a faithful reading outline', () => 
 		{ title: '下月重点', markdown: '' },
 	]);
 });
+
+import { timeTraceRecordHeading } from './journalReview.ts';
+
+for(const [focus,expected] of [
+ [{kind:'day',date:'2026-09-22'},'2026 年 9 月 22 日'],
+ [{kind:'week',isoYear:2026,isoWeek:39,anchorDate:'2026-09-21'},'2026-W39 · 2026.09.21—2026.09.27'],
+ [{kind:'month',year:2026,month:9},'2026-09 · 2026.09.01—2026.09.30'],
+ [{kind:'quarter',year:2026,quarter:3},'2026-Q3 · 2026.07.01—2026.09.30'],
+ [{kind:'year',year:2026},'2026 · 2026.01.01—2026.12.31'],
+ [{kind:'month',year:2028,month:2},'2028-02 · 2028.02.01—2028.02.29'],
+ [{kind:'week',isoYear:2020,isoWeek:53,anchorDate:'2020-12-28'},'2020-W53 · 2020.12.28—2021.01.03'],
+] as const)test(`compact record heading ${expected}`,()=>assert.equal(timeTraceRecordHeading(focus),expected));
+
+import { journalPlanningReviewHeaderTime } from './journalReview.ts';
+for(const [focus,expected] of [
+ [{kind:'week',isoYear:2026,isoWeek:39,anchorDate:'2026-09-21'},'2026-W39 · 2026.09.21—2026.09.27'],
+ [{kind:'month',year:2026,month:9},'2026 年 9 月'],
+ [{kind:'quarter',year:2026,quarter:3},'2026-Q3 · 2026.07.01—2026.09.30'],
+ [{kind:'year',year:2026},'2026 · 2026.01.01—2026.12.31'],
+] as const)test(`plan overview shared focus header ${focus.kind}`,()=>assert.equal(journalPlanningReviewHeaderTime({focus,visible:{year:2026,month:9}},'plans'),expected));

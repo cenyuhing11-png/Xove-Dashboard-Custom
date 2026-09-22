@@ -274,7 +274,7 @@ export class DashboardView extends ItemView {
 		if (action === 'home') await this.setSection('home');
 		else if (action === 'classic') { await this.setSection('home'); await this.showClassicDashboard(); }
 		else if (action === 'opportunity') await this.setSection('inbox');
-		else if (action === 'plan') await this.setSection('timeTrace');
+		else if (action === 'plan') { if (await this.planRenderer.openOverview()) await this.setSection('timeTrace'); }
 		else if (action === 'all') await this.setSection('process');
 		else if (action === 'diary') await this.createDiary();
 		else if (action === 'quickJournal') this.plugin.openQuickJournal();

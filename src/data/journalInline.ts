@@ -1,3 +1,5 @@
+import { planTemplate } from './planning.ts';
+import type { PlanPeriod } from './planning.ts';
 import { journalTemplate } from './journal.ts';
 import type { JournalKind } from './journal.ts';
 import { markdownReviewSections } from './journalReview.ts';
@@ -73,9 +75,19 @@ export function patchJournalTitle(text: string, value: string, expected: string 
 	return `${bom}---${eol}${row}---${eol}${eol}${text.slice(bom.length)}`;
 }
 export function editableJournalSections(kind: JournalKind): string[] { return markdownReviewSections(journalTemplate(kind)).map(s => s.title).filter(t => t !== '今日任务'); }
-export type EditorField = { kind: 'section'; title: string } | { kind: 'title' } | { kind: 'quick' };
-export function fieldSnapshot(text: string, field: EditorField): string | null { return field.kind === 'title' ? titleSnapshot(text) : sectionSnapshot(text, field.kind === 'quick' ? '随时记' : field.title); }
-export function fieldValue(text: string, field: EditorField): string { return field.kind === 'title' ? titleValue(text) : field.kind === 'quick' ? '' : sectionValue(text, field.title); }
+export function editablePlanSections(kind: PlanPeriod): string[] { return markdownReviewSections(planTemplate(kind)).map(s => s.title); }
+export type EditorField = { kind: 'section'; title: string; fallbackTitle?: string } | { kind: 'title' } | { kind: 'quick' };
+export function fieldSnapshot(text: string, field: EditorField): string | null { if (field.kind === 'section' && field.fallbackTitle) { const a = sectionSnapshot(text, field.title), b = sectionSnapshot(text, field.fallbackTitle); return a === null && b === null ? null : JSON.stringify([a, b]); } return field.kind === 'title' ? titleSnapshot(text) : sectionSnapshot(text, field.kind === 'quick' ? '随时记' : field.title); }
+export function fieldValue(text: string, field: EditorField): string { if (field.kind === 'section' && field.fallbackTitle) return sectionSnapshot(text, field.title) !== null ? sectionValue(text, field.title) : sectionValue(text, field.fallbackTitle); return field.kind === 'title' ? titleValue(text) : field.kind === 'quick' ? '' : sectionValue(text, field.title); }
+/** Legacy annual text is read as fallback; first edit writes canonical heading in place. */
+export function patchInlineSection(text: string, field: Extract<EditorField, { kind: 'section' }>, value: string, expected: string | null): string {
+ if (fieldSnapshot(text, field) !== expected) throw new JournalEditConflict();
+ if (field.fallbackTitle && sectionSnapshot(text, field.title) === null && sectionSnapshot(text, field.fallbackTitle) !== null) {
+  const h = headings(text).find(h => h.title === field.fallbackTitle)!;
+  text = text.slice(0, h.start) + text.slice(h.start, h.end).replace(field.fallbackTitle, field.title) + text.slice(h.end);
+ }
+ return patchJournalSection(text, field.title, value, sectionSnapshot(text, field.title));
+}
 export interface InlineFiles { read(): Promise<string>; ensure(): Promise<void>; process(update: (latest: string) => string): Promise<void> }
 /** One queue per open document, atomic Vault.process at the adapter boundary. */
 export class JournalInlineDocument {
@@ -104,7 +116,7 @@ export class JournalInlineDocument {
 					// A lazily ensured canonical template is equivalent to the missing empty field.
 					const actual = fieldSnapshot(latest, field);
 					const base = expected === null && fieldValue(latest, field) === '' ? actual : expected;
-					saved = field.kind === 'title' ? patchJournalTitle(latest, value, base) : patchJournalSection(latest, field.title, value, base);
+					saved = field.kind === 'title' ? patchJournalTitle(latest, value, base) : patchInlineSection(latest, field, value, base);
 				}
 				return saved;
 			}); if (field.kind === 'quick') this.quickEntry = savedQuickEntry; return saved;

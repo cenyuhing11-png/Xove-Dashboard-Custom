@@ -8,6 +8,7 @@ import * as journal from './journal.ts';
 import * as planning from './planning.ts';
 import * as calendar from './planWorkspace.ts';
 import * as time from './timeTrace.ts';
+import { journalPlanningReviewHeaderTime } from './journalReview.ts';
 import * as quarters from './quarters.ts';
 import * as taskLogic from './taskLogic.ts';
 import { QuickJournalService } from './quickJournal.ts';
@@ -29,11 +30,13 @@ class El {
 	setAttribute(k: string, v: string) { this.attrs[k] = v; }
 	removeAttribute(k: string) { delete this.attrs[k]; }
 	addEventListener(k: string, fn: () => unknown) { this.listeners.set(k, [...this.listeners.get(k) ?? [], fn]); }
-	async fire(k: string) { for (const fn of this.listeners.get(k) ?? []) await fn(); }
+	async fire(k: string) { if (k === 'click') await this.onclick?.({ stopPropagation() {} }); for (const fn of this.listeners.get(k) ?? []) await fn(); }
 	appendChild(e: El) { if (e.parent) e.parent.children = e.parent.children.filter(c => c !== e); e.parent = this; this.children.push(e); }
 	all(): El[] { return this.children.flatMap(c => [c, ...c.all()]); }
 	querySelectorAll(s: string) { return this.all().filter(e => e.classes.has(s.slice(1))); }
 	querySelector(s: string) { return this.querySelectorAll(s)[0]; }
+	remove() { if(this.parent)this.parent.children=this.parent.children.filter(c=>c!==this); }
+	contains(e:El) { return e===this||this.all().includes(e); }
 	closest() { return this; }
 	empty() { this.children = []; }
 	focus() {}
@@ -52,14 +55,18 @@ function load(path: string, imports: Record<string, any> = {}) {
 	const exports: any = {};
 	runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2021 } }).outputText, {
 		exports, require: (id: string) => imports[id] ?? common[id] ?? {}, console,
-		document: { body: { classList: { contains: (c: string) => phone.has(c) } } }, window: { visualViewport: viewport, innerHeight: 800 },
+		document: { addEventListener() {}, removeEventListener() {}, body: { classList: { contains: (c: string) => phone.has(c) } } }, window: { visualViewport: viewport, innerHeight: 800 },
 	});
 	return exports;
 }
 const mini = load('../components/timeTrace/TimeTraceMiniCalendar.ts', { '../../data/planWorkspace': calendar, '../../data/timeTrace': time, '../../data/quarters': quarters });
+const monthShell = load('../components/timeTrace/MonthCalendar.ts', { '../../data/planWorkspace': calendar, '../../data/timeTrace': time });
 const checkbox = load('../components/tasks/EmbeddedTaskCheckbox.ts');
+let discoveryCalls = 0;
 const plan = load('../views/PlanView.ts', {
+ '../data/journalReview': { journalPlanningReviewHeaderTime, discoverReviewRecords: async () => { discoveryCalls++; return [{ path: 'MXPOL fixture' }]; }, randomReviewRecord: (records: unknown[]) => records[0] },
  '../components/timeTrace/TimeTraceMiniCalendar': mini,
+ '../components/timeTrace/MonthCalendar': monthShell,
  '../components/tasks/EmbeddedTaskCheckbox': checkbox,
  '../data/longTermNarrative': { NarrativeDisclosure: class {} },
  '../data/learningVault': { scanLearning: () => [] }, '../data/projectVault': { scanProjects: () => [] },
@@ -148,8 +155,8 @@ for (const isPhone of [false, true]) test(`daily plan shared nav order and activ
  if (!isPhone) phone.clear();
  try {
   const root = new El(); p.renderSidebar(root);
-  assert.deepEqual(root.querySelectorAll('.mx-time-trace-nav-item').map(e => e.textContent), ['日记&复盘','每日计划','长期计划','周期计划']);
-  assert.equal(root.querySelectorAll('.mx-time-trace-nav-item').filter(e => e.classes.has('is-active'))[0]!.textContent, '日记&复盘');
+  assert.deepEqual(root.querySelectorAll('.mx-time-trace-nav-item').map(e => e.textContent), ['日记·计划·复盘','每日执行','长期计划']);
+  assert.equal(root.querySelectorAll('.mx-time-trace-nav-item').filter(e => e.classes.has('is-active'))[0]!.textContent, '日记·计划·复盘');
  } finally { phone.add('is-mobile'); phone.add('is-phone'); }
 });
 test('first renderer defaults to review and session deactivation retains chosen section', async () => {
@@ -210,4 +217,95 @@ test('new task action presets only explicit day focus, never guesses week or mon
 });
 test('overdue tasks stay on their logical day in Daily Plan', () => {
  const all = mixedTasks(); assert.equal(calendar.tasksOnDate(all, '2036-04-18').length, 3); assert.equal(calendar.tasksOnDate(all, '2036-04-20').length, 0);
+});
+
+test('legacy board route maps to nested plan overview and keeps its focus while browsing',async()=>{
+ const p=await renderer(fixture());p.inlineTransition=Promise.resolve();await p.setState({mode:'board'});assert.equal(p.mode,'review');assert.equal(p.reviewView,'plans');
+ const root=new El();p.renderReviewToolbar(root,[]);assert.deepEqual(root.querySelectorAll('.mx-journal-review-tool').map(e=>e.textContent),['日记一览','计划一览','最近记录','搜索','随机回顾','过去的今天']);
+ p.setTimeState(time.selectMonth(p.timeState,5));await p.inlineTransition;assert.equal(p.reviewView,'plans');
+ p.openPlanFocus({kind:'month',year:2038,month:5});await p.inlineTransition;assert.equal(p.reviewView,'record');assert.equal(p.timeState.focus.month,5);
+});
+for(const period of ['week','month','quarter','year'] as const)test(`nested plan overview ${period} markers remain separate from Review`,async()=>{
+ const f=fixture();const p=await renderer(f);const date=new Date('2038-06-18T12:00:00');const pp=planning.planPaths(period,date)[0]!;const jp=journal.journalPaths(period,date)[0]!;
+ const exists=new Set([pp]);p.app.vault.getAbstractFileByPath=(path:string)=>exists.has(path)?new File():undefined;
+ p.mode='review';p.reviewView='plans';const focus:time.TimeFocus=period==='week'?{kind:'week',isoYear:2038,isoWeek:24,anchorDate:'2038-06-14'}:period==='quarter'?{kind:'quarter',year:2038,quarter:2}:period==='month'?{kind:'month',year:2038,month:6}:{kind:'year',year:2038};
+ assert.equal(p.markerResolver()(focus),true);p.reviewView='record';assert.equal(p.markerResolver()(focus),false);exists.clear();exists.add(jp);assert.equal(p.markerResolver()(focus),true);p.reviewView='plans';assert.equal(p.markerResolver()(focus),false);
+});
+
+test('plan overview random action loads review candidates on demand instead of using an empty list',async()=>{
+ const p=await renderer(fixture());p.mode='review';p.reviewView='plans';const root=new El();let chosen:any;p.openReviewRecord=(record:any)=>{chosen=record;};const before=discoveryCalls;p.renderReviewToolbar(root,[]);assert.equal(discoveryCalls,before);await root.querySelectorAll('.mx-journal-review-tool').find(e=>e.textContent==='随机回顾')!.onclick!({});assert.equal(discoveryCalls,before+1);assert.equal(chosen.path,'MXPOL fixture');
+});
+
+
+test('review entry whole-row click returns to overview once and month arrows preserve it', async () => {
+ const p = await renderer(fixture()); Object.assign(p, { mode:'review', reviewView:'record', inlineTransition:Promise.resolve() });
+ let renders=0; p.renderPlanContent=async()=>{renders++;}; const root=new El(); p.renderSidebar(root);
+ const entry=root.querySelectorAll('.mx-time-trace-nav-item')[0]!;
+ await entry.fire('click'); await p.inlineTransition; assert.equal(p.reviewView,'overview'); assert.equal(renders,1);
+ await entry.fire('click'); await p.inlineTransition; assert.equal(renders,1);
+ p.setTimeState(time.shiftVisibleMonth(p.timeState,1)); await p.inlineTransition; assert.equal(p.reviewView,'overview'); assert.equal(p.timeState.visible.month,10);
+ p.setDayFocus(new Date('2026-09-22T12:00:00')); await p.inlineTransition; assert.equal(p.reviewView,'record');
+});
+
+test('quarter button is the first weekday cell and still selects its visible quarter', () => {
+ const root=new El(); let selected:any; mini.renderTimeTraceMiniCalendar(root,{state:time.initialTimeTraceState(new Date('2026-09-22T12:00:00')),hasMarker:()=>false,onChange:(state:any)=>selected=state});
+ const button=root.querySelector('.mx-mini-calendar-quarter')!; assert.equal(button.parent!.classes.has('mx-mini-calendar-weekdays'),true);assert.equal(button.parent!.children[0],button);
+ button.onclick!({}); assert.equal(selected.focus.kind,'quarter');assert.equal(selected.focus.quarter,3);
+});
+
+for(const journal of [true,false])test(`shared month shell ${journal?'Journal':'execution'} keeps today and selection disjoint`,()=>{
+ const root=new El(); let chosen=''; monthShell.renderMonthCalendar(root,{year:2026,month:9,selected:'2026-09-22',today:new Date('2026-09-22T12:00:00'),journal,onSelect:(date:Date)=>chosen=calendar.dateKey(date),content:()=>{}});
+ const cells=root.querySelectorAll('.mx-month-day');assert.equal(cells.length,42);assert.equal(root.querySelector('.mx-month-weekdays')!.children.length,7);
+ const today=cells.find(e=>e.attrs['data-date']==='2026-09-22')!;assert.ok(today.classes.has('is-today'));assert.equal(today.classes.has('is-sel'),false);assert.equal(today.attrs['aria-current'],'date');today.onclick!({});assert.equal(chosen,'2026-09-22');
+ const other=new El();monthShell.renderMonthCalendar(other,{year:2026,month:9,selected:'2026-09-23',today:new Date('2026-09-22T12:00:00'),journal,onSelect:()=>{},content:()=>{}});assert.ok(other.querySelectorAll('.mx-month-day').find(e=>e.attrs['data-date']==='2026-09-23')!.classes.has('is-sel'));
+});
+
+for(const journal of [true,false])test(`shared ${journal?'Journal':'task'} cells reserve date row before content`,()=>{
+ const root=new El();monthShell.renderMonthCalendar(root,{year:2026,month:9,today:new Date('2026-09-22T12:00:00'),selected:'2026-09-22',journal,onSelect:()=>{},content:(body:El)=>body.createSpan({text:journal?'很长的中文日记标题，应该从日期行下方开始':'☐ 3'})});
+ for(const cell of root.querySelectorAll('.mx-month-day')){assert.equal(cell.children[0]!.classes.has('mx-month-date-row'),true);assert.equal(cell.children[1]!.classes.has('mx-month-cell-content'),true);assert.ok(cell.children[0]!.querySelector('.mx-month-date'));assert.equal(cell.children[1]!.children.length,1);}
+ const today=root.querySelectorAll('.mx-month-day').find(e=>e.classes.has('is-today'))!;assert.equal(today.classes.has('is-sel'),false);
+});
+
+test('overview scroll sync updates header and Mini Calendar without a navigation jump or selected-day change',async()=>{
+ const p=await renderer(fixture());const root=new El();(root as any).prepend=(e:El)=>{root.children=root.children.filter(c=>c!==e);root.children.unshift(e);};
+ const header=root.createDiv({cls:'mx-journal-review-time'});p.workspaceEl=root;p.mode='review';p.reviewView='overview';let jumps=0;let miniMonth=0;p.renderSidebar=(parent:El)=>{miniMonth=p.timeState.visible.month;parent.createDiv({cls:'mx-time-trace-sidebar'});};
+ // DOM remove is needed for repeated sidebar synchronization.
+ (El.prototype as any).remove=function(){if(this.parent)this.parent.children=this.parent.children.filter((c:El)=>c!==this);};
+ p.overviewFlow={jump:()=>{jumps++;}};const selected=p.timeState.focus;
+ p.syncOverviewMonth({year:2026,month:10});assert.equal(header.textContent,'2026 年 10 月');assert.equal(miniMonth,10);assert.equal(jumps,0);assert.equal(p.timeState.focus,selected);
+ p.setTimeState({...p.timeState,visible:{year:2027,month:1}});assert.equal(jumps,1);assert.equal(miniMonth,1);assert.equal(p.reviewView,'overview');
+});
+
+test('overview creates exactly one weekday strip between header and scrolling body',async()=>{
+ const p=await renderer(fixture());Object.assign(p,{mode:'review',reviewView:'overview',workspaceEl:new El(),generation:0});p.renderReview=async()=>{};
+ await p.renderPlanContent();const root=p.workspaceEl as El,main=root.querySelector('.po-main')!;
+ assert.deepEqual(main.children.map(e=>[...e.classes].filter(c=>['mx-time-trace-section-header','mx-overview-weekdays','mx-time-trace-section-body'].includes(c))[0]),['mx-time-trace-section-header','mx-overview-weekdays','mx-time-trace-section-body']);
+ assert.equal(root.querySelectorAll('.mx-month-weekdays').length,1);assert.deepEqual(root.querySelector('.mx-month-weekdays')!.children.map(e=>e.textContent),['一','二','三','四','五','六','日']);assert.equal(root.querySelector('.mx-time-trace-section-body')!.querySelector('.mx-month-weekdays'),undefined);
+});
+test('continuous month shell omits weekdays while ordinary execution month retains them',()=>{
+ const stream=new El(),execution=new El();const options={year:2026,month:9,onSelect:()=>{},content:()=>{}};
+ monthShell.renderMonthCalendar(stream,{...options,journal:true,hideWeekdays:true});monthShell.renderMonthCalendar(execution,options);
+ assert.equal(stream.querySelectorAll('.mx-month-weekdays').length,0);assert.equal(execution.querySelectorAll('.mx-month-weekdays').length,1);assert.equal(stream.querySelectorAll('.mx-month-day').length,42);assert.ok(stream.querySelectorAll('.mx-month-day').some(e=>e.classes.has('is-out')));
+});
+
+
+for(const isPhone of [false,true])test(`Mini labels and arrows are independent on ${isPhone?'phone':'desktop'}`,()=>{
+ if(!isPhone)phone.clear();try{
+ const root=new El(),focuses:any[]=[],changes:any[]=[];const close=mini.renderTimeTraceMiniCalendar(root,{state:time.initialTimeTraceState(new Date('2026-09-22T12:00:00')),hasMarker:()=>false,onFocus:(s:any)=>focuses.push(s),onChange:(s:any)=>changes.push(s)});
+ for(const kind of ['year','month']){const label=root.all().find(e=>e.attrs['data-scope-label']===kind)!,arrow=root.all().find(e=>e.attrs['data-scope-arrow']===kind)!;assert.notEqual(label,arrow);assert.equal(label.children.includes(arrow),false);let stopped=0,prevented=0;const event={stopPropagation(){stopped++;},preventDefault(){prevented++;}};
+ label.onclick!(event);assert.equal(focuses.at(-1).focus.kind,kind);assert.equal(root.querySelector('.mx-mini-calendar-picker'),undefined);const before=focuses.length;arrow.onclick!(event);assert.ok(root.querySelector('.mx-mini-calendar-picker'));assert.equal(focuses.length,before);assert.equal(changes.length,0);assert.equal(stopped,2);assert.equal(prevented,2);close();}
+ for(const [cls,kind]of [['.mx-mini-calendar-quarter','quarter'],['.mx-mini-calendar-week','week'],['.mx-mini-calendar-day','day']] as const){root.querySelector(cls)!.onclick!({});assert.equal(focuses.at(-1).focus.kind,kind);}close();
+ }finally{phone.add('is-mobile');phone.add('is-phone');}
+});
+for(const kind of ['day','week','month','quarter','year'] as const)test(`Mini ${kind} focus leaves overview for the inline record`,async()=>{
+ const p=await renderer(fixture());Object.assign(p,{mode:'review',reviewView:'overview',inlineTransition:Promise.resolve()});let renders=0;p.renderPlanContent=async()=>{renders++;};const state=kind==='day'?time.selectDay(p.timeState,new Date('2026-09-22T12:00:00')):kind==='week'?time.selectWeek(p.timeState,new Date('2026-09-21')):kind==='month'?time.selectMonth(p.timeState,9):kind==='quarter'?time.selectQuarter(p.timeState):time.selectYear(p.timeState,2026);
+ p.enterTimeFocus(state);await p.inlineTransition;assert.equal(p.reviewView,'record');assert.equal(p.timeState.focus.kind,kind);assert.equal(renders,1);
+});
+for(const mode of ['calendar','longTermPlan','review'])test(`top TimeTrace home from ${mode} lands in overview and retains month`,async()=>{
+ const p=await renderer(fixture());Object.assign(p,{mode,reviewView:'record',inlineTransition:Promise.resolve()});p.timeState.visible={year:2027,month:2};p.renderPlanContent=async()=>{};
+ const {DashboardView}=load('../views/DashboardView.ts');const v=Object.create(DashboardView.prototype);let section='';v.planRenderer=p;v.setSection=async(s:string)=>{section=s;};await v.navigateWorkbench('plan');assert.equal(section,'timeTrace');assert.equal(p.mode,'review');assert.equal(p.reviewView,'overview');assert.equal(p.timeState.visible.year,2027);assert.equal(p.timeState.visible.month,2);
+});
+test('top TimeTrace home refuses navigation when an inline save conflicts',async()=>{
+ const p=await renderer(fixture());Object.assign(p,{mode:'review',reviewView:'record',inlineTransition:Promise.resolve(),inlineEditor:{flush:async()=>false}});p.renderPlanContent=async()=>{throw Error('Unexpected render');};
+ const {DashboardView}=load('../views/DashboardView.ts');const v=Object.create(DashboardView.prototype);v.planRenderer=p;v.setSection=async()=>{throw Error('Unexpected navigation');};await v.navigateWorkbench('plan');assert.equal(p.reviewView,'record');
 });

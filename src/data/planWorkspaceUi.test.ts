@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const view = readFileSync(new URL('../views/PlanView.ts', import.meta.url), 'utf8');
+const monthShell = readFileSync(new URL('../components/timeTrace/MonthCalendar.ts', import.meta.url), 'utf8');
 const shell = readFileSync(new URL('../components/workbench/WorkbenchShell.ts', import.meta.url), 'utf8');
 const main = readFileSync(new URL('../main.ts', import.meta.url), 'utf8');
 const journalSummary = readFileSync(new URL('../components/journal/JournalTaskSummary.ts', import.meta.url), 'utf8');
@@ -31,8 +32,8 @@ test('global plan navigation routes inside the supplied Mengxu view instead of o
 	assert.doesNotMatch(navigation, /setViewState\(\{ type: PROJECT_VIEW/);
 });
 test('plan board reuses original ProjectBoard primitives', () => { for (const cls of ['po-container', 'po-sidebar', 'po-kanban', 'po-kanban__col', 'po-kanban__card']) assert.ok(view.includes(cls)); });
-test('plan calendar reuses original calendar body primitives', () => { for (const cls of ['po-cal__days', 'po-cal__week', 'po-cal__det']) assert.ok(view.includes(cls)); });
-test('plan workspace never creates plan markdown', () => { assert.equal(view.includes('ensurePlan'), false); assert.equal(view.includes('.vault.create('), false); });
+test('plan calendar reuses original calendar body primitives', () => { for (const cls of ['po-cal__days', 'po-cal__week', 'po-cal__det']) assert.ok((view + monthShell).includes(cls)); });
+test('plan workspace creates plans only through the shared ensure helper', () => { assert.ok(view.includes('ensurePlan(this.planFiles(), period, date)')); assert.equal(view.includes('.vault.create('), false); });
 test('calendar checkboxes write through the shared Embedded Task checkbox', () => {
 	assert.match(view, /renderEmbeddedTaskCheckbox\(row, task, this\.plugin\.embeddedTasks\)/);
 	assert.match(embeddedTaskCheckbox, /store\.complete\(task, check\.checked\)/);
@@ -121,17 +122,17 @@ test('annual quarter and month cards keep their established three-column summary
 	assert.match(board, /mx-plan-summary/);
 });
 test('week board has no redundant section heading or quarter caption', () => { assert.equal(view.includes('本月周计划'), false); assert.equal(view.includes('当前选择 · Q'), false); });
-test('sidebar removes its duplicate title and exposes four settled time-trace view names', () => {
+test('sidebar exposes three entries and review body has no repeated module title', () => {
 	assert.doesNotMatch(view, /mx-time-trace-title', text: '时迹'/);
-	assert.match(view, /\[\['review', '日记&复盘'\], \['calendar', '每日计划'\], \['longTermPlan', '长期计划'\], \['board', '周期计划'\]\]/);
-	for (const title of ['周期计划', '长期计划', '每日计划', '日记&复盘']) assert.match(view, new RegExp(`mx-plan-title', text: '${title}'`));
+	assert.match(view, /\[\['review', '日记·计划·复盘'\], \['calendar', '每日执行'\], \['longTermPlan', '长期计划'\]\]/);
+	for (const title of ['计划一览', '长期计划', '每日执行']) assert.match(view, new RegExp(`mx-plan-title', text: '${title}'`));
 });
 test('time trace main owns one persistent header slot and one body slot for every section', () => {
 	const content = view.match(/private async renderPlanContent[\s\S]*?(?=\n\tprivate markerResolver)/)?.[0] ?? '';
 	assert.equal((content.match(/mx-time-trace-section-header/g) ?? []).length, 1);
 	assert.equal((content.match(/mx-time-trace-section-body/g) ?? []).length, 1);
 	assert.match(content, /const main = container\.createDiv\(\{ cls: 'po-main' \}\);[\s\S]*const header = main\.createDiv[\s\S]*const body = main\.createDiv/);
-	for (const call of ['renderBoard(header, body', 'renderLongTermPlans(header, body', 'renderDailyPlan(header, body', 'renderReview(header, body']) assert.ok(content.includes(call));
+	for (const call of ['this.renderBoard(body.createDiv', 'renderLongTermPlans(header, body', 'renderDailyPlan(header, body', 'renderReview(header, body']) assert.ok(content.includes(call));
 });
 test('section renderers fill the shared header instead of creating their own header containers', () => {
 	const board = view.match(/private renderBoard[\s\S]*?(?=\n\tprivate existingFile)/)?.[0] ?? '';
@@ -160,18 +161,18 @@ test('shared header refactor preserves every established section body wrapper', 
 });
 test('calendar removes its duplicate toolbar and renders only shared header metadata', () => {
 	const calendar = view.match(/private async renderDailyPlan[\s\S]*?(?=\n\tprivate weekDates)/)?.[0] ?? '';
-	assert.match(calendar, /header\.createSpan\(\{ cls: 'mx-plan-title', text: '每日计划' \}\)/);
+	assert.match(calendar, /header\.createSpan\(\{ cls: 'mx-plan-title', text: '每日执行' \}\)/);
 	assert.match(calendar, /header\.createSpan\(\{ cls: 'mx-plan-context'/);
 	for (const legacy of ['po-cal__bar', 'po-cal__seg', 'po-cal__nav', 'po-cal__ttl', "text: '‹'", "text: '今天'", "text: '›'"]) assert.equal(calendar.includes(legacy), false);
 	assert.doesNotMatch(view, /private moveCalendar/);
 });
 test('shared mini calendar is the only calendar period controller', () => {
-	assert.match(miniCalendar, /current\.onclick = \(\) => options\.onChange\(selectToday\(state, today\)\)/);
+	assert.match(miniCalendar, /current\.onclick = \(\) => enterFocus\(selectToday\(state, today\)\)/);
 	assert.match(miniCalendar, /previous\.onclick = \(\) => options\.onChange\(shiftVisibleMonth\(state, -1\)\)/);
 	assert.match(miniCalendar, /next\.onclick = \(\) => options\.onChange\(shiftVisibleMonth\(state, 1\)\)/);
 	assert.match(miniCalendar, /options\.onChange\(selectMonth\(state, value\)\)/);
-	assert.match(miniCalendar, /options\.onChange\(selectWeek\(state, week\.days\[0\]!\.date\)\)/);
-	assert.match(miniCalendar, /options\.onChange\(selectDay\(state, day\.date\)\)/);
+	assert.match(miniCalendar, /enterFocus\(selectWeek\(state, week\.days\[0\]!\.date\)\)/);
+	assert.match(miniCalendar, /enterFocus\(selectDay\(state, day\.date\)\)/);
 	const setTimeState = view.match(/private setTimeState[\s\S]*?(?=\n\tprivate setDayFocus)/)?.[0] ?? '';
 	assert.match(setTimeState, /state\.focus\.kind === 'week' \? 'week' : 'month'/);
 });
@@ -272,7 +273,7 @@ test('calendar task refresh subscription does not rebuild the outer view', () =>
 	assert.equal(view.includes("embeddedTasks.subscribe(() => { if (this.mode === 'calendar') void this.mountView()"), false);
 });
 test('time trace sidebar has four equal view rows, no explanatory labels and a lightweight today action', () => {
-	assert.match(view, /\[\['review', '日记&复盘'\], \['calendar', '每日计划'\], \['longTermPlan', '长期计划'\], \['board', '周期计划'\]\]/);
+	assert.match(view, /\[\['review', '日记·计划·复盘'\], \['calendar', '每日执行'\], \['longTermPlan', '长期计划'\]\]/);
 	assert.match(view, /po-sidebar__item\$\{this\.mode === mode \? ' is-active' : ''\}/);
 	assert.match(miniCalendar, /po-sidebar__item mx-time-trace-today', text: '今天'/);
 	for (const old of ["text: '视图'", "text: '时间'", "text: '当前计划'"]) assert.equal(view.includes(old), false);
@@ -285,9 +286,9 @@ test('mini calendar uses restrained markers and existing arrow primitives', () =
 });
 test('year and month are separate interactive scope buttons', () => {
 	assert.match(miniCalendar, /text: `\$\{state\.visible\.year\} 年`/);
-	assert.match(miniCalendar, /year\.onclick = event => \{ event\.stopPropagation\(\); openPicker\('year'\); \}/);
+	assert.match(miniCalendar, /yearArrow\.onclick = event => \{ event\.preventDefault\(\); event\.stopPropagation\(\); openPicker\('year'\); \}/);
 	assert.match(miniCalendar, /text: `\$\{state\.visible\.month\} 月`/);
-	assert.match(miniCalendar, /month\.onclick = event => \{ event\.stopPropagation\(\); openPicker\('month'\); \}/);
+	assert.match(miniCalendar, /monthArrow\.onclick = event => \{ event\.preventDefault\(\); event\.stopPropagation\(\); openPicker\('month'\); \}/);
 });
 test('year and month pickers are one mutually exclusive compact overlay', () => {
 	assert.match(miniCalendar, /let pickerKind: 'year' \| 'month' \| undefined/);
@@ -335,12 +336,13 @@ test('year quarter month week and day selected states all derive from the discri
 	for (const helper of ['focusMatchesYear', 'focusMatchesQuarter', 'focusMatchesMonth', 'focusMatchesWeek', 'focusMatchesDay']) assert.ok(miniCalendar.includes(helper));
 	assert.match(miniCalendar, /aria-pressed': String\(selected\)/);
 });
-test('quarter is a lightweight same-row scope derived from visible month without a picker', () => {
+test('quarter is a lightweight first weekday cell derived from visible month without a picker', () => {
 	assert.match(miniCalendar, /const title = nav\.createDiv\(\{ cls: 'mx-mini-calendar-title' \}\)/);
 	assert.match(miniCalendar, /quarterOfMonth\(state\.visible\.month\)/);
-	assert.match(miniCalendar, /mx-mini-calendar-separator/);
+	assert.doesNotMatch(miniCalendar, /mx-mini-calendar-separator/);
+	assert.match(miniCalendar, /weekdays\.createEl\('button', \{ cls: `mx-mini-calendar-scope mx-mini-calendar-quarter/);
 	assert.match(miniCalendar, /mx-mini-calendar-scope mx-mini-calendar-quarter/);
-	assert.match(miniCalendar, /options\.onChange\(selectQuarter\(state\)\)/);
+	assert.match(miniCalendar, /enterFocus\(selectQuarter\(state\)\)/);
 	assert.doesNotMatch(miniCalendar, /openPicker\('quarter'\)|pickerKind: 'quarter'|Q1.*Q2.*Q3.*Q4/);
 	assert.match(css, /\.mx-mini-calendar-quarter \{[^}]*font-family: var\(--ad-font-mono\)/);
 });
@@ -400,7 +402,7 @@ test('mini calendar selection today and markers remain visually distinct and neu
 });
 test('journal review reads the selected period while the shared calendar stays mounted', () => {
 	assert.match(view, /else await this\.renderReview\(header, body, token\)/);
-	assert.match(view, /private async renderReview[\s\S]*text: '日记&复盘'[\s\S]*journalReviewTarget\(this\.timeState\.focus\)/);
+	assert.match(view, /private async renderReview[\s\S]*journalReviewTarget\(this\.timeState\.focus\)/);
 	assert.equal(view.includes('最近日记'), false);
 	assert.equal(view.includes('过去的今天'), true);
 });
@@ -417,7 +419,7 @@ test('marker semantics remain section-specific and read only', () => {
 test('calendar reuses month week and day modes and leaves quarter on the visible month view', () => {
 	const calendar = view.match(/private async renderDailyPlan[\s\S]*?(?=\n\tprivate weekDates)/)?.[0] ?? '';
 	assert.match(calendar, /this\.calendarMode = this\.timeState\.focus\.kind === 'week' \? 'week' : 'month'/);
-	assert.match(view, /day\.addEventListener\('click', \(\) => this\.setDayFocus\(date\)\)/);
+	assert.match(view, /onSelect: date => this\.setDayFocus\(date\)/);
 	assert.match(calendar, /this\.calendarMode === 'month'\) this\.renderDailyPlanMonth[\s\S]*else this\.renderDailyPlanWeek/);
 	assert.equal(calendar.includes("['year', '年']"), false);
 	assert.equal(calendar.includes("'quarter' ?"), false);
@@ -604,5 +606,17 @@ test('journal metadata changes refresh the mounted calendar without rebuilding t
 	assert.match(view, /sectionDisposers\.push\(\(\) => this\.app\.metadataCache\.offref\(metadataRef\)\)/);
 });
 test('daily plan only requests meaningful Journal dates in review mode', () => {
-	assert.match(view, /this.meaningfulDays = this.mode === 'review' \? await meaningfulJournalDates\(this.app\) : new Set<string>\(\)/);
+	assert.match(view, /this.meaningfulDays = this.mode === 'review' && this.reviewView !== 'plans' \? await meaningfulJournalDates\(this.app\) : new Set<string>\(\)/);
+});
+
+
+test('record headers are time-only with generic columns and no duplicate navigation',()=>{
+ const review=view.slice(view.indexOf('private renderReviewToolbar'),view.indexOf('private async renderLongTermPlans'));
+ assert.doesNotMatch(review,/text: '日记·计划·复盘'|mx-journal-overview-nav|mx-journal-review-modes|mx-journal-review-record-controls/);
+ assert.match(review,/text: journalPlanningReviewHeaderTime\(this.timeState, this.reviewView\)/);
+ assert.match(review,/text: '计划'/);assert.match(review,/text: '复盘'/);
+ assert.equal((view.match(/renderMonthCalendar\(root/g)||[]).length,1); assert.match(view,/new JournalWeekFlow\(content/);
+ assert.match(css,/button\.mx-month-day\.po-cal__day\.is-today \{ border: 2px solid #111; background: transparent/);
+ assert.match(css,/\.mx-month-day\.is-today \.mx-month-date \{ background: #111; color: #fff/);
+ assert.match(css,/is-sel:not\(\.is-today\)/);
 });
