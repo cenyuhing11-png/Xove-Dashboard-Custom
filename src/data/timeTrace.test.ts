@@ -198,8 +198,8 @@ test('cycle never invents a marker for day focus', () => {
 	assert.equal(hasTimeTraceMarker('cycle', { kind: 'day', date: '2026-09-10' }, markerSources([], [], ['2026-09-10'])), false);
 });
 
-test('calendar day markers come only from existing daily journals', () => {
-	const sources = markerSources([], [], ['2026-09-10']);
+test('legacy calendar key uses task presence independently from journals', () => {
+	const sources = { ...markerSources([], [], []), taskExists: (date: string) => date === '2026-09-10' };
 	assert.equal(hasTimeTraceMarker('calendar', { kind: 'day', date: '2026-09-10' }, sources), true);
 	assert.equal(hasTimeTraceMarker('calendar', { kind: 'month', year: 2026, month: 9 }, sources), false);
 	assert.equal(hasTimeTraceMarker('calendar', { kind: 'quarter', year: 2026, quarter: 3 }, markerSources(['quarter:2026-7-1'], ['quarter:2026-7-1'])), false);

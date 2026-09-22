@@ -1,3 +1,4 @@
+import { NewEmbeddedTaskModal } from './EmbeddedTaskModal';
 import { JournalInlineEditor, journalInlineFiles } from '../components/journal/JournalInlineEditor';
 import { JournalInlineDocument } from '../data/journalInline';
 import { journalOverviewSummary } from '../data/journalOverview';
@@ -16,8 +17,7 @@ import { scanLearning } from '../data/learningVault';
 import { scanProjects } from '../data/projectVault';
 import { processes } from '../data/processes';
 import { processContentTypeLabel, taskSourceTypeLabel } from '../data/processContentTypes';
-import { JOURNAL_ROOT, journalCalendarEntry, journalDateFromPath, journalPaths, readJournalTitle } from '../data/journal';
-import type { JournalCalendarEntry } from '../data/journal';
+import { JOURNAL_ROOT, journalPaths } from '../data/journal';
 import { dayReviewSections, discoverReviewRecords, ensureReviewForFocus, journalReviewTarget, markdownReviewSections, pastTodayReference, pastTodayReviewRecords, randomReviewRecord, recentReviewRecords, recentReviewTimeLabel, recentReviewTitle, reviewRecordTimeLabel, searchReviewRecords, timeStateForReviewRecord } from '../data/journalReview';
 import type { JournalReviewMode, JournalReviewViewMode, MarkdownReviewSection, ReviewRecord } from '../data/journalReview';
 import { renderEmbeddedTaskCheckbox } from '../components/tasks/EmbeddedTaskCheckbox';
@@ -66,7 +66,7 @@ function compactProcessDate(value?: string | null): string { return /^\d{4}-\d{2
  * mount this same renderer, so the business UI has a single implementation. */
 export class PlanWorkspaceRenderer extends Component {
 	private timeState: TimeTraceState = initialTimeTraceState();
-	private mode: PlanWorkspaceMode = 'board';
+	private mode: PlanWorkspaceMode = 'review';
 	private calendarMode: PlanCalendarMode = 'month';
 	private reviewMode: JournalReviewMode = 'review';
 	private reviewView: JournalReviewViewMode = 'record';
@@ -202,7 +202,7 @@ export class PlanWorkspaceRenderer extends Component {
 		const snapshot = this.mode === 'board'
 			? await readPlanWorkspace(this.planFiles(), year, month)
 			: undefined;
-		this.meaningfulDays = await meaningfulJournalDates(this.app);
+		this.meaningfulDays = this.mode === 'review' ? await meaningfulJournalDates(this.app) : new Set<string>();
 		const editorKey = JSON.stringify([this.mode, this.reviewView, this.reviewMode, this.timeState.focus]);
 		if (this.inlineEditor && this.inlineKey === editorKey && container.querySelector('.mx-journal-inline-field')) {
 			if (token !== this.generation || container !== this.workspaceEl) return;
@@ -220,7 +220,7 @@ export class PlanWorkspaceRenderer extends Component {
 		const body = main.createDiv({ cls: 'mx-time-trace-section-body', attr: { 'data-time-trace-body': this.mode } });
 		if (this.mode === 'board' && snapshot) this.renderBoard(header, body, snapshot);
 		else if (this.mode === 'longTermPlan') await this.renderLongTermPlans(header, body, longTermPlans);
-		else if (this.mode === 'calendar') await this.renderCalendar(header, body, token);
+		else if (this.mode === 'calendar') await this.renderDailyPlan(header, body, token);
 		else await this.renderReview(header, body, token);
 	}
 
@@ -232,6 +232,7 @@ export class PlanWorkspaceRenderer extends Component {
 			planExists: (period, date) => planPaths(period, date).some(exists),
 			journalExists: (period, date) => journalPaths(period, date).some(exists),
 			dailyJournalExists: date => dailyDates.has(date),
+			taskExists: date => tasksOnDate(this.plugin.embeddedTasks.all(), date).length > 0,
 		});
 	}
 
@@ -242,7 +243,7 @@ export class PlanWorkspaceRenderer extends Component {
 	private renderSidebar(container: HTMLElement): void {
 		const side = container.createDiv({ cls: 'po-sidebar mx-time-trace-sidebar' });
 		const list = side.createDiv({ cls: 'po-sidebar__list mx-time-trace-nav' });
-		for (const [mode, label] of [['board', '周期计划'], ['longTermPlan', '长期计划'], ['calendar', '综合日历'], ['review', '日记&复盘']] as const) {
+		for (const [mode, label] of [['review', '日记&复盘'], ['calendar', '每日计划'], ['longTermPlan', '长期计划'], ['board', '周期计划']] as const) {
 			const item = list.createDiv({ cls: `po-sidebar__item${this.mode === mode ? ' is-active' : ''} mx-time-trace-nav-item`, text: label, attr: { role: 'button', tabindex: '0' } });
 			const selectMode = () => this.navigateInline(() => { this.mode = mode; });
 			item.addEventListener('click', selectMode);
@@ -609,31 +610,23 @@ export class PlanWorkspaceRenderer extends Component {
 		const unassigned=linked.filter(process=>!assigned.has(normalizeLongTermProcessRef(process.sourceFile)));if(unassigned.length){const loose=detailContent.createDiv({cls:'ad-update-block mx-long-term-unassigned'});loose.createEl('h2',{cls:'ad-modal-title',text:'未分配'});for(const process of unassigned)this.renderUnassignedProcess(loose,process,plan);}
 	}
 
-	private async readCalendarJournals(): Promise<Map<string, JournalCalendarEntry>> {
-		const files = this.app.vault.getMarkdownFiles().filter(file => journalDateFromPath(file.path))
-			.sort((a, b) => a.path.length - b.path.length || a.path.localeCompare(b.path, 'zh-CN'));
-		const entries = await Promise.all(files.map(async file => {
-			try { return journalCalendarEntry(file.path, await readJournalContent(this.app, file), this.app.metadataCache.getFileCache(file)?.frontmatter); }
-			catch { return null; }
-		}));
-		const journals = new Map<string, JournalCalendarEntry>();
-		for (const entry of entries) if (entry && !journals.has(entry.date)) journals.set(entry.date, entry);
-		return journals;
+	private openDailyPlanTask(): void {
+		new NewEmbeddedTaskModal(this.app, this.plugin.embeddedTasks, undefined, this.timeState.focus.kind === 'day' ? this.timeState.focus.date : undefined).open();
 	}
 
-	private async renderCalendar(header: HTMLElement, main: HTMLElement, token: number): Promise<void> {
+	private async renderDailyPlan(header: HTMLElement, main: HTMLElement, token: number): Promise<void> {
 		const { year, month } = this.timeState.visible;
 		this.calendarMode = this.timeState.focus.kind === 'week' ? 'week' : 'month';
-		header.createSpan({ cls: 'mx-plan-title', text: '综合日历' });
+		header.createSpan({ cls: 'mx-plan-title', text: '每日计划' });
 		header.createSpan({ cls: 'mx-plan-context', text: this.calendarMode === 'month' ? monthTitle(year, month) : this.weekTitle() });
+		header.createEl('button', { cls: 'mx-inline-action', text: '新建任务' }).onclick = () => this.openDailyPlanTask();
 		const tasks = this.plugin.embeddedTasks.all();
 		this.sourceLabels = new Map(processes(scanLearning(this.app), scanProjects(this.app), tasks).map(process => [process.sourceFile, taskSourceTypeLabel(process.contentType)]));
-		const journals = await this.readCalendarJournals();
 		if (token !== this.generation || !main.isConnected) return;
-		const root = main.createDiv({ cls: 'po-cal' }); root.tabIndex = 0;
-		if (this.calendarMode === 'month') this.renderCalendarMonth(root, journals, tasks); else this.renderCalendarWeek(root, journals, tasks);
+		const root = main.createDiv({ cls: 'po-cal' }); root.addClass('mx-daily-plan'); root.toggleClass('is-week', this.calendarMode === 'week'); root.tabIndex = 0;
+		if (this.calendarMode === 'month') this.renderDailyPlanMonth(root, tasks); else this.renderDailyPlanWeek(root, tasks);
 		const selectedDate = this.calendarDate();
-		this.renderDayDetail(root, selectedDate, journals.get(dateKey(selectedDate)));
+		if (this.timeState.focus.kind === 'day') this.renderDayDetail(root, selectedDate);
 	}
 
 	private weekDates(): Date[] {
@@ -647,7 +640,7 @@ export class PlanWorkspaceRenderer extends Component {
 		return `${focused?.isoYear ?? fallback.year}-W${String(focused?.isoWeek ?? fallback.week).padStart(2, '0')} · ${dayLabel(dates[0]!)} — ${dayLabel(dates[6]!)}`;
 	}
 
-	private renderCalendarIncomplete(parent: HTMLElement, tasks: EmbeddedTask[], key: string): number {
+	private renderDailyPlanIncomplete(parent: HTMLElement, tasks: EmbeddedTask[], key: string): number {
 		const count = incompleteTaskCountOnDate(tasks, key);
 		if (!count) return 0;
 		parent.addClass('has-incomplete-tasks');
@@ -655,7 +648,7 @@ export class PlanWorkspaceRenderer extends Component {
 		return count;
 	}
 
-	private renderCalendarMonth(root: HTMLElement, journals: Map<string, JournalCalendarEntry>, tasks: EmbeddedTask[]): void {
+	private renderDailyPlanMonth(root: HTMLElement, tasks: EmbeddedTask[]): void {
 		const { year, month } = this.timeState.visible;
 		const weekdays = root.createDiv({ cls: 'po-cal__weekdays' });
 		for (const name of ['一', '二', '三', '四', '五', '六', '日']) weekdays.createSpan({ text: name });
@@ -665,42 +658,43 @@ export class PlanWorkspaceRenderer extends Component {
 		const today = new Date();
 		for (let index = 0; index < 42; index++) {
 			const date = new Date(cursor); date.setDate(cursor.getDate() + index);
-			const key = dateKey(date); const journal = journals.get(key);
+			const key = dateKey(date);
 			let cls = 'po-cal__day';
 			if (date.getFullYear() !== year || date.getMonth() !== month - 1) cls += ' is-out';
 			if (date.getDay() === 0 || date.getDay() === 6) cls += ' is-weekend';
 			if (sameDay(date, today)) cls += ' is-today';
 			if (this.timeState.focus.kind === 'day' && this.timeState.focus.date === key) cls += ' is-sel';
-			const day = days.createDiv({ cls }); day.createSpan({ cls: `po-cal__day-num${sameDay(date, today) ? ' is-today' : ''}`, text: String(date.getDate()) });
+			const day = days.createDiv({ cls, attr: { 'data-date': key, role: 'button', tabindex: '0', 'aria-label': key } }); day.createSpan({ cls: `po-cal__day-num${sameDay(date, today) ? ' is-today' : ''}`, text: String(date.getDate()) });
 			const body = day.createDiv({ cls: 'po-cal__day-body mx-plan-calendar-day-body' }); body.createDiv({ cls: 'po-cal__slot' });
-			if (journal) this.renderCalendarJournal(body, journal, 'month');
-			this.renderCalendarIncomplete(day, tasks, key);
+			if (tasksOnDate(tasks, key).length) day.createSpan({ cls: 'mx-daily-plan-task-dot', attr: { 'aria-label': '有任务' } });
+			this.renderDailyPlanIncomplete(day, tasks, key);
 			day.addEventListener('click', () => this.setDayFocus(date));
+			day.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.setDayFocus(date); } });
 		}
 	}
 
-	private renderCalendarWeek(root: HTMLElement, journals: Map<string, JournalCalendarEntry>, allTasks: EmbeddedTask[]): void {
+	private renderDailyPlanWeek(root: HTMLElement, allTasks: EmbeddedTask[]): void {
 		const weekdays = root.createDiv({ cls: 'po-cal__weekdays' });
 		for (const name of ['一', '二', '三', '四', '五', '六', '日']) weekdays.createSpan({ text: name });
 		const cols = root.createDiv({ cls: 'po-cal__week' });
 		const today = new Date();
 		for (const date of this.weekDates()) {
-			const key = dateKey(date); const tasks = tasksOnDate(allTasks, key); const journal = journals.get(key);
+			const key = dateKey(date); const tasks = tasksOnDate(allTasks, key);
 			const col = cols.createDiv({ cls: `po-cal__wcol${sameDay(date, today) ? ' is-today' : ''}${this.timeState.focus.kind === 'day' && this.timeState.focus.date === key ? ' is-sel' : ''}` });
 			const head = col.createDiv({ cls: 'po-cal__wcol-hd' }); head.createSpan({ cls: 'po-cal__wcol-day', text: String(date.getDate()) }); head.createSpan({ cls: 'po-cal__wcol-name', text: `${date.getMonth() + 1}月` });
-			if (journal) this.renderCalendarJournal(col, journal);
-			for (const task of tasks) this.renderCalendarChip(col, task);
-			this.renderCalendarIncomplete(col, allTasks, key);
+			for (const task of tasks) this.renderDailyPlanChip(col, task);
+			this.renderDailyPlanIncomplete(col, allTasks, key);
 			col.addEventListener('click', () => this.setDayFocus(date));
 		}
 	}
 
-	private renderDayDetail(root: HTMLElement, selectedDate: Date, journal?: JournalCalendarEntry): void {
+	private renderDayDetail(root: HTMLElement, selectedDate: Date): void {
 		const detail = root.createDiv({ cls: 'po-cal__det' });
 		const tasks = tasksOnDate(this.plugin.embeddedTasks.all(), dateKey(selectedDate));
-		detail.createDiv({ cls: 'po-cal__det-ttl', text: `${selectedDate.getMonth() + 1} 月 ${selectedDate.getDate()} 日 · ${tasks.length} 项任务` });
-		if (!tasks.length && !journal) { detail.createDiv({ cls: 'po-cal__det-empty', text: '当日暂无任务或日记' }); return; }
-		const layout = detail.createDiv({ cls: `mx-day-detail-layout${tasks.length && journal ? ' is-split' : ''}` });
+		detail.createDiv({ cls: 'po-cal__det-ttl', text: `${selectedDate.getFullYear()} 年 ${selectedDate.getMonth() + 1} 月 ${selectedDate.getDate()} 日 · ${tasks.length} 项任务` });
+		this.renderDailyPlanIncomplete(detail, tasks, dateKey(selectedDate));
+		if (!tasks.length) { detail.createDiv({ cls: 'po-cal__det-empty', text: '当日暂无任务' }); return; }
+		const layout = detail.createDiv({ cls: 'mx-day-detail-layout' });
 		if (tasks.length) {
 			const taskPane = layout.createDiv({ cls: 'mx-day-detail-task-pane' });
 			const groups = groupEmbeddedForDisplay(tasks);
@@ -711,42 +705,13 @@ export class PlanWorkspaceRenderer extends Component {
 				for (const task of groups[category]) this.renderTaskRow(section, task);
 			}
 		}
-		if (journal) this.renderJournalDetail(layout.createDiv({ cls: 'mx-day-detail-journal-pane' }), journal);
 	}
 
-	private renderCalendarJournal(parent: HTMLElement, journal: JournalCalendarEntry, mode: 'month' | 'week' = 'week'): void {
-		const row = parent.createDiv({
-			cls: `po-cal__chip mx-calendar-journal-row${mode === 'month' ? ' is-month' : ''}${journal.titleSource === 'quick-note' ? ' is-quick-note' : ''}`,
-			text: journal.title,
-			attr: { title: journal.title },
-		});
-		if (mode === 'month' && journal.titleSource !== 'quick-note') this.fitMonthJournalTitle(row);
-		row.addEventListener('click', event => { event.stopPropagation(); const date = parseDateKey(journal.date); if (date) this.setDayFocus(date); });
-	}
-
-	private fitMonthJournalTitle(row: HTMLElement): void {
-		requestAnimationFrame(() => {
-			if (!row.isConnected) return;
-			const lineHeight = Number.parseFloat(getComputedStyle(row).lineHeight) || 15;
-			const availableLines = Math.max(1, Math.floor(row.clientHeight / lineHeight));
-			row.style.setProperty('--mx-calendar-journal-lines', String(availableLines));
-		});
-	}
-
-	private renderCalendarChip(parent: HTMLElement, task: EmbeddedTask): void {
+	private renderDailyPlanChip(parent: HTMLElement, task: EmbeddedTask): void {
 		const chip = parent.createDiv({ cls: `po-cal__chip mx-calendar-task-chip${task.completed ? ' is-done' : ''}`, attr: { title: task.text } });
+		renderEmbeddedTaskCheckbox(chip, task, this.plugin.embeddedTasks);
 		chip.createSpan({ cls: 'mx-calendar-task-marker', text: taskDisplayMarker(task.sourceType) });
 		chip.createSpan({ cls: 'mx-calendar-task-text', text: task.text });
-	}
-
-	private renderJournalDetail(parent: HTMLElement, journal: JournalCalendarEntry): void {
-		const section = parent.createDiv({ cls: 'mx-day-journal-section' });
-		section.createDiv({ cls: 'mx-day-task-section__title', text: '日记' });
-		section.createDiv({ cls: 'mx-day-journal-title', text: journal.title });
-		if (journal.quickNoteCount && journal.titleSource !== 'quick-note') section.createDiv({ cls: 'mx-day-journal-meta', text: `随时记 · ${journal.quickNoteCount}条` });
-		if (journal.summary) section.createDiv({ cls: 'mx-day-journal-summary', text: journal.summary });
-		const open = section.createEl('button', { cls: 'mx-inline-action mx-day-journal-open', text: '打开日记 →', attr: { type: 'button' } });
-		open.addEventListener('click', () => { const file = this.app.vault.getAbstractFileByPath(journal.path); if (file instanceof TFile) void this.app.workspace.getLeaf('tab').openFile(file); });
 	}
 
 	private renderTaskRow(parent: HTMLElement, task: EmbeddedTask): void {

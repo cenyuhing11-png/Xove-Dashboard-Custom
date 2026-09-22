@@ -14,11 +14,13 @@ export interface TimeTraceState { visible: VisibleMonth; focus: TimeFocus }
 export interface MiniCalendarDay { date: Date; key: string; inMonth: boolean }
 export interface MiniCalendarWeek { isoYear: number; isoWeek: number; anchorDate: string; days: MiniCalendarDay[] }
 export const YEAR_PICKER_PAGE_SIZE = 12;
+/** calendar is the legacy compatibility key for Daily Plan. */
 export type TimeTraceMarkerMode = 'cycle' | 'longTerm' | 'calendar' | 'review';
 export interface TimeTraceMarkerSources {
 	planExists(period: 'year' | 'quarter' | 'month' | 'week', date: Date): boolean;
 	journalExists(period: 'year' | 'quarter' | 'month' | 'week', date: Date): boolean;
 	dailyJournalExists(date: string): boolean;
+	taskExists?(date: string): boolean;
 }
 
 function atNoon(value: Date): Date { return new Date(value.getFullYear(), value.getMonth(), value.getDate(), 12); }
@@ -74,12 +76,12 @@ export function focusLabel(focus: TimeFocus): string {
 }
 export function hasTimeTraceMarker(mode: TimeTraceMarkerMode, focus: TimeFocus, sources: TimeTraceMarkerSources): boolean {
 	if (mode === 'longTerm') return false;
-	if (focus.kind === 'day') return (mode === 'calendar' || mode === 'review') && sources.dailyJournalExists(focus.date);
+	if (mode === 'calendar') return focus.kind === 'day' && (sources.taskExists?.(focus.date) ?? false);
+	if (focus.kind === 'day') return mode === 'review' && sources.dailyJournalExists(focus.date);
 	if (focus.kind === 'quarter') {
 		const date = quarterStartDate(focus.year, focus.quarter);
 		return mode === 'cycle' ? sources.planExists('quarter', date) : mode === 'review' ? sources.journalExists('quarter', date) : false;
 	}
-	if (mode === 'calendar') return false;
 	const date = focus.kind === 'week'
 		? parseDateKey(focus.anchorDate)
 		: new Date(focus.year, focus.kind === 'month' ? focus.month - 1 : 0, 1, 12);

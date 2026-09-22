@@ -5,6 +5,7 @@ import type { PlanFiles, PlanPeriod } from './planning.ts';
 import { planDisplayLabel } from './cycleDisplayLabels.ts';
 import { quarterOfMonth } from './quarters.ts';
 
+/** calendar remains the legacy key for Daily Plan, including restored view state. */
 export type PlanWorkspaceMode = 'board' | 'longTermPlan' | 'calendar' | 'review';
 export type PlanCalendarMode = 'month' | 'week';
 

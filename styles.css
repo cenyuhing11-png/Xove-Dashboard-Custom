@@ -3054,3 +3054,14 @@ body.is-mobile.is-phone button.mx-journal-overview-day { min-height: 76px; paddi
 body.is-mobile.is-phone .mx-journal-inline-input { font-size: 16px; max-height: min(480px, 50dvh); scroll-margin-block: 80px; }
 body.is-mobile.is-phone .mx-journal-review-content { min-width: 0; overflow-wrap: anywhere; }
 body.is-mobile.is-phone .mx-journal-review-tools { flex-wrap: wrap; }
+
+/* Daily Plan: task presence is independent from the incomplete count. */
+.mx-daily-plan-task-dot { position: absolute; top: 9px; right: 9px; width: 4px; height: 4px; border-radius: 50%; background: var(--ad-text-dim); }
+.po-cal__det { position: relative; }
+.mx-calendar-task-chip { display: flex; align-items: center; min-width: 0; }
+.mx-calendar-task-chip .mx-calendar-task-text { min-width: 0; overflow-wrap: anywhere; }
+body.is-mobile.is-phone .mx-calendar-task-chip { white-space: normal; height: auto; }
+body.is-mobile.is-phone .mx-calendar-task-chip .mx-embedded-task-checkbox { min-width: 32px; min-height: 36px; }
+body.is-mobile.is-phone .mx-daily-plan.is-week > .po-cal__weekdays { display: none; }
+body.is-mobile.is-phone .mx-daily-plan .po-cal__week { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+body.is-mobile.is-phone .mx-daily-plan .po-cal__wcol { grid-row: auto; min-height: 68px; min-width: 0; }
