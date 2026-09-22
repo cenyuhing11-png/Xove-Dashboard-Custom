@@ -122,8 +122,8 @@ test('annual quarter and month cards keep their established three-column summary
 test('week board has no redundant section heading or quarter caption', () => { assert.equal(view.includes('本月周计划'), false); assert.equal(view.includes('当前选择 · Q'), false); });
 test('sidebar removes its duplicate title and exposes four settled time-trace view names', () => {
 	assert.doesNotMatch(view, /mx-time-trace-title', text: '时迹'/);
-	assert.match(view, /\[\['board', '周期计划'\], \['longTermPlan', '长期计划'\], \['calendar', '综合日历'\], \['review', '日记回顾'\]\]/);
-	for (const title of ['周期计划', '长期计划', '综合日历', '日记回顾']) assert.match(view, new RegExp(`mx-plan-title', text: '${title}'`));
+	assert.match(view, /\[\['board', '周期计划'\], \['longTermPlan', '长期计划'\], \['calendar', '综合日历'\], \['review', '日记&复盘'\]\]/);
+	for (const title of ['周期计划', '长期计划', '综合日历', '日记&复盘']) assert.match(view, new RegExp(`mx-plan-title', text: '${title}'`));
 });
 test('time trace main owns one persistent header slot and one body slot for every section', () => {
 	const content = view.match(/private async renderPlanContent[\s\S]*?(?=\n\tprivate markerResolver)/)?.[0] ?? '';
@@ -259,7 +259,7 @@ test('journal detail opens its exact source file without a scroll hack', () => {
 	assert.equal(view.includes('scrollIntoView'), false);
 });
 test('selected day changes refresh only the mounted plan content', () => {
-	assert.match(view, /private setTimeState[\s\S]*?void this\.renderPlanContent\(\);\n\t}/);
+	assert.match(view, /private setTimeState[\s\S]*?this\.navigateInline\([\s\S]*?this\.timeState = state/);
 	assert.doesNotMatch(view, /private setTimeState[\s\S]*?void this\.mountView\(\);\n\t}/);
 });
 test('calendar navigation keeps the WorkbenchShell mounted', () => {
@@ -270,7 +270,7 @@ test('calendar navigation keeps the WorkbenchShell mounted', () => {
 	assert.equal(contentRender.includes('renderLifeCompass'), false);
 });
 test('plan view mode switches patch content instead of rebuilding the shell', () => {
-	assert.match(view, /this\.mode = mode; void this\.renderPlanContent\(\)/);
+	assert.match(view, /this\.navigateInline\(\(\) => \{ this\.mode = mode;/);
 	assert.match(view, /this\.calendarMode = state\.focus\.kind === 'week' \? 'week' : 'month'/);
 });
 test('calendar task refresh subscription does not rebuild the outer view', () => {
@@ -278,7 +278,7 @@ test('calendar task refresh subscription does not rebuild the outer view', () =>
 	assert.equal(view.includes("embeddedTasks.subscribe(() => { if (this.mode === 'calendar') void this.mountView()"), false);
 });
 test('time trace sidebar has four equal view rows, no explanatory labels and a lightweight today action', () => {
-	assert.match(view, /\[\['board', '周期计划'\], \['longTermPlan', '长期计划'\], \['calendar', '综合日历'\], \['review', '日记回顾'\]\]/);
+	assert.match(view, /\[\['board', '周期计划'\], \['longTermPlan', '长期计划'\], \['calendar', '综合日历'\], \['review', '日记&复盘'\]\]/);
 	assert.match(view, /po-sidebar__item\$\{this\.mode === mode \? ' is-active' : ''\}/);
 	assert.match(miniCalendar, /po-sidebar__item mx-time-trace-today', text: '今天'/);
 	for (const old of ["text: '视图'", "text: '时间'", "text: '当前计划'"]) assert.equal(view.includes(old), false);
@@ -406,7 +406,7 @@ test('mini calendar selection today and markers remain visually distinct and neu
 });
 test('journal review reads the selected period while the shared calendar stays mounted', () => {
 	assert.match(view, /else await this\.renderReview\(header, body, token\)/);
-	assert.match(view, /private async renderReview[\s\S]*text: '日记回顾'[\s\S]*journalReviewTarget\(this\.timeState\.focus\)/);
+	assert.match(view, /private async renderReview[\s\S]*text: '日记&复盘'[\s\S]*journalReviewTarget\(this\.timeState\.focus\)/);
 	assert.equal(view.includes('最近日记'), false);
 	assert.equal(view.includes('过去的今天'), true);
 });

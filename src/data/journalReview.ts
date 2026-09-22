@@ -9,7 +9,7 @@ import { planDisplayLabel, reviewDisplayLabel, reviewDisplayTitle } from './cycl
 import { quarterStartDate } from './quarters.ts';
 
 export type JournalReviewMode = 'review' | 'compare';
-export type JournalReviewViewMode = 'record' | 'recent' | 'search' | 'pastToday';
+export type JournalReviewViewMode = 'record' | 'overview' | 'recent' | 'search' | 'pastToday';
 
 export interface JournalReviewTarget {
 	kind: JournalKind;

@@ -7,7 +7,7 @@ import ts from 'typescript';
 // Reconstructed regression tests; original uncommitted test text was not recoverable.
 const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const css = read('../../styles.css');
-const mobileCss = css.slice(css.indexOf('/* ============================================================\n   Mobile Layout v1'));
+const mobileCss = css.slice(css.indexOf('/* ============================================================\n   Mobile Layout v1'), css.indexOf('/* Journal & Review:'));
 const shell = read('../components/workbench/WorkbenchShell.ts');
 const plan = read('../views/PlanView.ts');
 const calendar = read('../components/timeTrace/TimeTraceMiniCalendar.ts');

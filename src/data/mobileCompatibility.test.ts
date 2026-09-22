@@ -30,7 +30,7 @@ const desktopOnlyPatterns: Array<[string, RegExp]> = [
 
 test('manifest no longer declares the plugin desktop-only', () => {
 	assert.equal(manifest.isDesktopOnly, false);
-	assert.equal(manifest.version, '0.4.0-dev.5');
+	assert.equal(manifest.version, '0.4.0-dev.6');
 });
 
 test('mobile production source has no desktop-only Node or Electron module imports', () => {
