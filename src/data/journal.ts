@@ -3,7 +3,7 @@ import type { PlanFiles } from './planning';
 import { ensureSafeNote } from './safeNote.ts';
 import { JOURNAL_ROOT, JOURNAL_FOLDERS, LEGACY_JOURNAL_FOLDERS } from './vaultPaths.ts';
 import type { EmbeddedTask } from './embeddedTasks.ts';
-import { groupEmbeddedForDisplay } from './embeddedTasks.ts';
+import { dailyTaskPath, groupEmbeddedForDisplay, validTaskDate } from './embeddedTasks.ts';
 import { applyFrontmatterUpdates } from './frontmatterWriter.ts';
 import { reviewDisplayLabel } from './cycleDisplayLabels.ts';
 import type { App, TFile } from 'obsidian';
@@ -136,7 +136,7 @@ export interface JournalCalendarEntry {
 	date: string;
 	path: string;
 	title: string;
-	titleSource: 'frontmatter' | 'legacy-h1' | 'quick-note';
+	titleSource: 'frontmatter' | 'legacy-h1' | 'quick-note' | 'narrative';
 	quickNoteCount: number;
 	summary?: string;
 }
@@ -162,10 +162,10 @@ function markdownHeadings(content: string): { lines: string[]; headings: Markdow
 }
 
 function sectionLines(document: ReturnType<typeof markdownHeadings>, title: string): string[] {
-	const heading = document.headings.find(item => item.level === 2 && item.text === title);
-	if (!heading) return [];
-	const end = document.headings.find(item => item.line > heading.line && item.level <= 2)?.line ?? document.lines.length;
-	return document.lines.slice(heading.line + 1, end);
+	return document.headings.filter(item => item.level === 2 && item.text === title).flatMap(heading => {
+		const end = document.headings.find(item => item.line > heading.line && item.level <= 2)?.line ?? document.lines.length;
+		return document.lines.slice(heading.line + 1, end);
+	});
 }
 
 function countJournalEntries(lines: string[]): number {
@@ -243,18 +243,63 @@ export async function writeJournalTitle(app: App, file: TFile, title: string): P
 	if (next !== content) await app.vault.modify(file, next);
 }
 
+/** Only authored title or narrative sections count as a daily journal record. */
+export function hasMeaningfulJournalContent(content: string, properties?: unknown): boolean {
+	const meaningfulTitle = (value: string) => !!value.replace(/\{\{[^}]*\}\}/g, '').trim();
+	if (meaningfulTitle(journalFrontmatterTitle(properties))) return true;
+	const frontmatter = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(content)?.[1] ?? '';
+	const title = /^标题:[ \t]*(.*)$/m.exec(frontmatter)?.[1]?.trim();
+	if (properties === undefined && title && meaningfulTitle(title.replace(/^(['"])(.*)\1$/, '$2')) && !/^(?:null|~|[>|][-+]?)$/i.test(title) && !title.startsWith('#')) return true;
+	const document = markdownHeadings(content.replace(/<!--[\s\S]*?-->/g, ''));
+	return ['随时记', '今日日记', '今日回看'].some(name => sectionLines(document, name).some(raw => {
+		const line = raw.trim();
+		if (/^(?:#{1,6}(?:\s|$)|[-*+]\s*\[[ xX]\]|`{3,}|~{3,}|[-*_]{3,}$)/.test(line)) return false;
+		return !!line.replace(/^(?:[-*+]|>)\s*/, '').replace(/\{\{[^}]*\}\}/g, '').trim();
+	}));
+}
+
+const journalReads = new WeakMap<TFile, { stamp: string; value: Promise<string> }>();
+/** Reuse unchanged journal reads across calendar, discovery and home renders. */
+export function readJournalContent(app: App, file: TFile): Promise<string> {
+	const stamp = `${file.stat?.mtime}:${file.stat?.size}`;
+	const cached = journalReads.get(file);
+	if (cached?.stamp === stamp) return cached.value;
+	const value = app.vault.cachedRead(file).catch(error => { journalReads.delete(file); throw error; });
+	journalReads.set(file, { stamp, value });
+	return value;
+}
+
+export async function meaningfulJournalDates(app: App): Promise<Set<string>> {
+	const dates = new Set<string>();
+	for (const file of app.vault.getMarkdownFiles()) {
+		const date = journalDateFromPath(file.path);
+		if (!date) continue;
+		try { if (hasMeaningfulJournalContent(await readJournalContent(app, file), app.metadataCache.getFileCache(file)?.frontmatter)) dates.add(date); } catch { /* unavailable file */ }
+	}
+	return dates;
+}
+
+/** Daily task writes always use the canonical dated filename and the shared template. */
+export async function ensureCanonicalDailyJournal(files: PlanFiles, date: string): Promise<string> {
+	if (!validTaskDate(date)) throw new Error('日期无效');
+	const info = journalInfo('day', new Date(`${date}T12:00:00`));
+	const existing = existingJournalPath(files, 'day', new Date(`${date}T12:00:00`));
+	if (existing && existing !== info.path) throw new Error('这一天已有旧格式日记，请先整理为 YYYY-MM-DD.md，避免创建重复日记');
+	return ensureSafeNote(files, dailyTaskPath(date), [JOURNAL_ROOT, info.folder], journalTemplate('day', new Date(`${date}T12:00:00`)));
+}
+
 /** Calendar projection only; the journal source remains untouched. */
 export function journalCalendarEntry(path: string, content: string, properties: unknown): JournalCalendarEntry | null {
 	const date = journalDateFromPath(path);
-	if (!date) return null;
+	if (!date || !hasMeaningfulJournalContent(content, properties)) return null;
 	const document = markdownHeadings(content);
 	const quickNoteCount = countJournalEntries(sectionLines(document, '随时记'));
 	const propertyTitle = journalFrontmatterTitle(properties);
 	const rawH1 = document.headings.find(item => item.level === 1)?.text.trim() ?? '';
 	const legacyTitle = rawH1 && rawH1 !== defaultDailyHeading(date) ? rawH1 : '';
-	const title = propertyTitle || legacyTitle || (quickNoteCount ? `随时记 · ${quickNoteCount}条` : '');
+	const title = propertyTitle || legacyTitle || (quickNoteCount ? `随时记 · ${quickNoteCount}条` : '') || firstJournalParagraph(sectionLines(document, '今日日记')) || firstJournalParagraph(sectionLines(document, '今日回看')) || '日记';
 	if (!title) return null;
-	const titleSource: JournalCalendarEntry['titleSource'] = propertyTitle ? 'frontmatter' : legacyTitle ? 'legacy-h1' : 'quick-note';
+	const titleSource: JournalCalendarEntry['titleSource'] = propertyTitle ? 'frontmatter' : legacyTitle ? 'legacy-h1' : quickNoteCount ? 'quick-note' : 'narrative';
 	return { date, path, title, titleSource, quickNoteCount, summary: firstJournalParagraph(sectionLines(document, '今日日记')) };
 }
 export async function ensureJournal(files: PlanFiles, kind: JournalKind, date = new Date()): Promise<string> {
