@@ -54,7 +54,7 @@ class EmbeddedTaskDateModal extends Modal {
 }
 
 export class NewEmbeddedTaskModal extends Modal {
-	constructor(app: App, private store: EmbeddedTaskStore, private presetPath?: string) { super(app); }
+	constructor(app: App, private store: EmbeddedTaskStore, private presetPath?: string, private presetDate?: string) { super(app); }
 	onOpen(): void {
 		const { contentEl } = this;
 		// Keep the original TaskModal shell; only its fields and save target differ.
@@ -97,6 +97,7 @@ export class NewEmbeddedTaskModal extends Modal {
 		const dateField = contentEl.createDiv({ cls: 'ad-modal-field' });
 		dateField.createEl('label', { cls: 'ad-modal-label', text: '日期（可选）' });
 		const dateInput = dateField.createEl('input', { cls: 'ad-modal-input', attr: { type: 'date', 'aria-label': '日期（可选）' } });
+		if (this.presetDate && /^\d{4}-\d{2}-\d{2}$/.test(this.presetDate)) dateInput.value = this.presetDate;
 		contentEl.createEl('div', { cls: 'ad-modal-hint', text: '日常任务未填日期时安排在今天；进程任务未填日期时不进入今日执行' });
 		const btns = contentEl.createDiv({ cls: 'ad-modal-btns' });
 		btns.createEl('button', { cls: 'ad-modal-btn', text: '取消' }).onclick = () => this.close();
