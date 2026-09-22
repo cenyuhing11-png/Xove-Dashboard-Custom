@@ -6,6 +6,8 @@ import { quarterOfMonth } from '../../data/quarters';
 export interface TimeTraceMiniCalendarOptions {
 	state: TimeTraceState;
 	today?: Date;
+	collapsed?: boolean;
+	onToggleCollapsed?(): void;
 	hasMarker(focus: TimeFocus): boolean;
 	onChange(state: TimeTraceState): void;
 }
@@ -40,6 +42,8 @@ export function renderTimeTraceMiniCalendar(parent: HTMLElement, options: TimeTr
 	quarter.onclick = () => options.onChange(selectQuarter(state));
 	const next = nav.createEl('button', { cls: 'po-cal__btn', text: '›', attr: { type: 'button', 'aria-label': '下一月' } });
 	next.onclick = () => options.onChange(shiftVisibleMonth(state, 1));
+	const toggle = nav.createEl('button', { cls: 'mx-mini-calendar-toggle', text: options.collapsed ? '⌄' : '⌃', attr: { type: 'button', 'aria-label': options.collapsed ? '展开日历' : '收起日历', 'aria-expanded': String(!options.collapsed) } });
+	toggle.onclick = event => { event.stopPropagation(); options.onToggleCollapsed?.(); };
 
 	let picker: HTMLElement | undefined;
 	let pickerKind: 'year' | 'month' | undefined;
@@ -105,10 +109,11 @@ export function renderTimeTraceMiniCalendar(parent: HTMLElement, options: TimeTr
 	year.onclick = event => { event.stopPropagation(); openPicker('year'); };
 	month.onclick = event => { event.stopPropagation(); openPicker('month'); };
 
-	const weekdays = parent.createDiv({ cls: 'mx-mini-calendar-weekdays' });
+	const body = parent.createDiv({ cls: 'mx-mini-calendar-body' });
+	const weekdays = body.createDiv({ cls: 'mx-mini-calendar-weekdays' });
 	weekdays.createSpan({ text: '' });
 	for (const name of ['一', '二', '三', '四', '五', '六', '日']) weekdays.createSpan({ text: name });
-	const grid = parent.createDiv({ cls: 'mx-mini-calendar-grid' });
+	const grid = body.createDiv({ cls: 'mx-mini-calendar-grid' });
 	for (const week of miniCalendarWeeks(state.visible.year, state.visible.month)) {
 		const weekFocus: TimeFocus = { kind: 'week', isoYear: week.isoYear, isoWeek: week.isoWeek, anchorDate: week.anchorDate };
 		const weekButton = grid.createEl('button', { cls: `mx-mini-calendar-week${focusMatchesWeek(state.focus, week.isoYear, week.isoWeek) ? ' is-selected' : ''}`, text: `W${String(week.isoWeek).padStart(2, '0')}`, attr: { type: 'button', 'aria-pressed': String(focusMatchesWeek(state.focus, week.isoYear, week.isoWeek)) } });
@@ -120,5 +125,6 @@ export function renderTimeTraceMiniCalendar(parent: HTMLElement, options: TimeTr
 			marker(button, options.hasMarker(dayFocus)); button.onclick = () => options.onChange(selectDay(state, day.date));
 		}
 	}
+	parent.toggleClass('is-calendar-collapsed', !!options.collapsed);
 	return closePicker;
 }

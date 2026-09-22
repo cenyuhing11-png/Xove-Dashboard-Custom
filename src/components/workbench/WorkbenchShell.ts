@@ -401,12 +401,12 @@ export class WorkbenchShell extends Component {
 			return btn;
 		};
 
-		const navGroup = nav.createDiv({ cls: 'ad-toolbar__group' });
+		const navGroup = nav.createDiv({ cls: 'ad-toolbar__group ad-toolbar__group--primary' });
 		navItems.forEach((it) => navGroup.appendChild(makeBtn(it)));
 		nav.createDiv({ cls: 'ad-toolbar__sep' });
 		const actGroup = nav.createDiv({ cls: 'ad-toolbar__group ad-toolbar__group--action' });
 		actionItems.forEach((it) => actGroup.appendChild(makeBtn(it, 'ad-toolbar__btn--action')));
-		makeBtn({ glyph: '\u25A6', label: '更多工具', action: 'classic' }, 'ad-toolbar__btn--more');
+		actGroup.appendChild(makeBtn({ glyph: '\u25A6', label: '更多工具', action: 'classic' }, 'ad-toolbar__btn--more'));
 		this.setActive(this.active);
 	}
 
