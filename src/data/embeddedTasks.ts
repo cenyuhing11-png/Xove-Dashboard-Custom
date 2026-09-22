@@ -1,7 +1,12 @@
 /** Markdown is the only source of truth. No Obsidian dependency in this module. */
-import { KNOWLEDGE_ROOT, PROJECT_ROOT } from './vaultPaths.ts';
-export const DAILY_TASK_FILE = '05-计划/06-日常任务.md';
-export const EMBEDDED_HEADINGS = { learning: '学习任务', creation: '创作任务', project: '项目任务', daily: '日常待办' } as const;
+import { DIARY_FOLDER, KNOWLEDGE_ROOT, PROJECT_ROOT } from './vaultPaths.ts';
+export const LEGACY_DAILY_TASK_FILE = '05-计划/06-日常任务.md';
+export function dailyTaskPath(date: string): string {
+	if (!validTaskDate(date)) throw new Error('日期无效');
+	return `${DIARY_FOLDER}/${date}.md`;
+}
+export function todayTaskDate(): string { const date = new Date(); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
+export const EMBEDDED_HEADINGS = { learning: '学习任务', creation: '创作任务', project: '项目任务', daily: '今日任务' } as const;
 export type EmbeddedSourceType = keyof typeof EMBEDDED_HEADINGS;
 export const TASK_DISPLAY_CATEGORIES = ['learning', 'creation', 'daily'] as const;
 export type TaskDisplayCategory = typeof TASK_DISPLAY_CATEGORIES[number];
@@ -18,10 +23,10 @@ export interface EmbeddedTask {
 	sourceDisplayName: string;
 	locator: { line: number; raw: string; snapshot: string; persistent: boolean };
 }
-export const DAILY_TASK_TEMPLATE = '---\n类型: 日常任务\n---\n\n# 日常任务\n\n## 日常待办\n\n- [ ]\n\n## 定期事项\n\n- [ ]\n';
 export function embeddedSource(path: string): EmbeddedSourceType | undefined {
 	if (!path.endsWith('.md') || path.split('/').some(p => p === '..' || p === '.' || p.startsWith('.'))) return undefined;
-	if (path === DAILY_TASK_FILE) return 'daily';
+	const date = path.slice(DIARY_FOLDER.length + 1, -3);
+	if (path.startsWith(`${DIARY_FOLDER}/`) && validTaskDate(date)) return 'daily';
 	if (path.startsWith('01-学习与资料/')) return 'learning';
 	if (path.startsWith(`${KNOWLEDGE_ROOT}/`)) return 'creation';
 	if (path.startsWith(`${PROJECT_ROOT}/`)) return 'project';
@@ -70,6 +75,7 @@ export function parseEmbeddedTasks(path: string, content: string, displayName?: 
 		if (!match) continue;
 		const markers = [...raw.matchAll(marker)];
 		const stable = markers.length === 1 ? markers[0]![1] : undefined;
+		if (sourceType === 'daily' && !stable) continue;
 		let text = match[2]!.replace(/<!--.*?-->/g, '').trim();
 		const dateMatch = /📅\s*(\d{4}-\d{2}-\d{2})(?![\d-])/.exec(text);
 		const date = dateMatch && validTaskDate(dateMatch[1]!) ? dateMatch[1] : undefined;
@@ -156,7 +162,7 @@ export interface EmbeddedFiles {
 	paths(): string[];
 	read(path: string): Promise<string>;
 	process(path: string, update: (content: string) => string): Promise<void>;
-	ensureDaily(): Promise<void>;
+	ensureDaily(date: string): Promise<void>;
 }
 /** Serialized rescans prevent late reads from resurrecting deleted/renamed sources. */
 export class EmbeddedTaskIndex {
@@ -169,10 +175,12 @@ export class EmbeddedTaskIndex {
 	bySource(path: string): EmbeddedTask[] { return this.cache.get(path) ?? []; }
 	today(date: string): EmbeddedTask[] { return todayEmbedded(this.all(), date); }
 	overdue(date: string): EmbeddedTask[] { return overdueEmbedded(this.all(), date); }
-	refresh(): Promise<void> {
+	refresh(changed?: readonly string[]): Promise<void> {
 		const run = this.tail.then(async () => {
-			const next = new Map<string, EmbeddedTask[]>();
-			for (const path of this.files.paths().filter(p => embeddedSource(p))) {
+			const next = changed ? new Map(this.cache) : new Map<string, EmbeddedTask[]>();
+			const paths = new Set(this.files.paths());
+			for (const path of changed ?? paths) {
+				if (!paths.has(path) || !embeddedSource(path)) { next.delete(path); continue; }
 				try { next.set(path, parseEmbeddedTasks(path, await this.files.read(path))); }
 				catch (error) { if (this.files.paths().includes(path)) throw error; }
 			}
@@ -183,18 +191,64 @@ export class EmbeddedTaskIndex {
 		return run;
 	}
 	async complete(task: EmbeddedTask, completed: boolean): Promise<void> {
-		await this.refresh();
+		await this.refresh([task.sourceFile]);
 		if (task.locator.persistent && this.all().filter(t => t.id === task.id).length !== 1) throw new Error('任务 ID 重复或索引已变化，请刷新');
 		await this.files.process(task.sourceFile, content => setEmbeddedCompletion(content, task, completed, this.makeId));
-		await this.refresh();
+		await this.refresh([task.sourceFile]);
 	}
 	async add(path: string, text: string, date?: string): Promise<void> {
 		const id = this.makeId();
 		if (this.all().some(t => t.id === id)) throw new Error('任务 ID 重复，请重试');
 		// Validate before any lazy file creation.
 		appendEmbeddedTask('', path, text, date, id);
-		if (path === DAILY_TASK_FILE) await this.files.ensureDaily();
+		if (embeddedSource(path) === 'daily') {
+			date = date || todayTaskDate();
+			if (path !== dailyTaskPath(date)) throw new Error('日常任务日期与来源日记不一致');
+			await this.files.ensureDaily(date);
+		}
 		await this.files.process(path, content => appendEmbeddedTask(content, path, text, date, id));
-		await this.refresh();
+		await this.refresh([path]);
 	}
+	async addDaily(text: string, date = todayTaskDate()): Promise<void> { await this.add(dailyTaskPath(date), text, date); }
+	private moveTail: Promise<void> = Promise.resolve();
+	changeDate(task: EmbeddedTask, date: string): Promise<void> {
+		const run = this.moveTail.then(async () => {
+			if (task.sourceType !== 'daily' || !validTaskDate(date)) throw new Error('请选择有效的日常任务日期');
+			await this.refresh([task.sourceFile, dailyTaskPath(date)]);
+			if (this.all().filter(t => t.id === task.id).length !== 1) throw new Error('任务 ID 重复或索引已变化');
+			const before = await this.files.read(task.sourceFile);
+			const current = parseEmbeddedTasks(task.sourceFile, before).find(t => t.id === task.id);
+			if (!current || current.locator.raw !== task.locator.raw) throw new Error('任务已变化，请刷新后重试');
+			const target = dailyTaskPath(date);
+			if (target === task.sourceFile && current.date === date) return;
+			const row = current.date ? current.locator.raw.replace(/📅\s*\d{4}-\d{2}-\d{2}/, `📅 ${date}`) : current.locator.raw.replace(/(<!--\s*mx-task:)/, `📅 ${date} $1`);
+			if (target === task.sourceFile) {
+				await this.files.process(target, content => { if (content !== before) throw new Error('任务已变化'); const lines = content.split('\n'); lines[current.locator.line] = row; return lines.join('\n'); });
+			} else {
+				await this.files.ensureDaily(date);
+				await this.files.process(target, content => insertDailyTaskRow(content, target, row));
+				try {
+					await this.files.process(task.sourceFile, content => { if (content !== before) throw new Error('任务已变化'); const lines = content.split('\n'); lines.splice(current.locator.line, 1); return lines.join('\n'); });
+				} catch (error) {
+					await this.files.process(target, content => { const found = parseEmbeddedTasks(target, content).find(t => t.id === task.id); if (!found || found.locator.raw.replace(/\r$/, '') !== row.replace(/\r$/, '')) throw new Error('移动中断，请检查两篇日记中的任务 ID'); const lines = content.split('\n'); lines.splice(found.locator.line, 1); return lines.join('\n'); });
+					throw error;
+				}
+			}
+			await this.refresh([task.sourceFile, target]);
+		});
+		this.moveTail = run.catch(() => {});
+		return run;
+	}
+}
+
+/** Insert an unchanged source row; migration and date moves preserve its exact text and checkbox. */
+export function insertDailyTaskRow(content: string, path: string, row: string): string {
+	const tasks = parseEmbeddedTasks(path, `## 今日任务\n${row}\n`);
+	if (tasks.length !== 1 || !tasks[0]!.date) throw new Error('日常任务行不完整');
+	const task = tasks[0]!;
+	if (path !== dailyTaskPath(task.date!)) throw new Error('任务日期与日记不一致');
+	const next = appendEmbeddedTask(content, path, task.text, task.date, task.id);
+	const appended = parseEmbeddedTasks(path, next).find(t => t.id === task.id)!;
+	const lines = next.split('\n'); lines[appended.locator.line] = row.replace(/\r$/, '') + (content.includes('\r\n') ? '\r' : '');
+	return lines.join('\n');
 }

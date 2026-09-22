@@ -1,16 +1,20 @@
+import { dailyTaskPath, todayTaskDate } from './embeddedTasks.ts';
+import { journalTemplate as dailyTemplate } from './journal.ts';
+const DAILY_TASK_FILE = dailyTaskPath('2026-09-06');
+const DAILY_TASK_TEMPLATE = dailyTemplate('day', new Date('2026-09-06T12:00:00'));
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { appendEmbeddedTask, DAILY_TASK_FILE, DAILY_TASK_TEMPLATE, embeddedSource, EmbeddedTaskIndex, groupEmbedded, groupEmbeddedForDisplay, overdueEmbedded, parseEmbeddedTasks, setEmbeddedCompletion, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, TASK_DISPLAY_MARKERS, taskDisplayCategory, taskDisplayMarker, taskSourceSubtitle, todayEmbedded, validTaskDate } from './embeddedTasks.ts';
+import { appendEmbeddedTask, embeddedSource, EmbeddedTaskIndex, groupEmbedded, groupEmbeddedForDisplay, overdueEmbedded, parseEmbeddedTasks, setEmbeddedCompletion, TASK_DISPLAY_CATEGORIES, TASK_DISPLAY_LABELS, TASK_DISPLAY_MARKERS, taskDisplayCategory, taskDisplayMarker, taskSourceSubtitle, todayEmbedded, validTaskDate } from './embeddedTasks.ts';
 import { learningTemplate } from './learning.ts';
 
 const learning = '01-学习与资料/书籍/书.md';
 const project = '03-项目与成果/视觉/project-视觉.md';
 const content = '## 学习任务\n\n- [ ] 看书 📅 2026-09-07\n';
 function first(raw = content, path = learning) { return parseEmbeddedTasks(path, raw)[0]!; }
-for (const [path, heading, type] of [[learning, '学习任务', 'learning'], [project, '项目任务', 'project'], [DAILY_TASK_FILE, '日常待办', 'daily']]) {
+for (const [path, heading, type] of [[learning, '学习任务', 'learning'], [project, '项目任务', 'project'], [DAILY_TASK_FILE, '今日任务', 'daily']]) {
 	test(`${type}: only target section parsed`, () => {
-		const tasks = parseEmbeddedTasks(path!, `# 页面\n- [ ] 外部\n## ${heading}\n- [ ] 正确\n## 其他\n- [ ] 不识别\n`);
+		const tasks = parseEmbeddedTasks(path!, `# 页面\n- [ ] 外部\n## ${heading}\n- [ ] 正确 <!-- mx-task:correct -->\n## 其他\n- [ ] 不识别\n`);
 		assert.equal(tasks.length, 1); assert.equal(tasks[0]!.text, '正确'); assert.equal(tasks[0]!.sourceType, type);
 	});
 	test(`${type}: append correct section without overwriting`, () => {
@@ -50,7 +54,7 @@ test('ambiguous duplicate headings refuse append', () => { assert.throws(() => a
 test('unclosed fenced code prevents hidden append', () => { assert.throws(() => appendEmbeddedTask(content + '```', learning, 'a', undefined, 'id'), /未闭合/); });
 test('invalid task creation cannot inject lines or markers', () => { for (const text of ['', 'a\nb', 'a <!-- mx-task:fake -->', 'a 📅 2026-09-06']) assert.throws(() => appendEmbeddedTask('', learning, text, undefined, 'id')); });
 test('today includes matching and overdue only, excludes completed/undated/future', () => { const raw = '## 学习任务\n- [ ] 今天 📅 2026-09-06\n- [ ] 过去 📅 2026-09-05\n- [x] 完成 📅 2026-09-06\n- [ ] 未来 📅 2026-09-07\n- [ ] 无日期'; const tasks = parseEmbeddedTasks(learning, raw); assert.deepEqual(todayEmbedded(tasks, '2026-09-06').map(t => t.text), ['过去', '今天']); assert.deepEqual(overdueEmbedded(tasks, '2026-09-06').map(t => t.text), ['过去']); });
-test('all tasks grouped without loss', () => { const tasks = [first(), first('## 项目任务\n- [x] 完成', project), first('## 日常待办\n- [ ] 日常', DAILY_TASK_FILE)]; const groups = groupEmbedded(tasks); assert.deepEqual(Object.keys(groups), ['project', 'creation', 'learning', 'daily']); assert.equal(Object.values(groups).flat().length, 3); });
+test('all tasks grouped without loss', () => { const tasks = [first(), first('## 项目任务\n- [x] 完成', project), first('## 今日任务\n- [ ] 日常 <!-- mx-task:daily -->', DAILY_TASK_FILE)]; const groups = groupEmbedded(tasks); assert.deepEqual(Object.keys(groups), ['project', 'creation', 'learning', 'daily']); assert.equal(Object.values(groups).flat().length, 3); });
 test('summary display categories are exactly learning, creation and daily', () => {
 	assert.deepEqual(TASK_DISPLAY_CATEGORIES, ['learning', 'creation', 'daily']);
 	assert.deepEqual(TASK_DISPLAY_LABELS, { learning: '学习', creation: '创作', daily: '日常' });
@@ -70,7 +74,7 @@ test('source subtitles stay useful for learning and creation but disappear for d
 	const learningTask = first('## 学习任务\n- [ ] 学习', learning);
 	const creationTask = first('## 创作任务\n- [ ] 创作', '02-知识与思考/文章.md');
 	const projectTask = first('## 项目任务\n- [ ] 项目', project);
-	const dailyTask = first('## 日常待办\n- [ ] 买纸巾', DAILY_TASK_FILE);
+	const dailyTask = first('## 今日任务\n- [ ] 买纸巾 <!-- mx-task:daily -->', DAILY_TASK_FILE);
 	assert.equal(taskSourceSubtitle(learningTask, '视频'), '书 · 视频');
 	assert.equal(taskSourceSubtitle(creationTask, '知识与思考'), '文章 · 知识与思考');
 	assert.equal(taskSourceSubtitle(projectTask, '项目'), '视觉 · 项目');
@@ -82,7 +86,7 @@ test('summary grouping merges knowledge and project tasks without changing total
 		first('## 学习任务\n- [ ] 学习', learning),
 		first('## 创作任务\n- [ ] 思考', knowledge),
 		first('## 项目任务\n- [ ] 项目', project),
-		first('## 日常待办\n- [ ] 日常', DAILY_TASK_FILE),
+		first('## 今日任务\n- [ ] 日常 <!-- mx-task:daily -->', DAILY_TASK_FILE),
 	];
 	const groups = groupEmbeddedForDisplay(tasks);
 	assert.deepEqual(Object.keys(groups), ['learning', 'creation', 'daily']);
@@ -97,14 +101,14 @@ function memory() {
 	return { files, index };
 }
 test('empty vault scan never creates daily file', async () => { const { files, index } = memory(); await index.refresh(); assert.deepEqual(index.all(), []); assert.equal(files.size, 0); });
-test('first daily task lazily creates template', async () => { const { files, index } = memory(); await index.add(DAILY_TASK_FILE, '交电费', '2026-09-06'); assert.equal(files.size, 1); assert.equal(index.all()[0]!.text, '交电费'); assert.ok(files.get(DAILY_TASK_FILE)!.includes('## 定期事项')); });
-test('existing daily content not overwritten', async () => { const { files, index } = memory(); files.set(DAILY_TASK_FILE, '# 保留正文\n'); await index.add(DAILY_TASK_FILE, 'a'); assert.ok(files.get(DAILY_TASK_FILE)!.startsWith('# 保留正文\n')); });
+test('first daily task lazily creates template', async () => { const { files, index } = memory(); await index.add(DAILY_TASK_FILE, '交电费', '2026-09-06'); assert.equal(files.size, 1); assert.equal(index.all()[0]!.text, '交电费'); assert.ok(files.get(DAILY_TASK_FILE)!.includes('## 今日日记')); });
+test('existing daily content not overwritten', async () => { const { files, index } = memory(); files.set(DAILY_TASK_FILE, '# 保留正文\n'); await index.add(DAILY_TASK_FILE, 'a', '2026-09-06'); assert.ok(files.get(DAILY_TASK_FILE)!.startsWith('# 保留正文\n')); });
 test('invalid creation never creates daily file', async () => { const { files, index } = memory(); await assert.rejects(index.add(DAILY_TASK_FILE, '')); assert.equal(files.size, 0); });
 test('deleted source is purged and stale completion rejected', async () => { const { files, index } = memory(); files.set(learning, content); await index.refresh(); const task = index.all()[0]!; files.delete(learning); await index.refresh(); assert.equal(index.all().length, 0); await assert.rejects(index.complete(task, true)); });
 test('renamed source reindexed with same persistent ID', async () => { const { files, index } = memory(); const raw = appendEmbeddedTask('', learning, 'a', undefined, 'keep'); files.set(learning, raw); await index.refresh(); files.delete(learning); files.set('01-学习与资料/新名字.md', raw); await index.refresh(); assert.equal(index.all()[0]!.id, 'keep'); assert.equal(index.bySource(learning).length, 0); });
 test('cross-file duplicate IDs rejected before write', async () => { const { files, index } = memory(); const raw = appendEmbeddedTask('', learning, 'a', undefined, 'same'); files.set(learning, raw); files.set('01-学习与资料/另一本.md', raw); await index.refresh(); await assert.rejects(index.complete(index.all()[0]!, true), /重复/); });
 test('index source/today/overdue queries refresh after completion', async () => { const { files, index } = memory(); files.set(learning, content); await index.refresh(); assert.equal(index.bySource(learning).length, 1); assert.equal(index.today('2026-09-07').length, 1); assert.equal(index.overdue('2026-09-08').length, 1); await index.complete(index.all()[0]!, true); assert.equal(index.today('2026-09-07').length, 0); });
-test('parallel adds keep both tasks', async () => { const { index } = memory(); await Promise.all([index.add(DAILY_TASK_FILE, 'one'), index.add(DAILY_TASK_FILE, 'two')]); assert.equal(index.all().length, 2); assert.equal(new Set(index.all().map(t => t.id)).size, 2); });
+test('parallel adds keep both tasks', async () => { const { index } = memory(); await Promise.all([index.add(DAILY_TASK_FILE, 'one', '2026-09-06'), index.add(DAILY_TASK_FILE, 'two', '2026-09-06')]); assert.equal(index.all().length, 2); assert.equal(new Set(index.all().map(t => t.id)).size, 2); });
 test('resource templates add empty task section without generated tasks', () => { const raw = learningTemplate('学习资源', '资料', '书籍'); assert.ok(raw.includes('## 学习任务')); assert.equal(parseEmbeddedTasks(learning, raw).length, 0); });
 test('legacy scanner has no embedded dependency', () => { const source = readFileSync(new URL('./taskStore.ts', import.meta.url), 'utf8'); assert.equal(source.includes('embedded'), false); assert.ok(source.includes('scanAllWithTasks')); });
 test('toolbar routes to embedded modal while legacy modal remains', () => { const source = readFileSync(new URL('../views/DashboardView.ts', import.meta.url), 'utf8'); assert.ok(source.includes("if (action === 'task') new NewEmbeddedTaskModal")); assert.ok(source.includes('private async openTaskModal(')); });

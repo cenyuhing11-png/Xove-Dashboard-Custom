@@ -1,7 +1,8 @@
+import { parseEmbeddedTasks } from '../../data/embeddedTasks';
 import { App, MarkdownPostProcessorContext, MarkdownRenderChild, Notice, TFile } from 'obsidian';
 import type { EmbeddedTaskStore } from '../../data/embeddedTaskVault';
 import { journalDateFromPath, readJournalTitle, writeJournalTitle } from '../../data/journal';
-import { renderJournalTaskSummary } from './JournalTaskRenderer';
+import { renderJournalDailyTask, renderJournalTaskSummary } from './JournalTaskRenderer';
 
 const JOURNAL_SECTION_TITLES = ['今日任务', '随时记', '今日日记', '今日回看'] as const;
 
@@ -145,6 +146,18 @@ export function mountJournalTaskSummary(
 	store: EmbeddedTaskStore,
 ): void {
 	if (!journalDateFromPath(ctx.sourcePath)) return;
+	// Obsidian's list data-line is relative to its Markdown render section.
+	const info = ctx.getSectionInfo(el);
+	if (info) {
+		const tasks = parseEmbeddedTasks(ctx.sourcePath, info.text);
+		for (const item of Array.from(el.querySelectorAll<HTMLElement>('li.task-list-item[data-line]'))) {
+			const line = info.lineStart + Number(item.dataset.line);
+			const task = tasks.find(candidate => candidate.locator.line === line);
+			if (!task) continue;
+			item.removeClass('task-list-item'); item.addClass('mx-journal-task-row');
+			renderJournalDailyTask(item, task, store);
+		}
+	}
 	for (const heading of Array.from(el.querySelectorAll('h2'))) {
 		const title = heading.textContent?.trim();
 		if (title === '今日任务') {

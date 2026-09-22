@@ -33,7 +33,7 @@ import { PLAN_PERIODS, PLAN_ROOT, ensurePlan, readPlan } from '../data/planning'
 import type { PlanFiles, PlanPeriod } from '../data/planning';
 import { currentLearning } from '../data/learning';
 import { learningFiles, scanLearning } from '../data/learningVault';
-import { ensureJournal, journalStates } from '../data/journal';
+import { ensureJournal, journalStates, meaningfulJournalDates, journalInfo } from '../data/journal';
 import type { JournalKind } from '../data/journal';
 import { JournalHistoryModal } from './JournalHistoryModal';
 import { DirectionDetailRenderer } from './DirectionView';
@@ -621,6 +621,8 @@ export class DashboardView extends ItemView {
 	/* ---- Create diary note ---- */
 	private async createDiary(): Promise<void> {
 		const dc = this.plugin.settings.diary;
+		const prepared = this.app.vault.getAbstractFileByPath(journalInfo('day').path);
+		if (prepared instanceof TFile) { await this.openJournalPath(prepared.path); return; }
 		if (dc.storagePath === DIARY_FOLDER && dc.namingPattern === 'YYYY-MM-DD 日记' && !dc.templateFile) {
 			await this.openJournal('day');
 			return;
@@ -1033,6 +1035,7 @@ export class DashboardView extends ItemView {
 		const processItems = processes(scanLearning(this.app), projects, this.plugin.embeddedTasks.all());
 		const taskSourceTypes = new Map(processItems.map(process => [process.sourceFile, taskSourceTypeLabel(process.contentType)]));
 
+		const meaningfulDays = await meaningfulJournalDates(this.app);
 		renderWorkbenchHome(board, {
 			renderEmbeddedToday: (parent) => {
 				const tasks = this.plugin.embeddedTasks.today(today);
@@ -1053,7 +1056,7 @@ export class DashboardView extends ItemView {
 			existingPaths,
 			plans,
 			learning,
-			journals: journalStates(this.planFiles(), date),
+			journals: journalStates(this.planFiles(), date).map(state => state.kind === 'day' ? { ...state, exists: meaningfulDays.has(today) } : state),
 			journalActions: {
 				open: (kind) => { void this.openJournal(kind); },
 				history: (mode) => new JournalHistoryModal(this.app, mode, (path) => this.openJournalPath(path), (kind) => this.openJournal(kind)).open(),

@@ -1,9 +1,13 @@
+import { dailyTaskPath, todayTaskDate } from './embeddedTasks.ts';
+import { journalTemplate as dailyTemplate } from './journal.ts';
+const DAILY_TASK_FILE = dailyTaskPath('2026-09-08');
+const DAILY_TASK_TEMPLATE = dailyTemplate('day', new Date('2026-09-08T12:00:00'));
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ensureJournal, isCanonicalDailyJournalPath, journalCalendarEntry, journalDateFromPath, journalEntry, journalHistory, journalInfo, journalPaths, journalStates, journalTaskWidgetOffset, journalTasks, journalTemplate, journalTitleWidgetOffset, updateJournalTitleContent } from './journal.ts';
 import type { JournalEntry, JournalKind } from './journal.ts';
 import type { PlanFiles } from './planning.ts';
-import { DAILY_TASK_FILE, parseEmbeddedTasks } from './embeddedTasks.ts';
+import { parseEmbeddedTasks } from './embeddedTasks.ts';
 
 const date = new Date(2026, 8, 6, 0, 1);
 for (const [kind, suffix] of Object.entries({ day: '01-日记/2026-09-06', week: '02-周复盘/2026-W36 周复盘', month: '03-月复盘/2026-09 月复盘', quarter: '04-季复盘/2026-Q3 季复盘', year: '05-年复盘/2026 年复盘' })) {
@@ -61,7 +65,7 @@ test('journal summary queries only the journal date and shares three display cat
 		...parseEmbeddedTasks('01-学习与资料/视频/学习.md', '## 学习任务\n- [ ] 学习 📅 2026-09-08\n- [ ] 明天 📅 2026-09-09'),
 		...parseEmbeddedTasks('02-知识与思考/创作.md', '## 创作任务\n- [ ] 创作 📅 2026-09-08'),
 		...parseEmbeddedTasks('03-项目与成果/项目/项目.md', '## 项目任务\n- [ ] 项目 📅 2026-09-08'),
-		...parseEmbeddedTasks(DAILY_TASK_FILE, '## 日常待办\n- [ ] 日常 📅 2026-09-08'),
+		...parseEmbeddedTasks(DAILY_TASK_FILE, '## 今日任务\n- [ ] 日常 📅 2026-09-08 <!-- mx-task:daily -->'),
 	];
 	const result = journalTasks(tasks, '04-日记与复盘/01-日记/2026-09-08 日记.md');
 	assert.equal(result.date, '2026-09-08');
@@ -74,15 +78,15 @@ test('calendar journal title follows frontmatter, H1 and quick-note fallbacks', 
 	const path = '04-日记与复盘/01-日记/2026-09-08.md';
 	const property = journalCalendarEntry(path, '# 正文标题\n\n## 随时记\n\n- 一条', { 标题: '属性标题' });
 	assert.equal(property?.title, '属性标题'); assert.equal(property?.titleSource, 'frontmatter');
-	const legacy = journalCalendarEntry(path, '# 正文标题\n', {});
+	const legacy = journalCalendarEntry(path, '# 正文标题\n## 今日日记\n真实内容', {});
 	assert.equal(legacy?.title, '正文标题'); assert.equal(legacy?.titleSource, 'legacy-h1');
 	const quick = journalCalendarEntry(path, '## 随时记\n\n- 一条\n- 两条', {});
 	assert.equal(quick?.title, '随时记 · 2条'); assert.equal(quick?.titleSource, 'quick-note');
 });
 
-test('calendar omits files without an intentional title or quick note', () => {
+test('calendar recognizes narrative-only journals and omits task-only files', () => {
 	const path = '04-日记与复盘/01-日记/2026-09-08.md';
-	assert.equal(journalCalendarEntry(path, '## 今日任务\n\n- [ ] 任务 \ud83d\udcc5 2026-09-08\n\n## 随时记\n\n## 今日日记\n\n正文但忘记标题', { 标题: '' }), null);
+	assert.equal(journalCalendarEntry(path, '## 今日任务\n\n- [ ] 任务 \ud83d\udcc5 2026-09-08\n\n## 随时记\n\n## 今日日记\n\n正文但忘记标题', { 标题: '' })?.title, '正文但忘记标题');
 	assert.equal(journalCalendarEntry(path, '# 2026年9月8日\n\n## 今日任务\n\n- [ ] 任务', {}), null);
 });
 
@@ -119,7 +123,7 @@ test('calendar counts a multiline quick note as one entry', () => {
 });
 
 test('calendar journal ignores headings inside frontmatter and code fences', () => {
-	const content = '---\n说明: "# 假标题"\n---\n\n```md\n# 代码标题\n## 随时记\n- 假记录\n```\n\n# 真实标题';
+	const content = '---\n说明: "# 假标题"\n---\n\n```md\n# 代码标题\n## 随时记\n- 假记录\n```\n\n# 真实标题\n## 今日日记\n真实内容';
 	const entry = journalCalendarEntry('04-日记与复盘/01-日记/2026-09-08.md', content, {});
 	assert.equal(entry?.title, '真实标题');
 	assert.equal(entry?.quickNoteCount, 0);

@@ -1,9 +1,10 @@
+import { parseEmbeddedTasks, type EmbeddedTask } from '../../data/embeddedTasks';
 import { StateField, type EditorState, type Extension, type Transaction } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view';
 import { App, editorInfoField, editorLivePreviewField, TFile } from 'obsidian';
 import type { EmbeddedTaskStore } from '../../data/embeddedTaskVault';
 import { isCanonicalDailyJournalPath, journalTaskWidgetOffset } from '../../data/journal';
-import { renderJournalTaskSummary } from './JournalTaskRenderer';
+import { renderJournalDailyTask, renderJournalTaskSummary } from './JournalTaskRenderer';
 
 /** A stable dynamic view: task text remains exclusively in its source Markdown. */
 class JournalTaskWidget extends WidgetType {
@@ -33,6 +34,16 @@ class JournalTaskWidget extends WidgetType {
 	}
 }
 
+class JournalDailyTaskWidget extends WidgetType {
+	constructor(private task: EmbeddedTask, private store: EmbeddedTaskStore) { super(); }
+	eq(other: JournalDailyTaskWidget): boolean { return this.task.id === other.task.id && this.task.locator.raw === other.task.locator.raw; }
+	toDOM(view: EditorView): HTMLElement {
+		const row = view.dom.ownerDocument.createElement('div'); row.className = 'mx-journal-task-row';
+		renderJournalDailyTask(row, this.task, this.store); return row;
+	}
+	ignoreEvent(): boolean { return true; }
+}
+
 interface JournalTaskEditorContext { path: string; offset: number }
 interface JournalTaskEditorState { decorations: DecorationSet; path: string; offset: number }
 
@@ -53,12 +64,21 @@ export function journalTaskLivePreviewExtension(app: App, store: EmbeddedTaskSto
 		return {
 			path: context.path,
 			offset: context.offset,
-			decorations: Decoration.set([Decoration.widget({ widget: new JournalTaskWidget(app, store, context.path), side: 1, block: true }).range(context.offset)]),
+			decorations: Decoration.set([
+				Decoration.widget({ widget: new JournalTaskWidget(app, store, context.path), side: 1, block: true }).range(context.offset),
+				...parseEmbeddedTasks(context.path, state.doc.toString()).flatMap(task => {
+					const line = state.doc.line(task.locator.line + 1);
+					// Editing a source row shows its real Markdown instead of a second rendering.
+					if (state.selection.ranges.some(range => range.from <= line.to && range.to >= line.from)) return [];
+					return [Decoration.replace({ widget: new JournalDailyTaskWidget(task, store), block: true }).range(line.from, line.to)];
+				}),
+			], true),
 		};
 	};
 	return StateField.define<JournalTaskEditorState>({
 		create,
 		update(value: JournalTaskEditorState, transaction: Transaction): JournalTaskEditorState {
+			if (transaction.docChanged || transaction.selection) return create(transaction.state);
 			const offset = value.offset >= 0 ? transaction.changes.mapPos(value.offset, 1) : -1;
 			const decorations = value.decorations.map(transaction.changes);
 			const context = journalTaskEditorContext(transaction.state);

@@ -1,5 +1,5 @@
 import type { App, TFile } from 'obsidian';
-import { ensureJournal, journalCalendarEntry, journalEntry, journalFrontmatterTitle, journalPaths } from './journal.ts';
+import { hasMeaningfulJournalContent, readJournalContent, ensureJournal, journalCalendarEntry, journalEntry, journalFrontmatterTitle, journalPaths } from './journal.ts';
 import type { JournalKind } from './journal.ts';
 import { isoWeek, planPaths } from './planning.ts';
 import type { PlanFiles } from './planning.ts';
@@ -272,7 +272,7 @@ function recordFocus(kind: JournalKind, period: string, date: Date): TimeFocus {
 /** Build one read-only record from an existing, metadata-validated journal file. */
 export function reviewRecordFromSource(source: ReviewRecordSource): ReviewRecord | null {
 	const entry = journalEntry(source.path, source.basename, source.properties);
-	if (!entry) return null;
+	if (!entry || (entry.kind === 'day' && !hasMeaningfulJournalContent(source.markdown, source.properties))) return null;
 	const date = new Date(entry.order);
 	const sections = entry.kind === 'day' ? dayReviewSections(source.markdown) : markdownReviewSections(source.markdown);
 	const bodies = sections.map(section => plainReviewText(section.markdown)).filter(Boolean);
@@ -323,7 +323,7 @@ export async function discoverReviewRecords(app: App): Promise<ReviewRecord[]> {
 	}
 	for (const { file, properties } of candidates.values()) {
 		try {
-			const markdown = await app.vault.cachedRead(file);
+			const markdown = await readJournalContent(app, file);
 			const record = reviewRecordFromSource({ path: file.path, basename: file.basename, markdown, properties });
 			if (record) records.push(record);
 		} catch { /* A temporarily unavailable iCloud file is simply absent from this view. */ }
