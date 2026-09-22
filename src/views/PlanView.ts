@@ -78,6 +78,7 @@ export class PlanWorkspaceRenderer extends Component {
 	private sectionDisposers: Array<() => void> = [];
 	private miniCalendarDisposer?: () => void;
 	private selectedLongTermPlanId = '';
+	private mobileCalendarExpanded = false;
 	private expandedLongTermPlanId = '';
 	private expandedLongTermStageIds = new Set<string>();
 	private quickTasks?: ProcessTasksModal;
@@ -206,17 +207,27 @@ export class PlanWorkspaceRenderer extends Component {
 		});
 	}
 
+	private isMobilePhone(): boolean {
+		return document.body.classList.contains('is-mobile') && document.body.classList.contains('is-phone');
+	}
+
 	private renderSidebar(container: HTMLElement): void {
-		const side = container.createDiv({ cls: 'po-sidebar' });
-		const list = side.createDiv({ cls: 'po-sidebar__list' });
+		const side = container.createDiv({ cls: 'po-sidebar mx-time-trace-sidebar' });
+		const list = side.createDiv({ cls: 'po-sidebar__list mx-time-trace-nav' });
 		for (const [mode, label] of [['board', '周期计划'], ['longTermPlan', '长期计划'], ['calendar', '综合日历'], ['review', '日记回顾']] as const) {
-			const item = list.createDiv({ cls: `po-sidebar__item${this.mode === mode ? ' is-active' : ''}`, text: label, attr: { role: 'button', tabindex: '0' } });
+			const item = list.createDiv({ cls: `po-sidebar__item${this.mode === mode ? ' is-active' : ''} mx-time-trace-nav-item`, text: label, attr: { role: 'button', tabindex: '0' } });
 			const selectMode = () => { this.mode = mode; void this.renderPlanContent(); };
 			item.addEventListener('click', selectMode);
 			item.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectMode(); } });
 		}
 		list.createDiv({ cls: 'mx-time-trace-divider', attr: { 'aria-hidden': 'true' } });
-		this.miniCalendarDisposer = renderTimeTraceMiniCalendar(list, { state: this.timeState, hasMarker: this.markerResolver(), onChange: state => this.setTimeState(state) });
+		const tools = list.createDiv({ cls: 'mx-time-trace-time-tools' });
+		this.miniCalendarDisposer = renderTimeTraceMiniCalendar(tools, {
+			state: this.timeState, hasMarker: this.markerResolver(),
+			collapsed: this.isMobilePhone() && !this.mobileCalendarExpanded,
+			onToggleCollapsed: () => { this.mobileCalendarExpanded = !this.mobileCalendarExpanded; void this.renderPlanContent(); },
+			onChange: state => this.setTimeState(state),
+		});
 	}
 
 	private renderPlanCard(column: HTMLElement, card: PlanWorkspaceCard, focused = false): void {

@@ -351,7 +351,7 @@ test('quarter is a lightweight same-row scope derived from visible month without
 	assert.match(css, /\.mx-mini-calendar-quarter \{[^}]*font-family: var\(--ad-font-mono\)/);
 });
 test('one shared mini calendar renderer is mounted once by the sidebar', () => {
-	assert.equal((view.match(/renderTimeTraceMiniCalendar\(list/g) ?? []).length, 1);
+	assert.equal((view.match(/renderTimeTraceMiniCalendar\(tools/g) ?? []).length, 1);
 	assert.match(view, /state: this\.timeState[\s\S]*hasMarker: this\.markerResolver\(\)[\s\S]*onChange: state => this\.setTimeState\(state\)/);
 });
 test('month arrows move only the visible month and preserve focus', () => {
